@@ -1,71 +1,208 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
+import supabase from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchSimilarGrants, formatSimilarGrant } from '@/lib/similarGrants';
 
-// Mock data for demonstration
-const mockGrant = {
-  id: '1',
-  title: 'Research Grant for Renewable Energy Solutions',
-  agency: 'Department of Energy',
-  agencyCode: 'DOE',
-  opportunity_id: 'DOE-2025-ENERGY-001',
-  opportunity_number: 'ENERGY-2025-001',
-  closeDate: '2025-06-30',
-  postDate: '2025-01-15',
-  fundingAmount: 500000,
-  awardCeiling: 750000,
-  awardFloor: 250000,
-  costSharing: true,
-  description: `This grant supports research and development of innovative renewable energy solutions that address climate change and promote sustainability.
+// Grant type definition
+interface Grant {
+  id: string;
+  title: string;
+  agency_name: string;
+  agency_code: string;
+  opportunity_id: string;
+  opportunity_number: string;
+  close_date: string | null;
+  post_date: string | null;
+  total_funding: number | null;
+  award_ceiling: number | null;
+  award_floor: number | null;
+  cost_sharing: boolean;
+  description: string;
+  eligible_applicants: string[] | null;
+  activity_category: string[] | null;
+  additional_info_url: string | null;
+  grantor_contact_name: string | null;
+  grantor_contact_email: string | null;
+  grantor_contact_phone: string | null;
+}
 
-The Department of Energy (DOE) is seeking proposals for research projects that advance the development of renewable energy technologies with the potential to significantly reduce greenhouse gas emissions and dependence on fossil fuels.
+// Interaction type
+interface Interaction {
+  action: string;
+}
 
-Areas of interest include but are not limited to:
-- Solar energy conversion and storage
-- Wind energy optimization
-- Geothermal energy systems
-- Bioenergy and biofuels
-- Energy-efficient building technologies
-- Grid integration of renewable energy sources
-
-Successful proposals will demonstrate innovative approaches, technical feasibility, and potential for commercialization and scalability.`,
-  eligibleApplicants: [
-    'Public and State controlled institutions of higher education',
-    'Private institutions of higher education',
-    'Nonprofit organizations with 501(c)(3) status',
-    'Small businesses',
-    'For profit organizations other than small businesses'
-  ],
-  categories: ['Energy', 'Research', 'Climate', 'Technology', 'Sustainability'],
-  additionalInfoUrl: 'https://www.energy.gov/grants',
-  grantorContactName: 'Dr. Jane Smith',
-  grantorContactEmail: 'jane.smith@energy.gov',
-  grantorContactPhone: '(202) 555-1234'
-};
+// Similar grant type
+interface SimilarGrant {
+  id: string;
+  title: string;
+  agency: string;
+  deadline: string;
+}
 
 export default function GrantDetail({ params }: { params: { grantId: string } }) {
   const { grantId } = params;
+  const { user } = useAuth();
+  const [grant, setGrant] = useState<Grant | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isApplied, setIsApplied] = useState(false);
+  const [isIgnored, setIsIgnored] = useState(false);
+  const [similarGrants, setSimilarGrants] = useState<SimilarGrant[]>([]);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
   
-  // In a real application, we would fetch the grant data based on the grantId
-  const grant = mockGrant;
+  // Fetch the grant data
+  useEffect(() => {
+    const fetchGrant = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch the grant by ID
+        const { data, error } = await supabase
+          .from('grants')
+          .select('*')
+          .eq('id', grantId)
+          .single();
+        
+        if (error) throw error;
+        
+        if (!data) {
+          setError('Grant not found');
+          return;
+        }
+        
+        setGrant(data);
+        
+        // If user is logged in, check if they've interacted with this grant
+        if (user) {
+          const { data: interactions, error: interactionsError } = await supabase
+            .from('user_interactions')
+            .select('action')
+            .eq('user_id', user.id)
+            .eq('grant_id', grantId);
+          
+          if (interactionsError) throw interactionsError;
+          
+          if (interactions && interactions.length > 0) {
+            setIsSaved(interactions.some((i: Interaction) => i.action === 'saved'));
+            setIsApplied(interactions.some((i: Interaction) => i.action === 'applied'));
+            setIsIgnored(interactions.some((i: Interaction) => i.action === 'ignored'));
+          }
+        }
+        
+        // Fetch similar grants
+        setLoadingSimilar(true);
+        const similarGrantsData = await fetchSimilarGrants(grantId, data.activity_category, 3);
+        setSimilarGrants(similarGrantsData.map(formatSimilarGrant));
+        setLoadingSimilar(false);
+      } catch (error: any) {
+        console.error('Error fetching grant:', error);
+        setError('Failed to load grant details. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchGrant();
+  }, [grantId, user]);
+  
+  // Handle user interactions (save, apply, ignore)
+  const handleInteraction = async (action: 'saved' | 'applied' | 'ignored') => {
+    if (!user) {
+      // Redirect to login or show login modal
+      return;
+    }
+    
+    try {
+      // Record the interaction
+      const { error } = await supabase
+        .from('user_interactions')
+        .upsert({
+          user_id: user.id,
+          grant_id: grantId,
+          action,
+          timestamp: new Date().toISOString(),
+        }, { onConflict: 'user_id,grant_id,action' });
+      
+      if (error) throw error;
+      
+      // Update the UI
+      if (action === 'saved') setIsSaved(true);
+      if (action === 'applied') setIsApplied(true);
+      if (action === 'ignored') setIsIgnored(true);
+    } catch (error: any) {
+      console.error(`Error ${action} grant:`, error);
+    }
+  };
   
   // Format dates
-  const formattedCloseDate = new Date(grant.closeDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  
-  const formattedPostDate = new Date(grant.postDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
   
   // Calculate days remaining
-  const today = new Date();
-  const closeDate = new Date(grant.closeDate);
-  const daysRemaining = Math.ceil((closeDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const getDaysRemaining = (closeDate: string | null) => {
+    if (!closeDate) return null;
+    
+    const today = new Date();
+    const closeDateObj = new Date(closeDate);
+    const daysRemaining = Math.ceil((closeDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    return daysRemaining;
+  };
+  
+  // Format currency
+  const formatCurrency = (amount: number | null) => {
+    if (amount === null) return 'N/A';
+    
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+  
+  // Show loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // Show error state
+  if (error || !grant) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-red-50 text-red-600 p-6 rounded-lg">
+            <h1 className="text-2xl font-bold mb-4">Error</h1>
+            <p>{error || 'Grant not found'}</p>
+            <Link href="/search" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
+              Return to Search
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // Calculate days remaining
+  const daysRemaining = getDaysRemaining(grant.close_date);
   
   return (
     <Layout>
@@ -100,17 +237,30 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 md:mb-0">{grant.title}</h1>
             <div className="flex space-x-2">
-              <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-                Save Grant
-              </button>
-              <button className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
-                Apply Now
-              </button>
+              {!isSaved && !isApplied && !isIgnored && (
+                <button 
+                  onClick={() => handleInteraction('saved')}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Save Grant
+                </button>
+              )}
+              {!isApplied && (
+                <a 
+                  href={`https://www.grants.gov/web/grants/view-opportunity.html?oppId=${grant.opportunity_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                  onClick={() => handleInteraction('applied')}
+                >
+                  Apply Now
+                </a>
+              )}
             </div>
           </div>
           
           <div className="flex flex-wrap gap-2 mb-4">
-            {grant.categories.map((category, index) => (
+            {grant.activity_category && grant.activity_category.map((category, index) => (
               <span 
                 key={index} 
                 className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded"
@@ -122,7 +272,7 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="font-medium text-gray-700">Agency:</span> {grant.agency} ({grant.agencyCode})
+              <span className="font-medium text-gray-700">Agency:</span> {grant.agency_name} ({grant.agency_code})
             </div>
             <div>
               <span className="font-medium text-gray-700">Opportunity ID:</span> {grant.opportunity_id}
@@ -148,35 +298,41 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
             
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4">Eligible Applicants</h2>
-              <ul className="list-disc pl-5 space-y-1">
-                {grant.eligibleApplicants.map((applicant, index) => (
-                  <li key={index}>{applicant}</li>
-                ))}
-              </ul>
+              {grant.eligible_applicants && grant.eligible_applicants.length > 0 ? (
+                <ul className="list-disc pl-5 space-y-1">
+                  {grant.eligible_applicants.map((applicant, index) => (
+                    <li key={index}>{applicant}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No eligibility information available.</p>
+              )}
             </div>
             
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold mb-4">Contact Information</h2>
               <div className="space-y-3">
                 <div>
-                  <span className="font-medium text-gray-700">Name:</span> {grant.grantorContactName}
+                  <span className="font-medium text-gray-700">Name:</span> {grant.grantor_contact_name || 'N/A'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Email:</span> {grant.grantorContactEmail}
+                  <span className="font-medium text-gray-700">Email:</span> {grant.grantor_contact_email || 'N/A'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Phone:</span> {grant.grantorContactPhone}
+                  <span className="font-medium text-gray-700">Phone:</span> {grant.grantor_contact_phone || 'N/A'}
                 </div>
-                <div className="pt-2">
-                  <a 
-                    href={grant.additionalInfoUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    Visit Agency Website
-                  </a>
-                </div>
+                {grant.additional_info_url && (
+                  <div className="pt-2">
+                    <a 
+                      href={grant.additional_info_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Visit Agency Website
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -189,46 +345,34 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
               <div className="space-y-4">
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Posted Date</div>
-                  <div>{formattedPostDate}</div>
+                  <div>{formatDate(grant.post_date)}</div>
                 </div>
                 
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Close Date</div>
-                  <div className="font-medium">{formattedCloseDate}</div>
-                  <div className={`text-sm ${daysRemaining < 30 ? 'text-red-600' : 'text-orange-600'}`}>
-                    {daysRemaining} days remaining
-                  </div>
+                  <div className="font-medium">{formatDate(grant.close_date)}</div>
+                  {daysRemaining !== null && (
+                    <div className={`text-sm ${daysRemaining < 30 ? 'text-red-600' : 'text-orange-600'}`}>
+                      {daysRemaining} days remaining
+                    </div>
+                  )}
                 </div>
                 
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Total Funding</div>
-                  <div>
-                    {new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0
-                    }).format(grant.fundingAmount)}
-                  </div>
+                  <div>{formatCurrency(grant.total_funding)}</div>
                 </div>
                 
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Award Range</div>
                   <div>
-                    {new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0
-                    }).format(grant.awardFloor)} - {new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                      maximumFractionDigits: 0
-                    }).format(grant.awardCeiling)}
+                    {formatCurrency(grant.award_floor)} - {formatCurrency(grant.award_ceiling)}
                   </div>
                 </div>
                 
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Cost Sharing Required</div>
-                  <div>{grant.costSharing ? 'Yes' : 'No'}</div>
+                  <div>{grant.cost_sharing ? 'Yes' : 'No'}</div>
                 </div>
               </div>
             </div>
@@ -241,21 +385,40 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="block w-full bg-blue-600 text-white text-center px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  onClick={() => !isApplied && handleInteraction('applied')}
                 >
                   Apply on Grants.gov
                 </a>
                 
-                <button className="block w-full bg-white border border-blue-600 text-blue-600 text-center px-4 py-2 rounded-md hover:bg-blue-50 transition-colors">
-                  Save Grant
-                </button>
+                {!isSaved && !isApplied && !isIgnored ? (
+                  <button 
+                    onClick={() => handleInteraction('saved')}
+                    className="block w-full bg-white border border-blue-600 text-blue-600 text-center px-4 py-2 rounded-md hover:bg-blue-50 transition-colors"
+                  >
+                    Save Grant
+                  </button>
+                ) : isSaved ? (
+                  <div className="block w-full bg-blue-50 border border-blue-600 text-blue-600 text-center px-4 py-2 rounded-md">
+                    ✓ Saved
+                  </div>
+                ) : null}
                 
                 <button className="block w-full bg-white border border-gray-300 text-gray-700 text-center px-4 py-2 rounded-md hover:bg-gray-50 transition-colors">
                   Share Grant
                 </button>
                 
-                <button className="block w-full bg-white border border-red-600 text-red-600 text-center px-4 py-2 rounded-md hover:bg-red-50 transition-colors">
-                  Ignore Grant
-                </button>
+                {!isIgnored && !isApplied ? (
+                  <button 
+                    onClick={() => handleInteraction('ignored')}
+                    className="block w-full bg-white border border-red-600 text-red-600 text-center px-4 py-2 rounded-md hover:bg-red-50 transition-colors"
+                  >
+                    Ignore Grant
+                  </button>
+                ) : isIgnored ? (
+                  <div className="block w-full bg-red-50 border border-red-600 text-red-600 text-center px-4 py-2 rounded-md">
+                    ✓ Ignored
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -264,23 +427,27 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
         {/* Similar Grants */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <h2 className="text-xl font-semibold mb-4">Similar Grants</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-              <h3 className="font-medium text-blue-600 mb-2">Sustainable Energy Research Initiative</h3>
-              <p className="text-sm text-gray-600 mb-2">Department of Energy</p>
-              <p className="text-xs text-gray-500">Deadline: July 15, 2025</p>
+          {loadingSimilar ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
             </div>
-            <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-              <h3 className="font-medium text-blue-600 mb-2">Climate Innovation Research Program</h3>
-              <p className="text-sm text-gray-600 mb-2">Environmental Protection Agency</p>
-              <p className="text-xs text-gray-500">Deadline: August 30, 2025</p>
+          ) : similarGrants.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {similarGrants.map((similarGrant) => (
+                <Link 
+                  key={similarGrant.id}
+                  href={`/grants/${similarGrant.id}`}
+                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                >
+                  <h3 className="font-medium text-blue-600 mb-2">{similarGrant.title}</h3>
+                  <p className="text-sm text-gray-600 mb-2">{similarGrant.agency}</p>
+                  <p className="text-xs text-gray-500">Deadline: {similarGrant.deadline}</p>
+                </Link>
+              ))}
             </div>
-            <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-              <h3 className="font-medium text-blue-600 mb-2">Advanced Energy Systems Development</h3>
-              <p className="text-sm text-gray-600 mb-2">Department of Energy</p>
-              <p className="text-xs text-gray-500">Deadline: September 10, 2025</p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-gray-600 text-center py-4">No similar grants found.</p>
+          )}
         </div>
       </div>
     </Layout>
