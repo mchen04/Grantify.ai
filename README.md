@@ -111,6 +111,12 @@ The data pipeline automatically fetches grant data from Grants.gov, processes it
 - `npm run clear-grants`: Clear all grants from the database
 - `npm run update-schema`: Update the database schema (requires manual SQL execution)
 
+## Deployment
+
+For deployment instructions, see:
+- [Vercel Deployment Guide](docs/vercel-deployment.md) - For deploying the frontend
+- [Backend Deployment](docs/vercel-deployment.md#deploy-backend-separately) - For deploying the backend API
+
 ## Documentation
 
 For more detailed information, see the documentation in the `docs/` directory:
@@ -120,6 +126,8 @@ For more detailed information, see the documentation in the `docs/` directory:
 - [Development Roadmap](docs/development-roadmap.md)
 - [AI Integration Strategy](docs/ai-integration-strategy.md)
 - [Data Pipeline Architecture](docs/data-pipeline-architecture.md)
+- [Supabase Setup](docs/supabase-setup.md)
+- [Vercel Deployment](docs/vercel-deployment.md)
 
 ## License
 

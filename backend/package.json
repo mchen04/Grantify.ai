@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "lint": "eslint src --ext .js",
     "test": "jest",
+    "build": "echo 'Backend build completed'",
     "update-grants": "node scripts/updateGrants.js",
     "update-grants-live": "node scripts/updateGrantsLive.js",
     "clear-grants": "node scripts/clearGrants.js",
