@@ -1,19 +1,27 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
-import supabase from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignUp() {
   const router = useRouter();
+  const { user, isLoading, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isLoading, router]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,31 +49,36 @@ export default function SignUp() {
     try {
       setLoading(true);
       
-      // Sign up with Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      // Sign up with Supabase using the AuthContext
+      const { error } = await signUp(email, password);
       
       if (error) {
         throw error;
       }
       
-      // Check if user was created
-      if (data?.user) {
-        setMessage('Success! Please check your email for confirmation.');
-        
-        // Redirect to dashboard after a delay
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
-      }
+      setMessage('Success! Please check your email for confirmation.');
+      
+      // Redirect to dashboard after a delay
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 2000);
     } catch (error: any) {
       setError(error.message || 'An error occurred during sign up');
     } finally {
       setLoading(false);
     }
   };
+
+  // If still checking authentication status, show loading
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

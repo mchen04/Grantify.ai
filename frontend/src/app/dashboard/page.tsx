@@ -6,57 +6,39 @@ import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
+import supabase from '@/lib/supabaseClient';
 
-// Mock data for demonstration
-const recommendedGrants = [
-  {
-    id: '1',
-    title: 'Research Grant for Renewable Energy Solutions',
-    agency: 'Department of Energy',
-    closeDate: '2025-06-30',
-    fundingAmount: 500000,
-    description: 'This grant supports research and development of innovative renewable energy solutions that address climate change and promote sustainability.',
-    categories: ['Energy', 'Research', 'Climate']
-  },
-  {
-    id: '2',
-    title: 'Community Health Initiative Grant',
-    agency: 'Department of Health',
-    closeDate: '2025-05-15',
-    fundingAmount: 250000,
-    description: 'Funding for community-based organizations to implement health programs that address local health disparities and improve access to care.',
-    categories: ['Health', 'Community', 'Social Services']
-  }
-];
+// Grant type definition
+interface Grant {
+  id: string;
+  title: string;
+  agency_name: string;
+  close_date: string | null;
+  award_ceiling: number | null;
+  description: string;
+  activity_category: string[];
+}
 
-const savedGrants = [
-  {
-    id: '3',
-    title: 'Small Business Innovation Research Grant',
-    agency: 'Small Business Administration',
-    closeDate: '2025-07-10',
-    fundingAmount: 150000,
-    description: 'This grant supports small businesses engaged in research and development with potential for commercialization and economic impact.',
-    categories: ['Business', 'Innovation', 'Research']
-  }
-];
-
-const appliedGrants = [
-  {
-    id: '4',
-    title: 'Digital Literacy Education Program',
-    agency: 'Department of Education',
-    closeDate: '2025-04-20',
-    fundingAmount: 300000,
-    description: 'Funding to develop and implement programs that enhance digital literacy skills among underserved populations and bridge the digital divide.',
-    categories: ['Education', 'Technology', 'Equity']
-  }
-];
+// User interaction type
+interface UserInteraction {
+  id: string;
+  user_id: string;
+  grant_id: string;
+  action: 'saved' | 'applied' | 'ignored';
+  timestamp: string;
+  grants: Grant;
+}
 
 export default function Dashboard() {
   const { user, isLoading, signOut } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('recommended');
+  const [loading, setLoading] = useState(false);
+  const [recommendedGrants, setRecommendedGrants] = useState<Grant[]>([]);
+  const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
+  const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
+  const [ignoredGrants, setIgnoredGrants] = useState<Grant[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -65,8 +47,118 @@ export default function Dashboard() {
     }
   }, [user, isLoading, router]);
 
-  // Show loading state while checking authentication
-  if (isLoading) {
+  // Fetch user's grants based on interactions
+  useEffect(() => {
+    const fetchUserGrants = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch saved grants
+        const { data: savedInteractions, error: savedError } = await supabase
+          .from('user_interactions')
+          .select('*, grants(*)')
+          .eq('user_id', user.id)
+          .eq('action', 'saved');
+        
+        if (savedError) throw savedError;
+        
+        // Fetch applied grants
+        const { data: appliedInteractions, error: appliedError } = await supabase
+          .from('user_interactions')
+          .select('*, grants(*)')
+          .eq('user_id', user.id)
+          .eq('action', 'applied');
+        
+        if (appliedError) throw appliedError;
+        
+        // Fetch ignored grants
+        const { data: ignoredInteractions, error: ignoredError } = await supabase
+          .from('user_interactions')
+          .select('*, grants(*)')
+          .eq('user_id', user.id)
+          .eq('action', 'ignored');
+        
+        if (ignoredError) throw ignoredError;
+        
+        // Fetch recommended grants (for now, just get some random grants)
+        // In a real implementation, this would use AI recommendations
+        const { data: allGrants, error: grantsError } = await supabase
+          .from('grants')
+          .select('*')
+          .limit(5);
+        
+        if (grantsError) throw grantsError;
+        
+        // Process the data
+        setSavedGrants(savedInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
+        setAppliedGrants(appliedInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
+        setIgnoredGrants(ignoredInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
+        setRecommendedGrants(allGrants || []);
+      } catch (error: any) {
+        console.error('Error fetching user grants:', error);
+        setError('Failed to load your grants. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserGrants();
+  }, [user]);
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/');
+  };
+
+  // Handle grant interaction (save, apply, ignore)
+  const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+    if (!user) return;
+    
+    try {
+      // Record the interaction in Supabase
+      const { error } = await supabase
+        .from('user_interactions')
+        .upsert({
+          user_id: user.id,
+          grant_id: grantId,
+          action,
+          timestamp: new Date().toISOString(),
+        }, { onConflict: 'user_id,grant_id,action' });
+      
+      if (error) throw error;
+      
+      // Update the local state based on the action
+      // This is a simplified approach - in a real app, you'd refetch the data
+      if (action === 'saved') {
+        const grantToSave = recommendedGrants.find(g => g.id === grantId);
+        if (grantToSave && !savedGrants.some(g => g.id === grantId)) {
+          setSavedGrants([...savedGrants, grantToSave]);
+        }
+      } else if (action === 'applied') {
+        const grantToApply = recommendedGrants.find(g => g.id === grantId) || 
+                            savedGrants.find(g => g.id === grantId);
+        if (grantToApply && !appliedGrants.some(g => g.id === grantId)) {
+          setAppliedGrants([...appliedGrants, grantToApply]);
+        }
+      } else if (action === 'ignored') {
+        const grantToIgnore = recommendedGrants.find(g => g.id === grantId);
+        if (grantToIgnore && !ignoredGrants.some(g => g.id === grantId)) {
+          setIgnoredGrants([...ignoredGrants, grantToIgnore]);
+          setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
+        }
+      }
+    } catch (error: any) {
+      console.error(`Error ${action} grant:`, error);
+      setError(`Failed to ${action.replace('ed', '')} grant. Please try again.`);
+    }
+  };
+
+  // Show loading state while checking authentication or loading data
+  if (isLoading || loading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-screen">
@@ -80,12 +172,6 @@ export default function Dashboard() {
   if (!user) {
     return null;
   }
-
-  // Handle sign out
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/');
-  };
 
   return (
     <Layout>
@@ -110,6 +196,12 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+        
+        {error && (
+          <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
         
         {/* Dashboard Navigation */}
         <div className="mb-8 border-b">
@@ -177,11 +269,14 @@ export default function Dashboard() {
                     key={grant.id}
                     id={grant.id}
                     title={grant.title}
-                    agency={grant.agency}
-                    closeDate={grant.closeDate}
-                    fundingAmount={grant.fundingAmount}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
                     description={grant.description}
-                    categories={grant.categories}
+                    categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   />
                 ))}
               </div>
@@ -213,11 +308,13 @@ export default function Dashboard() {
                     key={grant.id}
                     id={grant.id}
                     title={grant.title}
-                    agency={grant.agency}
-                    closeDate={grant.closeDate}
-                    fundingAmount={grant.fundingAmount}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
                     description={grant.description}
-                    categories={grant.categories}
+                    categories={grant.activity_category || []}
+                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   />
                 ))}
               </div>
@@ -249,11 +346,12 @@ export default function Dashboard() {
                     key={grant.id}
                     id={grant.id}
                     title={grant.title}
-                    agency={grant.agency}
-                    closeDate={grant.closeDate}
-                    fundingAmount={grant.fundingAmount}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
                     description={grant.description}
-                    categories={grant.categories}
+                    categories={grant.activity_category || []}
+                    isApplied={true}
                   />
                 ))}
               </div>
@@ -278,15 +376,33 @@ export default function Dashboard() {
               <h2 className="text-xl font-semibold">Ignored Grants</h2>
             </div>
             
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">You haven't ignored any grants yet.</p>
-              <Link
-                href="/search"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Search Grants
-              </Link>
-            </div>
+            {ignoredGrants.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {ignoredGrants.map((grant) => (
+                  <GrantCard
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
+                    description={grant.description}
+                    categories={grant.activity_category || []}
+                    isIgnored={true}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">You haven't ignored any grants yet.</p>
+                <Link
+                  href="/search"
+                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Search Grants
+                </Link>
+              </div>
+            )}
           </section>
         )}
       </div>

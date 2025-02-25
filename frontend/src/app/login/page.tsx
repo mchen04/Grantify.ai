@@ -1,23 +1,33 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
-import supabase from '@/lib/supabaseClient';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Login() {
   const router = useRouter();
+  const { user, isLoading, signIn, resetPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!isLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Reset error state
+    // Reset states
     setError(null);
+    setMessage(null);
     
     // Validate form
     if (!email || !password) {
@@ -28,21 +38,15 @@ export default function Login() {
     try {
       setLoading(true);
       
-      // Sign in with Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Sign in with Supabase using the AuthContext
+      const { error } = await signIn(email, password);
       
       if (error) {
         throw error;
       }
       
-      // Check if user was authenticated
-      if (data?.user) {
-        // Redirect to dashboard
-        router.push('/dashboard');
-      }
+      // Redirect to dashboard
+      router.push('/dashboard');
     } catch (error: any) {
       setError(error.message || 'Invalid email or password');
     } finally {
@@ -51,6 +55,10 @@ export default function Login() {
   };
 
   const handleResetPassword = async () => {
+    // Reset states
+    setError(null);
+    setMessage(null);
+    
     if (!email) {
       setError('Please enter your email address to reset your password');
       return;
@@ -59,23 +67,32 @@ export default function Login() {
     try {
       setLoading(true);
       
-      // Send password reset email
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
+      // Send password reset email using the AuthContext
+      const { error } = await resetPassword(email);
       
       if (error) {
         throw error;
       }
       
       // Show success message
-      alert('Password reset email sent. Please check your inbox.');
+      setMessage('Password reset email sent. Please check your inbox.');
     } catch (error: any) {
       setError(error.message || 'Failed to send password reset email');
     } finally {
       setLoading(false);
     }
   };
+
+  // If still checking authentication status, show loading
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -86,6 +103,12 @@ export default function Login() {
           {error && (
             <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
               {error}
+            </div>
+          )}
+          
+          {message && (
+            <div className="bg-green-50 text-green-600 p-4 rounded-lg mb-6">
+              {message}
             </div>
           )}
           

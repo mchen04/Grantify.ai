@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { GRANT_CATEGORIES, GRANT_AGENCIES, DEFAULT_USER_PREFERENCES } from '@/lib/config';
+import supabase from '@/lib/supabaseClient';
 
 type EmailFrequency = 'daily' | 'weekly' | 'never';
 
@@ -32,7 +33,7 @@ export default function Preferences() {
     }
   }, [user, isLoading, router]);
 
-  // Load user preferences
+  // Load user preferences from Supabase
   useEffect(() => {
     const loadPreferences = async () => {
       if (!user) return;
@@ -40,22 +41,45 @@ export default function Preferences() {
       try {
         setLoading(true);
         
-        // TODO: Replace with actual API call to get user preferences
-        // For now, use default preferences
-        const preferences = DEFAULT_USER_PREFERENCES;
+        // Fetch user preferences from Supabase
+        const { data, error } = await supabase
+          .from('user_preferences')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
         
-        // Set state from preferences
-        setSelectedTopics(preferences.topics || []);
-        setFundingMin(preferences.funding_min || 0);
-        setFundingMax(preferences.funding_max || 1000000);
-        setSelectedAgencies(preferences.agencies || []);
-        setEligibleTypes(preferences.eligible_applicant_types || []);
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+          throw error;
+        }
         
-        if (preferences.notification_settings) {
-          const frequency = preferences.notification_settings.email_frequency || 'weekly';
-          setEmailFrequency(frequency as EmailFrequency);
-          setNotifyNewMatches(preferences.notification_settings.notify_new_matches || true);
-          setNotifyDeadlines(preferences.notification_settings.notify_deadlines || true);
+        if (data) {
+          // Set state from preferences
+          setSelectedTopics(data.topics || []);
+          setFundingMin(data.funding_min || 0);
+          setFundingMax(data.funding_max || 1000000);
+          setSelectedAgencies(data.agencies || []);
+          setEligibleTypes(data.eligible_applicant_types || []);
+          
+          if (data.notification_settings) {
+            const frequency = data.notification_settings.email_frequency || 'weekly';
+            setEmailFrequency(frequency as EmailFrequency);
+            setNotifyNewMatches(data.notification_settings.notify_new_matches || true);
+            setNotifyDeadlines(data.notification_settings.notify_deadlines || true);
+          }
+        } else {
+          // If no preferences exist yet, use defaults
+          setSelectedTopics(DEFAULT_USER_PREFERENCES.topics || []);
+          setFundingMin(DEFAULT_USER_PREFERENCES.funding_min || 0);
+          setFundingMax(DEFAULT_USER_PREFERENCES.funding_max || 1000000);
+          setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
+          setEligibleTypes(DEFAULT_USER_PREFERENCES.eligible_applicant_types || []);
+          
+          if (DEFAULT_USER_PREFERENCES.notification_settings) {
+            const frequency = DEFAULT_USER_PREFERENCES.notification_settings.email_frequency || 'weekly';
+            setEmailFrequency(frequency as EmailFrequency);
+            setNotifyNewMatches(DEFAULT_USER_PREFERENCES.notification_settings.notify_new_matches || true);
+            setNotifyDeadlines(DEFAULT_USER_PREFERENCES.notification_settings.notify_deadlines || true);
+          }
         }
       } catch (error) {
         console.error('Error loading preferences:', error);
@@ -68,7 +92,7 @@ export default function Preferences() {
     loadPreferences();
   }, [user]);
 
-  // Handle form submission
+  // Handle form submission - Save to Supabase
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -79,6 +103,7 @@ export default function Preferences() {
       
       // Prepare preferences object
       const preferences = {
+        user_id: user.id,
         topics: selectedTopics,
         funding_min: fundingMin,
         funding_max: fundingMax,
@@ -89,11 +114,17 @@ export default function Preferences() {
           notify_new_matches: notifyNewMatches,
           notify_deadlines: notifyDeadlines,
         },
+        updated_at: new Date().toISOString(),
       };
       
-      // TODO: Replace with actual API call to update user preferences
-      // For now, just simulate a delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Save preferences to Supabase using upsert
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert(preferences, { onConflict: 'user_id' });
+      
+      if (error) {
+        throw error;
+      }
       
       setMessage({ type: 'success', text: 'Preferences saved successfully' });
       
@@ -101,9 +132,9 @@ export default function Preferences() {
       setTimeout(() => {
         setMessage(null);
       }, 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving preferences:', error);
-      setMessage({ type: 'error', text: 'Failed to save preferences' });
+      setMessage({ type: 'error', text: `Failed to save preferences: ${error.message}` });
     } finally {
       setSaving(false);
     }
