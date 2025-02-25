@@ -8,7 +8,7 @@ Grantify.ai extracts grant data daily from Grants.gov, uses AI to categorize gra
 
 ## Features
 
-- Daily data extraction from Grants.gov XML Extract
+- Daily data extraction from Grants.gov XML Extract at 5 AM EST
 - AI-based grant categorization using Gemini API / DeepSeek
 - Hybrid search system (AI-driven personalized results + keyword-based filtering)
 - Per-user learning to refine recommendations
@@ -28,6 +28,9 @@ Grantify.ai extracts grant data daily from Grants.gov, uses AI to categorize gra
 root/
 ├─ frontend/       # Next.js application
 ├─ backend/        # Node.js API server
+│  ├─ data/        # Downloaded grant data (not committed to Git)
+│  ├─ scripts/     # Utility scripts for data pipeline
+│  └─ src/         # Source code
 ├─ docs/           # Documentation
 ```
 
@@ -62,11 +65,51 @@ root/
 
 4. Set up environment variables
    - Create `.env.local` in the frontend directory
-   - Create `.env` in the backend directory
+   - Create `.env` in the backend directory with the following:
+     ```
+     PORT=3001
+     NODE_ENV=development
+     SUPABASE_URL=your_supabase_url
+     SUPABASE_SERVICE_KEY=your_supabase_service_key
+     ENABLE_CRON_JOBS=true
+     ```
 
 5. Start the development servers
    - Frontend: `npm run dev` in the frontend directory
    - Backend: `npm run dev` in the backend directory
+
+## Data Pipeline
+
+The data pipeline automatically fetches grant data from Grants.gov, processes it, and stores it in the Supabase database.
+
+### Running the Data Pipeline
+
+1. Update the database schema (one-time setup):
+   ```sql
+   ALTER TABLE grants ALTER COLUMN total_funding TYPE bigint;
+   ALTER TABLE grants ALTER COLUMN award_ceiling TYPE bigint;
+   ALTER TABLE grants ALTER COLUMN award_floor TYPE bigint;
+   CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
+   ```
+
+2. Clear existing grants (if needed):
+   ```
+   cd backend
+   npm run clear-grants
+   ```
+
+3. Download and process grants:
+   ```
+   cd backend
+   npm run update-grants-live
+   ```
+
+### Available Scripts
+
+- `npm run update-grants`: Run the pipeline with mock data (for testing)
+- `npm run update-grants-live`: Run the pipeline with real data from Grants.gov
+- `npm run clear-grants`: Clear all grants from the database
+- `npm run update-schema`: Update the database schema (requires manual SQL execution)
 
 ## Documentation
 

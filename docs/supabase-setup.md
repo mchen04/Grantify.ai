@@ -21,6 +21,7 @@ After your project is created:
 3. Copy the following values:
    - **URL**: Your Supabase project URL
    - **anon public key**: Your anonymous API key
+   - **service_role key**: Your service role key (for backend use)
 
 ## 3. Update Environment Variables
 
@@ -38,6 +39,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_KEY=your_supabase_service_key
+ENABLE_CRON_JOBS=true
 ```
 
 Note: The service key is different from the anon key. You can find it in the same API settings page.
@@ -53,7 +55,29 @@ We'll use the SQL schema we've already created. You can run this SQL in the Supa
 
 Alternatively, you can use the Supabase CLI to apply migrations.
 
-## 5. Configure Authentication
+## 5. Update Schema for Large Funding Amounts
+
+Some grants have funding amounts that exceed PostgreSQL's integer limit (2.1 billion). To handle these large amounts, you need to update the schema to use `bigint` instead of `integer`:
+
+1. Go to the SQL Editor in your Supabase dashboard
+2. Create a new query
+3. Paste the following SQL:
+
+```sql
+-- Update funding fields to use bigint instead of integer to handle large funding amounts
+ALTER TABLE grants ALTER COLUMN total_funding TYPE bigint;
+ALTER TABLE grants ALTER COLUMN award_ceiling TYPE bigint;
+ALTER TABLE grants ALTER COLUMN award_floor TYPE bigint;
+
+-- Add an index on opportunity_id for faster lookups
+CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
+```
+
+4. Run the query
+
+This will update the funding fields to use `bigint` instead of `integer`, allowing them to handle larger funding amounts.
+
+## 6. Configure Authentication
 
 ### Enable Email Authentication
 
@@ -72,7 +96,7 @@ If you want to allow login with Google, GitHub, etc.:
 3. Follow the instructions to set up the OAuth credentials
 4. Toggle the provider to "Enabled"
 
-## 6. Set Up Row-Level Security (RLS)
+## 7. Set Up Row-Level Security (RLS)
 
 Our schema already includes RLS policies, but ensure they're enabled:
 
@@ -80,7 +104,7 @@ Our schema already includes RLS policies, but ensure they're enabled:
 2. For each table, check that RLS is enabled
 3. Verify the policies match what's in our schema
 
-## 7. Create Initial Data (Optional)
+## 8. Create Initial Data (Optional)
 
 You may want to create some initial data for testing:
 
@@ -88,7 +112,14 @@ You may want to create some initial data for testing:
 2. Add some sample grants
 3. Create a test user account
 
-## 8. Test the Connection
+Alternatively, you can use our data pipeline to fetch real grants from Grants.gov:
+
+```bash
+cd backend
+npm run update-grants-live
+```
+
+## 9. Test the Connection
 
 After setting up Supabase, test the connection:
 
@@ -106,7 +137,7 @@ const { data, error } = await supabase.from('grants').select('*').limit(1);
 console.log(data, error);
 ```
 
-## 9. Implement Authentication UI
+## 10. Implement Authentication UI
 
 Now that Supabase is set up, you can implement the authentication UI using Supabase Auth components or custom components.
 
@@ -133,7 +164,7 @@ const LoginPage = () => {
 };
 ```
 
-## 10. Set Up User Management
+## 11. Set Up User Management
 
 After a user signs up, you'll need to:
 
@@ -141,6 +172,18 @@ After a user signs up, you'll need to:
 2. Initialize their preferences in the `user_preferences` table
 
 This can be done using Supabase Functions or in your application code.
+
+## 12. Database Maintenance
+
+For database maintenance, we've created several utility scripts:
+
+- **Clear Grants**: To clear all grants from the database, run:
+  ```bash
+  cd backend
+  npm run clear-grants
+  ```
+
+- **Update Schema**: To update the database schema, run the SQL in the Supabase SQL Editor as described in step 5.
 
 ## Next Steps
 

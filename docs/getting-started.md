@@ -35,6 +35,62 @@ Based on our development roadmap, here's what should be implemented first:
 - Set up indexes for performance
 - Configure row-level security policies
 
+## Phase 2: Data Pipeline Implementation
+
+### Step 1: Set Up Data Extraction
+- Create utility to download XML extract from Grants.gov
+- Implement error handling and fallbacks
+- Set up directory structure for downloaded files
+
+### Step 2: Implement Data Parsing
+- Create XML parser for Grants.gov data
+- Transform raw data into structured format
+- Validate and clean data
+
+### Step 3: Configure Database Storage
+- Implement batch processing with progress bar
+- Set up delta updates (only process new/changed grants)
+- Create utility scripts for database management
+
+### Step 4: Schedule Automated Updates
+- Set up cron job to run at 5 AM EST daily
+- Implement logging and monitoring
+- Create manual trigger for updates
+
+### Step 5: Database Schema Optimization
+- Update funding fields to use bigint instead of integer
+- Add indexes for faster lookups
+- Implement efficient querying
+
+## Running the Data Pipeline
+
+1. Update the database schema (one-time setup):
+   ```sql
+   ALTER TABLE grants ALTER COLUMN total_funding TYPE bigint;
+   ALTER TABLE grants ALTER COLUMN award_ceiling TYPE bigint;
+   ALTER TABLE grants ALTER COLUMN award_floor TYPE bigint;
+   CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
+   ```
+
+2. Clear existing grants (if needed):
+   ```bash
+   cd backend
+   npm run clear-grants
+   ```
+
+3. Download and process grants:
+   ```bash
+   cd backend
+   npm run update-grants-live
+   ```
+
+## Available Scripts
+
+- `npm run update-grants`: Run the pipeline with mock data (for testing)
+- `npm run update-grants-live`: Run the pipeline with real data from Grants.gov
+- `npm run clear-grants`: Clear all grants from the database
+- `npm run update-schema`: Update the database schema (requires manual SQL execution)
+
 ## Implementation Order
 
 1. **First Week**: Focus on setting up the development environment and project structure
@@ -49,4 +105,10 @@ Based on our development roadmap, here's what should be implemented first:
    - Implement basic API endpoints
    - Create frontend pages and components
 
-This foundation will provide the infrastructure needed for the subsequent phases of development, including the data pipeline, AI integration, and core features.
+3. **Third Week**: Implement data pipeline
+   - Set up data extraction from Grants.gov
+   - Implement data parsing and transformation
+   - Configure database storage with delta updates
+   - Set up cron job for automated updates
+
+This foundation will provide the infrastructure needed for the subsequent phases of development, including the AI integration and core features.
