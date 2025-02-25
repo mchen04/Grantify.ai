@@ -1,5 +1,6 @@
 const supabase = require('../db/supabaseClient');
 const { format } = require('date-fns');
+const readline = require('readline');
 
 /**
  * Service for managing grants in the database
@@ -23,6 +24,7 @@ class GrantsService {
         failed: 0,
         startTime: new Date(),
         endTime: null,
+        failedGrants: [], // Track failed grants for reporting
       };
       
       // Process grants in batches to avoid overwhelming the database
@@ -35,10 +37,15 @@ class GrantsService {
       
       console.log(`Split grants into ${batches.length} batches of up to ${batchSize} grants each`);
       
+      // Set up progress bar
+      const progressBar = this.createProgressBar(batches.length);
+      
       // Process each batch
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
-        console.log(`Processing batch ${i + 1} of ${batches.length} (${batch.length} grants)...`);
+        
+        // Update progress bar
+        this.updateProgressBar(progressBar, i + 1, batches.length);
         
         // Process each grant in the batch
         const batchResults = await Promise.all(
@@ -50,8 +57,32 @@ class GrantsService {
           if (result.status === 'new') stats.new++;
           else if (result.status === 'updated') stats.updated++;
           else if (result.status === 'unchanged') stats.unchanged++;
-          else stats.failed++;
+          else {
+            stats.failed++;
+            if (result.error) {
+              stats.failedGrants.push({
+                id: result.id,
+                error: result.error
+              });
+            }
+          }
         });
+      }
+      
+      // Complete the progress bar
+      this.updateProgressBar(progressBar, batches.length, batches.length);
+      console.log(''); // Add a newline after the progress bar
+      
+      // Log failed grants (limited to first 10)
+      if (stats.failedGrants.length > 0) {
+        console.log(`Failed to process ${stats.failedGrants.length} grants. First 10 errors:`);
+        stats.failedGrants.slice(0, 10).forEach(failedGrant => {
+          console.log(`Error processing grant ${failedGrant.id}: ${JSON.stringify(failedGrant.error)}`);
+        });
+        
+        if (stats.failedGrants.length > 10) {
+          console.log(`... and ${stats.failedGrants.length - 10} more errors`);
+        }
       }
       
       // Record the pipeline run
@@ -76,6 +107,49 @@ class GrantsService {
       
       throw error;
     }
+  }
+  
+  /**
+   * Create a progress bar
+   * @param {number} total - Total number of items
+   * @returns {Object} - Progress bar object
+   */
+  createProgressBar(total) {
+    const progressBar = {
+      total,
+      current: 0,
+      bar: '',
+      percent: 0,
+    };
+    
+    // Initialize the progress bar
+    this.updateProgressBar(progressBar, 0, total);
+    
+    return progressBar;
+  }
+  
+  /**
+   * Update the progress bar
+   * @param {Object} progressBar - Progress bar object
+   * @param {number} current - Current progress
+   * @param {number} total - Total items
+   */
+  updateProgressBar(progressBar, current, total) {
+    progressBar.current = current;
+    progressBar.percent = Math.floor((current / total) * 100);
+    
+    const barLength = 30;
+    const filledLength = Math.floor((current / total) * barLength);
+    const emptyLength = barLength - filledLength;
+    
+    const filledBar = '='.repeat(filledLength);
+    const emptyBar = ' '.repeat(emptyLength);
+    progressBar.bar = `[${filledBar}>${emptyBar}]`;
+    
+    // Clear the current line and write the progress bar
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    process.stdout.write(`Progress: ${progressBar.bar} ${progressBar.percent}% (${current}/${total} batches)`);
   }
   
   /**
@@ -123,8 +197,7 @@ class GrantsService {
       
       return { status: 'updated', id: existingGrant.id };
     } catch (error) {
-      console.error(`Error processing grant ${grant.opportunity_id}:`, error);
-      return { status: 'failed', id: grant.opportunity_id, error: error.message };
+      return { status: 'failed', id: grant.opportunity_id, error };
     }
   }
   

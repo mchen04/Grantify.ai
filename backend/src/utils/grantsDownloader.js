@@ -4,12 +4,55 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const { promisify } = require('util');
 const { mkdirp } = require('mkdirp');
-const { format } = require('date-fns');
+const { format, subDays } = require('date-fns');
+const cheerio = require('cheerio');
 
 // Promisify fs functions
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 const exists = promisify(fs.exists);
+
+/**
+ * Get the latest available XML extract URL from Grants.gov
+ * @returns {Promise<string>} - URL of the latest XML extract
+ */
+async function getLatestXmlExtractUrl() {
+  try {
+    // Fetch the XML extract page
+    const response = await axios.get('https://www.grants.gov/xml-extract');
+    const $ = cheerio.load(response.data);
+    
+    // Find all links to ZIP files
+    const zipLinks = [];
+    $('a[href$=".zip"]').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href && href.includes('GrantsDBExtract')) {
+        zipLinks.push(href);
+      }
+    });
+    
+    if (zipLinks.length === 0) {
+      throw new Error('No ZIP files found on the XML extract page');
+    }
+    
+    // Sort by date (assuming the filenames contain dates)
+    zipLinks.sort().reverse();
+    
+    // Return the latest one
+    const latestZipUrl = zipLinks[0];
+    console.log(`Found latest XML extract: ${latestZipUrl}`);
+    
+    // If the URL is relative, make it absolute
+    if (latestZipUrl.startsWith('/')) {
+      return `https://www.grants.gov${latestZipUrl}`;
+    }
+    
+    return latestZipUrl;
+  } catch (error) {
+    console.error('Error getting latest XML extract URL:', error);
+    throw error;
+  }
+}
 
 /**
  * Downloads the latest grants XML extract from Grants.gov
@@ -49,32 +92,24 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
       return xmlPath;
     }
     
-    // Construct URL
-    const url = `https://www.grants.gov/extract/${filename}`;
-    console.log(`Downloading grants extract from ${url}...`);
-    
-    // Download the file
-    const zipPath = path.join(extractsDir, filename);
-    
     try {
+      // Get the latest XML extract URL from the Grants.gov website
+      const zipUrl = await getLatestXmlExtractUrl();
+      console.log(`Downloading grants extract from ${zipUrl}...`);
+      
+      // Extract the filename from the URL
+      const urlFilename = zipUrl.split('/').pop();
+      const zipPath = path.join(extractsDir, urlFilename);
+      const extractedXmlFilename = urlFilename.replace('.zip', '.xml');
+      const extractedXmlPath = path.join(xmlDir, extractedXmlFilename);
+      
+      // Download the zip file
       const response = await axios({
         method: 'get',
-        url,
+        url: zipUrl,
         responseType: 'arraybuffer',
-        validateStatus: status => status === 200, // Only accept 200 OK
-        timeout: 30000, // 30 second timeout
+        timeout: 60000, // 60 second timeout for large files
       });
-      
-      // Check if the response is a ZIP file
-      const contentType = response.headers['content-type'];
-      if (contentType && !contentType.includes('application/zip') && !contentType.includes('application/octet-stream')) {
-        console.warn(`Warning: Response content type is ${contentType}, expected application/zip or application/octet-stream`);
-      }
-      
-      // Check if the response is too small to be a valid ZIP file
-      if (response.data.length < 100) {
-        throw new Error(`Response too small to be a valid ZIP file (${response.data.length} bytes)`);
-      }
       
       await writeFile(zipPath, response.data);
       console.log(`Downloaded zip file to ${zipPath}`);
@@ -84,7 +119,7 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
         const zip = new AdmZip(zipPath);
         const zipEntries = zip.getEntries();
         
-        // Check if the ZIP contains the expected XML file
+        // Check if the ZIP contains an XML file
         const xmlEntry = zipEntries.find(entry => entry.entryName.endsWith('.xml'));
         if (!xmlEntry) {
           throw new Error('ZIP file does not contain an XML file');
@@ -94,54 +129,42 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
         console.log(`Extracted XML file to ${xmlDir}`);
         
         // Verify that the XML file was extracted
-        if (!(await exists(xmlPath))) {
-          throw new Error(`XML file not found after extraction: ${xmlPath}`);
+        if (!(await exists(extractedXmlPath))) {
+          throw new Error(`XML file not found after extraction: ${extractedXmlPath}`);
         }
         
-        // Return the path to the XML file
-        return xmlPath;
+        // Return the path to the extracted XML file
+        return extractedXmlPath;
       } catch (extractError) {
         console.error('Error extracting ZIP file:', extractError);
-        
-        // If we can't extract the ZIP, try downloading without the v2 suffix
-        if (useV2) {
-          console.log('Trying without v2 suffix...');
-          return downloadGrantsXml(date, false);
-        }
-        
-        // If all else fails, use the mock XML file
-        console.log('Using mock XML file as fallback...');
-        return xmlPath;
+        throw extractError;
       }
     } catch (downloadError) {
-      console.error('Error downloading ZIP file:', downloadError);
+      console.error('Error downloading or extracting ZIP file:', downloadError);
       
-      // If the current day's file is not available, try the previous day
-      if (downloadError.response && downloadError.response.status === 404) {
-        const yesterday = new Date(date);
-        yesterday.setDate(yesterday.getDate() - 1);
-        
-        console.log(`File not found for ${format(date, 'yyyy-MM-dd')}, trying ${format(yesterday, 'yyyy-MM-dd')}...`);
-        return downloadGrantsXml(yesterday, useV2);
+      // If using the mock file as fallback
+      if (await exists(path.join(xmlDir, 'GrantsDBExtract20250225v2.xml'))) {
+        console.log('Using existing mock XML file as fallback...');
+        return path.join(xmlDir, 'GrantsDBExtract20250225v2.xml');
       }
       
-      // If all else fails, use the mock XML file
-      console.log('Using mock XML file as fallback...');
-      return xmlPath;
+      throw downloadError;
     }
   } catch (error) {
     console.error('Error downloading grants XML:', error);
     
-    // If all else fails, use the mock XML file
-    console.log('Using mock XML file as fallback...');
-    const dateStr = format(date, 'yyyyMMdd');
-    const v2Suffix = useV2 ? 'v2' : '';
-    const xmlFilename = `GrantsDBExtract${dateStr}${v2Suffix}.xml`;
-    const xmlPath = path.join(__dirname, '../../data/xml', xmlFilename);
-    return xmlPath;
+    // If all else fails, use the mock XML file if it exists
+    const mockXmlPath = path.join(__dirname, '../../data/xml/GrantsDBExtract20250225v2.xml');
+    if (await exists(mockXmlPath)) {
+      console.log('Using mock XML file as fallback...');
+      return mockXmlPath;
+    }
+    
+    throw error;
   }
 }
 
 module.exports = {
   downloadGrantsXml,
+  getLatestXmlExtractUrl
 };

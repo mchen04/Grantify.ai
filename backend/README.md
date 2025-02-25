@@ -20,17 +20,55 @@ The backend includes a data pipeline that fetches grant data from Grants.gov, pr
 - `src/utils/grantsParser.js`: Parses the XML data and transforms it into a structured format
 - `src/services/grantsService.js`: Handles storing the data in the database with delta updates
 - `src/utils/cronJobs.js`: Sets up the cron job to run the pipeline daily
-- `scripts/updateGrants.js`: Script to manually run the pipeline
+- `scripts/updateGrants.js`: Script to manually run the pipeline with mock data
+- `scripts/updateGrantsLive.js`: Script to manually run the pipeline with live data from Grants.gov
+- `scripts/update-schema.sql`: SQL script to update the database schema
+- `scripts/clearGrants.js`: Script to clear all grants from the database
+- `scripts/runSchemaUpdate.js`: Script to run the schema update SQL
 
 ### Manual Execution
 
-To manually run the data pipeline:
+To manually run the data pipeline with mock data (for testing):
 
 ```bash
 npm run update-grants
 ```
 
-This will download the latest XML extract, process it, and store it in the database.
+To manually run the data pipeline with live data from Grants.gov:
+
+```bash
+npm run update-grants-live
+```
+
+The live data script will attempt to download the latest XML extract from Grants.gov. If the current day's file is not available, it will try previous days until it finds a valid file.
+
+### Clearing Grants from the Database
+
+If you need to clear all grants from the database (for example, to start fresh or fix data issues), you can run:
+
+```bash
+npm run clear-grants
+```
+
+This will delete all grants and pipeline runs from the database, giving you a clean slate.
+
+### Fixing Integer Overflow Errors
+
+If you encounter errors like `value "2192000000" is out of range for type integer`, you need to update the database schema to use `bigint` instead of `integer` for the funding fields. You can do this by running:
+
+```bash
+npm run update-schema
+```
+
+This will execute the SQL in `scripts/update-schema.sql` to update the funding fields to use `bigint` instead of `integer`, allowing them to handle larger funding amounts.
+
+Alternatively, you can run the SQL manually in your Supabase SQL Editor:
+
+1. Go to your Supabase dashboard
+2. Navigate to the SQL Editor
+3. Open a new query
+4. Copy and paste the contents of `scripts/update-schema.sql`
+5. Run the query
 
 ### Configuration
 

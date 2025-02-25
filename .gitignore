@@ -64,3 +64,8 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Grants.gov data files
+backend/data/
+*.zip
+*.xml

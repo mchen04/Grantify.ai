@@ -4,7 +4,7 @@ This document outlines the architecture and implementation details for the Grant
 
 ## Overview
 
-The data pipeline is a critical component of the Grantify.ai platform, ensuring that users have access to the latest grant opportunities. The pipeline runs daily at 6 AM EST to fetch the latest grant data from Grants.gov, process it, and make it available for search and recommendations.
+The data pipeline is a critical component of the Grantify.ai platform, ensuring that users have access to the latest grant opportunities. The pipeline runs daily at 5 AM EST to fetch the latest grant data from Grants.gov, process it, and make it available for search and recommendations.
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -31,76 +31,177 @@ The data extraction component is responsible for downloading the latest grant da
 
 #### Implementation Details:
 
-```typescript
-// src/utils/dataExtraction.ts
+```javascript
+// src/utils/grantsDownloader.js
 
-import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import { format } from 'date-fns';
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const AdmZip = require('adm-zip');
+const { promisify } = require('util');
+const { mkdirp } = require('mkdirp');
+const { format } = require('date-fns');
+const cheerio = require('cheerio');
 
-export async function downloadGrantsData(): Promise<string> {
+// Promisify fs functions
+const writeFile = promisify(fs.writeFile);
+const readFile = promisify(fs.readFile);
+const exists = promisify(fs.exists);
+
+/**
+ * Get the latest available XML extract URL from Grants.gov
+ * @returns {Promise<string>} - URL of the latest XML extract
+ */
+async function getLatestXmlExtractUrl() {
   try {
-    // Get current date in YYYYMMDD format
-    const dateStr = format(new Date(), 'yyyyMMdd');
-    const fileName = `GrantsDBExtract${dateStr}.zip`;
-    const url = `https://www.grants.gov/extract/${fileName}`;
+    // Fetch the XML extract page
+    const response = await axios.get('https://www.grants.gov/xml-extract');
+    const $ = cheerio.load(response.data);
     
-    // Create downloads directory if it doesn't exist
-    const downloadsDir = path.join(process.cwd(), 'downloads');
-    if (!fs.existsSync(downloadsDir)) {
-      fs.mkdirSync(downloadsDir, { recursive: true });
+    // Find all links to ZIP files
+    const zipLinks = [];
+    $('a[href$=".zip"]').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href && href.includes('GrantsDBExtract')) {
+        zipLinks.push(href);
+      }
+    });
+    
+    if (zipLinks.length === 0) {
+      throw new Error('No ZIP files found on the XML extract page');
     }
     
-    const filePath = path.join(downloadsDir, fileName);
+    // Sort by date (assuming the filenames contain dates)
+    zipLinks.sort().reverse();
     
-    // Download file
-    const response = await axios({
-      method: 'GET',
-      url,
-      responseType: 'stream',
-    });
+    // Return the latest one
+    const latestZipUrl = zipLinks[0];
+    console.log(`Found latest XML extract: ${latestZipUrl}`);
     
-    // Save file to disk
-    const writer = fs.createWriteStream(filePath);
-    response.data.pipe(writer);
+    // If the URL is relative, make it absolute
+    if (latestZipUrl.startsWith('/')) {
+      return `https://www.grants.gov${latestZipUrl}`;
+    }
     
-    return new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(filePath));
-      writer.on('error', reject);
-    });
+    return latestZipUrl;
   } catch (error) {
-    console.error('Error downloading grants data:', error);
+    console.error('Error getting latest XML extract URL:', error);
     throw error;
   }
 }
+
+/**
+ * Downloads the latest grants XML extract from Grants.gov
+ * @param {Date} date - The date to download (defaults to today)
+ * @param {boolean} useV2 - Whether to use the v2 version of the extract
+ * @param {boolean} useMock - Whether to use the mock XML file (for testing)
+ * @returns {Promise<string>} - Path to the extracted XML file
+ */
+async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = false) {
+  try {
+    // Create data directory if it doesn't exist
+    const dataDir = path.join(__dirname, '../../data');
+    const extractsDir = path.join(dataDir, 'extracts');
+    const xmlDir = path.join(dataDir, 'xml');
+    
+    // Use mkdirp correctly - it's an async function in v3.x
+    await mkdirp(dataDir);
+    await mkdirp(extractsDir);
+    await mkdirp(xmlDir);
+    
+    // Format date for filename
+    const dateStr = format(date, 'yyyyMMdd');
+    const v2Suffix = useV2 ? 'v2' : '';
+    const filename = `GrantsDBExtract${dateStr}${v2Suffix}.zip`;
+    const xmlFilename = `GrantsDBExtract${dateStr}${v2Suffix}.xml`;
+    const xmlPath = path.join(xmlDir, xmlFilename);
+    
+    // Check if we already have the file
+    if (await exists(xmlPath)) {
+      console.log(`XML file already exists at ${xmlPath}`);
+      return xmlPath;
+    }
+    
+    // If using mock, return the path to the mock XML file
+    if (useMock) {
+      console.log(`Using mock XML file at ${xmlPath}`);
+      return xmlPath;
+    }
+    
+    try {
+      // Get the latest XML extract URL from the Grants.gov website
+      const zipUrl = await getLatestXmlExtractUrl();
+      console.log(`Downloading grants extract from ${zipUrl}...`);
+      
+      // Extract the filename from the URL
+      const urlFilename = zipUrl.split('/').pop();
+      const zipPath = path.join(extractsDir, urlFilename);
+      const extractedXmlFilename = urlFilename.replace('.zip', '.xml');
+      const extractedXmlPath = path.join(xmlDir, extractedXmlFilename);
+      
+      // Download the zip file
+      const response = await axios({
+        method: 'get',
+        url: zipUrl,
+        responseType: 'arraybuffer',
+        timeout: 60000, // 60 second timeout for large files
+      });
+      
+      await writeFile(zipPath, response.data);
+      console.log(`Downloaded zip file to ${zipPath}`);
+      
+      // Try to extract the zip file
+      const zip = new AdmZip(zipPath);
+      const zipEntries = zip.getEntries();
+      
+      // Check if the ZIP contains an XML file
+      const xmlEntry = zipEntries.find(entry => entry.entryName.endsWith('.xml'));
+      if (!xmlEntry) {
+        throw new Error('ZIP file does not contain an XML file');
+      }
+      
+      zip.extractAllTo(xmlDir, true);
+      console.log(`Extracted XML file to ${xmlDir}`);
+      
+      // Return the path to the extracted XML file
+      return extractedXmlPath;
+    } catch (error) {
+      console.error('Error downloading or extracting ZIP file:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error downloading grants XML:', error);
+    throw error;
+  }
+}
+
+module.exports = {
+  downloadGrantsXml,
+  getLatestXmlExtractUrl
+};
 ```
 
 #### Error Handling and Retries:
 
-```typescript
-// src/utils/retry.ts
+```javascript
+// src/utils/retry.js
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: {
-    maxRetries: number;
-    retryDelay: number;
-    backoffFactor: number;
-  } = {
+export async function withRetry(
+  fn,
+  options = {
     maxRetries: 3,
     retryDelay: 1000,
     backoffFactor: 2,
   }
-): Promise<T> {
-  let lastError: Error;
+) {
+  let lastError;
   let delay = options.retryDelay;
   
   for (let attempt = 1; attempt <= options.maxRetries + 1; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      lastError = error as Error;
+      lastError = error;
       
       if (attempt <= options.maxRetries) {
         console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
@@ -114,8 +215,8 @@ export async function withRetry<T>(
 }
 
 // Usage in data extraction
-export async function downloadGrantsDataWithRetry(): Promise<string> {
-  return withRetry(downloadGrantsData, {
+export async function downloadGrantsDataWithRetry() {
+  return withRetry(downloadGrantsXml, {
     maxRetries: 5,
     retryDelay: 5000,
     backoffFactor: 1.5,
@@ -129,486 +230,525 @@ The data parsing component is responsible for extracting and parsing the XML dat
 
 #### Implementation Details:
 
-```typescript
-// src/utils/dataParsing.ts
+```javascript
+// src/utils/grantsParser.js
 
-import fs from 'fs';
-import path from 'path';
-import { Extract } from 'unzipper';
-import { parseStringPromise } from 'xml2js';
-import { Transform } from 'stream';
+const fs = require('fs');
+const xml2js = require('xml2js');
+const { promisify } = require('util');
 
-export async function extractAndParseXML(zipFilePath: string): Promise<any> {
+// Promisify fs.readFile
+const readFile = promisify(fs.readFile);
+
+/**
+ * Parse the grants XML file and convert it to a structured format
+ * @param {string} xmlPath - Path to the XML file
+ * @returns {Promise<Array>} - Array of grant objects
+ */
+async function parseGrantsXml(xmlPath) {
   try {
-    // Create a temporary directory for extraction
-    const extractDir = path.join(path.dirname(zipFilePath), 'extract');
-    if (!fs.existsSync(extractDir)) {
-      fs.mkdirSync(extractDir, { recursive: true });
+    console.log(`Parsing XML file: ${xmlPath}`);
+    
+    // Read the XML file
+    const xmlData = await readFile(xmlPath, 'utf8');
+    
+    // Parse XML to JSON
+    const parser = new xml2js.Parser({ explicitArray: false });
+    const result = await parser.parseStringPromise(xmlData);
+    
+    // Extract grants from the parsed data
+    const grantsData = result.Grants.OpportunitySynopsisDetail_1_0;
+    
+    if (!grantsData || !Array.isArray(grantsData)) {
+      throw new Error('Invalid XML format: OpportunitySynopsisDetail_1_0 not found or not an array');
     }
     
-    // Extract the ZIP file
-    await fs.createReadStream(zipFilePath)
-      .pipe(Extract({ path: extractDir }))
-      .promise();
+    console.log(`Found ${grantsData.length} grants in the XML file`);
     
-    // Find the XML file
-    const files = fs.readdirSync(extractDir);
-    const xmlFile = files.find(file => file.endsWith('.xml'));
+    // Transform the grants data into our database schema format
+    const grants = grantsData.map(transformGrantData);
     
-    if (!xmlFile) {
-      throw new Error('No XML file found in the ZIP archive');
-    }
-    
-    const xmlFilePath = path.join(extractDir, xmlFile);
-    
-    // Read and parse the XML file
-    const xmlData = fs.readFileSync(xmlFilePath, 'utf-8');
-    const parsedData = await parseStringPromise(xmlData, {
-      explicitArray: false,
-      mergeAttrs: true,
-    });
-    
-    // Clean up
-    fs.rmSync(extractDir, { recursive: true, force: true });
-    
-    return parsedData;
+    return grants;
   } catch (error) {
-    console.error('Error extracting and parsing XML:', error);
+    console.error('Error parsing grants XML:', error);
     throw error;
   }
 }
 
-// For large XML files, use streaming approach
-export function parseXMLStream(zipFilePath: string): Transform {
-  // Create a transform stream that processes chunks of XML data
-  const transformStream = new Transform({
-    objectMode: true,
-    transform(chunk, encoding, callback) {
-      try {
-        // Process XML chunk
-        // ...
-        callback(null, processedChunk);
-      } catch (error) {
-        callback(error as Error);
-      }
-    }
-  });
-  
-  // Set up the pipeline
-  fs.createReadStream(zipFilePath)
-    .pipe(Extract())
-    .pipe(/* XML parser stream */)
-    .pipe(transformStream);
-  
-  return transformStream;
-}
-```
-
-### 3. Data Processing
-
-The data processing component is responsible for transforming the parsed XML data into a format suitable for storage in the database.
-
-#### Implementation Details:
-
-```typescript
-// src/utils/dataProcessing.ts
-
-import { Grant } from '../models/grant';
-
-export function transformGrantData(rawData: any): Grant[] {
-  try {
-    const opportunities = Array.isArray(rawData.Grants.OpportunitySynopsisDetail_1_0)
-      ? rawData.Grants.OpportunitySynopsisDetail_1_0
-      : [rawData.Grants.OpportunitySynopsisDetail_1_0];
+/**
+ * Transform the raw grant data from XML into our database schema format
+ * @param {Object} grant - Raw grant data from XML
+ * @returns {Object} - Transformed grant object
+ */
+function transformGrantData(grant) {
+  // Helper function to convert date format from MMDDYYYY to ISO format
+  const convertDate = (dateStr) => {
+    if (!dateStr) return null;
     
-    return opportunities.map(opportunity => ({
-      id: generateUUID(), // Generate a unique ID
-      title: opportunity.OpportunityTitle || '',
-      opportunity_id: opportunity.OpportunityID || '',
-      opportunity_number: opportunity.OpportunityNumber || '',
-      category: opportunity.CategoryOfFundingActivity || '',
-      funding_type: opportunity.FundingInstrumentType || '',
-      activity_category: [], // Will be filled by AI categorization
-      eligible_applicants: parseEligibleApplicants(opportunity.EligibleApplicants),
-      agency_name: opportunity.AgencyName || '',
-      post_date: parseDate(opportunity.PostDate),
-      close_date: parseDate(opportunity.CloseDate),
-      total_funding: parseNumber(opportunity.EstimatedTotalProgramFunding),
-      award_ceiling: parseNumber(opportunity.AwardCeiling),
-      award_floor: parseNumber(opportunity.AwardFloor),
-      cost_sharing: opportunity.CostSharingOrMatchingRequirement === 'Yes',
-      description: opportunity.Description || '',
-      additional_info_url: opportunity.AdditionalInformationURL || '',
-      grantor_contact_name: opportunity.GrantorContactName || '',
-      grantor_contact_email: opportunity.GrantorContactEmailAddress || '',
-      grantor_contact_phone: opportunity.GrantorContactPhoneNumber || '',
-    }));
-  } catch (error) {
-    console.error('Error transforming grant data:', error);
-    throw error;
-  }
+    // Extract month, day, and year
+    const month = dateStr.substring(0, 2);
+    const day = dateStr.substring(2, 4);
+    const year = dateStr.substring(4, 8);
+    
+    // Create ISO date string
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Helper function to parse funding amounts
+  const parseFunding = (amount) => {
+    if (!amount) return null;
+    
+    // Remove any non-numeric characters except decimal point
+    const cleanAmount = amount.replace(/[^0-9.]/g, '');
+    return cleanAmount ? parseInt(cleanAmount, 10) : null;
+  };
+  
+  // Transform the grant data
+  return {
+    opportunity_id: grant.OpportunityID || '',
+    opportunity_number: grant.OpportunityNumber || '',
+    title: grant.OpportunityTitle || '',
+    category: grant.OpportunityCategory || '',
+    funding_type: grant.FundingInstrumentType || '',
+    activity_category: [], // Will be filled by AI categorization
+    eligible_applicants: parseEligibleApplicants(grant.EligibleApplicants),
+    agency_name: grant.AgencyName || '',
+    post_date: convertDate(grant.PostDate),
+    close_date: convertDate(grant.CloseDate),
+    total_funding: parseFunding(grant.EstimatedTotalProgramFunding),
+    award_ceiling: parseFunding(grant.AwardCeiling),
+    award_floor: parseFunding(grant.AwardFloor),
+    cost_sharing: grant.CostSharingOrMatchingRequirement === 'Yes',
+    description: grant.Description || '',
+    additional_info_url: grant.AdditionalInformationURL || '',
+    grantor_contact_name: grant.GrantorContactName || grant.GrantorContactText || '',
+    grantor_contact_email: grant.GrantorContactEmail || '',
+    grantor_contact_phone: grant.GrantorContactPhoneNumber || '',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
 }
 
-function parseEligibleApplicants(eligibleApplicants: any): string[] {
-  if (!eligibleApplicants) return [];
-  
-  if (typeof eligibleApplicants === 'string') {
-    return [eligibleApplicants];
-  }
-  
-  if (Array.isArray(eligibleApplicants)) {
-    return eligibleApplicants;
-  }
-  
-  if (eligibleApplicants.ApplicantType) {
-    return Array.isArray(eligibleApplicants.ApplicantType)
-      ? eligibleApplicants.ApplicantType
-      : [eligibleApplicants.ApplicantType];
-  }
-  
-  return [];
-}
-
-function parseDate(dateString: string): Date | null {
-  if (!dateString) return null;
-  
-  try {
-    return new Date(dateString);
-  } catch (error) {
-    console.warn(`Invalid date: ${dateString}`);
-    return null;
-  }
-}
-
-function parseNumber(numberString: string): number | null {
-  if (!numberString) return null;
-  
-  try {
-    return parseInt(numberString.replace(/[^0-9]/g, ''), 10);
-  } catch (error) {
-    console.warn(`Invalid number: ${numberString}`);
-    return null;
-  }
-}
-
-function generateUUID(): string {
-  // Simple UUID generation
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
-
-// Data validation
-export function validateGrant(grant: Grant): boolean {
-  // Basic validation
-  if (!grant.title || !grant.opportunity_id) {
-    return false;
-  }
-  
-  // Additional validation rules
-  // ...
-  
-  return true;
-}
+module.exports = {
+  parseGrantsXml,
+  transformGrantData
+};
 ```
 
-### 4. Database Storage
+### 3. Database Storage
 
 The database storage component is responsible for storing the processed grant data in the Supabase database.
 
 #### Implementation Details:
 
-```typescript
-// src/utils/databaseStorage.ts
+```javascript
+// src/services/grantsService.js
 
-import { createClient } from '@supabase/supabase-js';
-import { Grant } from '../models/grant';
+const supabase = require('../db/supabaseClient');
+const { format } = require('date-fns');
+const readline = require('readline');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase credentials');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-export async function storeGrants(grants: Grant[]): Promise<void> {
-  try {
-    // Process in batches to avoid hitting limits
-    const batchSize = 100;
-    for (let i = 0; i < grants.length; i += batchSize) {
-      const batch = grants.slice(i, i + batchSize);
+/**
+ * Service for managing grants in the database
+ */
+class GrantsService {
+  /**
+   * Store grants in the database with delta updates
+   * @param {Array} grants - Array of grant objects to store
+   * @returns {Promise<Object>} - Result of the operation
+   */
+  async storeGrants(grants) {
+    try {
+      console.log(`Processing ${grants.length} grants for storage...`);
       
-      // Use upsert to insert or update
-      const { error } = await supabase
+      // Track statistics
+      const stats = {
+        total: grants.length,
+        new: 0,
+        updated: 0,
+        unchanged: 0,
+        failed: 0,
+        startTime: new Date(),
+        endTime: null,
+        failedGrants: [], // Track failed grants for reporting
+      };
+      
+      // Process grants in batches to avoid overwhelming the database
+      const batchSize = 50;
+      const batches = [];
+      
+      for (let i = 0; i < grants.length; i += batchSize) {
+        batches.push(grants.slice(i, i + batchSize));
+      }
+      
+      console.log(`Split grants into ${batches.length} batches of up to ${batchSize} grants each`);
+      
+      // Set up progress bar
+      const progressBar = this.createProgressBar(batches.length);
+      
+      // Process each batch
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        
+        // Update progress bar
+        this.updateProgressBar(progressBar, i + 1, batches.length);
+        
+        // Process each grant in the batch
+        const batchResults = await Promise.all(
+          batch.map(grant => this.processGrant(grant))
+        );
+        
+        // Update statistics
+        batchResults.forEach(result => {
+          if (result.status === 'new') stats.new++;
+          else if (result.status === 'updated') stats.updated++;
+          else if (result.status === 'unchanged') stats.unchanged++;
+          else {
+            stats.failed++;
+            if (result.error) {
+              stats.failedGrants.push({
+                id: result.id,
+                error: result.error
+              });
+            }
+          }
+        });
+      }
+      
+      // Complete the progress bar
+      this.updateProgressBar(progressBar, batches.length, batches.length);
+      console.log(''); // Add a newline after the progress bar
+      
+      // Log failed grants (limited to first 10)
+      if (stats.failedGrants.length > 0) {
+        console.log(`Failed to process ${stats.failedGrants.length} grants. First 10 errors:`);
+        stats.failedGrants.slice(0, 10).forEach(failedGrant => {
+          console.log(`Error processing grant ${failedGrant.id}: ${JSON.stringify(failedGrant.error)}`);
+        });
+        
+        if (stats.failedGrants.length > 10) {
+          console.log(`... and ${stats.failedGrants.length - 10} more errors`);
+        }
+      }
+      
+      // Record the pipeline run
+      stats.endTime = new Date();
+      await this.recordPipelineRun(stats);
+      
+      return stats;
+    } catch (error) {
+      console.error('Error storing grants:', error);
+      
+      // Record the failed pipeline run
+      await this.recordPipelineRun({
+        total: grants.length,
+        new: 0,
+        updated: 0,
+        unchanged: 0,
+        failed: grants.length,
+        startTime: new Date(),
+        endTime: new Date(),
+        error: error.message,
+      });
+      
+      throw error;
+    }
+  }
+  
+  /**
+   * Create a progress bar
+   * @param {number} total - Total number of items
+   * @returns {Object} - Progress bar object
+   */
+  createProgressBar(total) {
+    const progressBar = {
+      total,
+      current: 0,
+      bar: '',
+      percent: 0,
+    };
+    
+    // Initialize the progress bar
+    this.updateProgressBar(progressBar, 0, total);
+    
+    return progressBar;
+  }
+  
+  /**
+   * Update the progress bar
+   * @param {Object} progressBar - Progress bar object
+   * @param {number} current - Current progress
+   * @param {number} total - Total items
+   */
+  updateProgressBar(progressBar, current, total) {
+    progressBar.current = current;
+    progressBar.percent = Math.floor((current / total) * 100);
+    
+    const barLength = 30;
+    const filledLength = Math.floor((current / total) * barLength);
+    const emptyLength = barLength - filledLength;
+    
+    const filledBar = '='.repeat(filledLength);
+    const emptyBar = ' '.repeat(emptyLength);
+    progressBar.bar = `[${filledBar}>${emptyBar}]`;
+    
+    // Clear the current line and write the progress bar
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    process.stdout.write(`Progress: ${progressBar.bar} ${progressBar.percent}% (${current}/${total} batches)`);
+  }
+  
+  /**
+   * Process a single grant (insert, update, or skip)
+   * @param {Object} grant - Grant object to process
+   * @returns {Promise<Object>} - Result of the operation
+   */
+  async processGrant(grant) {
+    try {
+      // Check if the grant already exists
+      const { data: existingGrant, error: fetchError } = await supabase
         .from('grants')
-        .upsert(batch, {
-          onConflict: 'opportunity_id',
-          ignoreDuplicates: false,
+        .select('id, updated_at, opportunity_id')
+        .eq('opportunity_id', grant.opportunity_id)
+        .single();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+        throw fetchError;
+      }
+      
+      // If the grant doesn't exist, insert it
+      if (!existingGrant) {
+        const { error: insertError } = await supabase
+          .from('grants')
+          .insert(grant);
+        
+        if (insertError) throw insertError;
+        
+        return { status: 'new', id: grant.opportunity_id };
+      }
+      
+      // If the grant exists, update it
+      const { error: updateError } = await supabase
+        .from('grants')
+        .update({
+          ...grant,
+          id: existingGrant.id, // Preserve the original ID
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingGrant.id);
+      
+      if (updateError) throw updateError;
+      
+      return { status: 'updated', id: existingGrant.id };
+    } catch (error) {
+      return { status: 'failed', id: grant.opportunity_id, error };
+    }
+  }
+  
+  /**
+   * Record a pipeline run in the database
+   * @param {Object} stats - Statistics about the pipeline run
+   * @returns {Promise<void>}
+   */
+  async recordPipelineRun(stats) {
+    try {
+      const { error } = await supabase
+        .from('pipeline_runs')
+        .insert({
+          status: stats.failed === stats.total ? 'failed' : 'completed',
+          details: {
+            total: stats.total,
+            new: stats.new,
+            updated: stats.updated,
+            unchanged: stats.unchanged,
+            failed: stats.failed,
+            duration_ms: stats.endTime - stats.startTime,
+            error: stats.error,
+          },
+          timestamp: new Date().toISOString(),
         });
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log(`Stored batch ${i / batchSize + 1} of ${Math.ceil(grants.length / batchSize)}`);
+      console.log('Pipeline run recorded successfully');
+    } catch (error) {
+      console.error('Error recording pipeline run:', error);
     }
-  } catch (error) {
-    console.error('Error storing grants:', error);
-    throw error;
   }
 }
 
-export async function getExistingGrantIds(): Promise<string[]> {
-  try {
-    const { data, error } = await supabase
-      .from('grants')
-      .select('opportunity_id');
-    
-    if (error) {
-      throw error;
-    }
-    
-    return data.map(grant => grant.opportunity_id);
-  } catch (error) {
-    console.error('Error getting existing grant IDs:', error);
-    throw error;
-  }
-}
-
-// Delta updates
-export async function performDeltaUpdate(grants: Grant[]): Promise<void> {
-  try {
-    // Get existing grant IDs
-    const existingIds = await getExistingGrantIds();
-    const existingIdSet = new Set(existingIds);
-    
-    // Split grants into new and existing
-    const newGrants = grants.filter(grant => !existingIdSet.has(grant.opportunity_id));
-    const updatedGrants = grants.filter(grant => existingIdSet.has(grant.opportunity_id));
-    
-    console.log(`Found ${newGrants.length} new grants and ${updatedGrants.length} existing grants`);
-    
-    // Store new grants
-    if (newGrants.length > 0) {
-      await storeGrants(newGrants);
-    }
-    
-    // Update existing grants
-    if (updatedGrants.length > 0) {
-      await storeGrants(updatedGrants);
-    }
-  } catch (error) {
-    console.error('Error performing delta update:', error);
-    throw error;
-  }
-}
+module.exports = new GrantsService();
 ```
 
-### 5. AI Processing
+### 4. Database Schema
 
-The AI processing component is responsible for categorizing grants and generating embeddings for similarity matching.
+The database schema is designed to efficiently store and query grant data. To handle large funding amounts, we use `bigint` instead of `integer` for the funding fields.
 
-#### Implementation Details:
+```sql
+-- Update funding fields to use bigint instead of integer to handle large funding amounts
+ALTER TABLE grants ALTER COLUMN total_funding TYPE bigint;
+ALTER TABLE grants ALTER COLUMN award_ceiling TYPE bigint;
+ALTER TABLE grants ALTER COLUMN award_floor TYPE bigint;
 
-```typescript
-// src/utils/aiProcessing.ts
-
-import { AIServiceClient } from '../services/aiService';
-import { Grant } from '../models/grant';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase credentials');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-const aiService = new AIServiceClient(process.env.AI_API_KEY, process.env.AI_API_URL);
-
-export async function categorizeGrant(grant: Grant): Promise<string[]> {
-  try {
-    const textToAnalyze = `${grant.title}. ${grant.description}`;
-    
-    // Call AI service to categorize grant
-    const categories = await aiService.categorize(textToAnalyze, {
-      maxCategories: 5,
-      confidenceThreshold: 0.7,
-    });
-    
-    // Update grant in database
-    const { error } = await supabase
-      .from('grants')
-      .update({ activity_category: categories })
-      .eq('id', grant.id);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return categories;
-  } catch (error) {
-    console.error(`Error categorizing grant ${grant.id}:`, error);
-    throw error;
-  }
-}
-
-export async function generateEmbeddings(grant: Grant): Promise<number[]> {
-  try {
-    const textToEmbed = `${grant.title}. ${grant.description}`;
-    
-    // Call AI service to generate embeddings
-    const embeddings = await aiService.generateEmbeddings(textToEmbed);
-    
-    // Update grant in database
-    const { error } = await supabase
-      .from('grants')
-      .update({ embeddings })
-      .eq('id', grant.id);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return embeddings;
-  } catch (error) {
-    console.error(`Error generating embeddings for grant ${grant.id}:`, error);
-    throw error;
-  }
-}
-
-// Process grants in batches
-export async function processGrantsWithAI(grants: Grant[]): Promise<void> {
-  try {
-    // Process in batches to avoid hitting API limits
-    const batchSize = 10;
-    for (let i = 0; i < grants.length; i += batchSize) {
-      const batch = grants.slice(i, i + batchSize);
-      
-      // Process each grant in the batch
-      await Promise.all(batch.map(async (grant) => {
-        try {
-          // Categorize grant
-          await categorizeGrant(grant);
-          
-          // Generate embeddings
-          await generateEmbeddings(grant);
-          
-          console.log(`Processed grant ${grant.id}`);
-        } catch (error) {
-          console.error(`Error processing grant ${grant.id}:`, error);
-          // Continue with other grants
-        }
-      }));
-      
-      console.log(`Processed batch ${i / batchSize + 1} of ${Math.ceil(grants.length / batchSize)}`);
-      
-      // Add delay between batches to avoid rate limiting
-      if (i + batchSize < grants.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-  } catch (error) {
-    console.error('Error processing grants with AI:', error);
-    throw error;
-  }
-}
+-- Add an index on opportunity_id for faster lookups
+CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
 ```
 
-## Orchestration
+### 5. Orchestration
 
 The orchestration component is responsible for coordinating the entire data pipeline process.
 
-### Implementation Details:
+#### Implementation Details:
 
-```typescript
-// src/utils/pipelineOrchestrator.ts
+```javascript
+// src/utils/cronJobs.js
 
-import { downloadGrantsDataWithRetry } from './dataExtraction';
-import { extractAndParseXML } from './dataParsing';
-import { transformGrantData, validateGrant } from './dataProcessing';
-import { performDeltaUpdate } from './databaseStorage';
-import { processGrantsWithAI } from './aiProcessing';
-import { Grant } from '../models/grant';
+const cron = require('node-cron');
+const { downloadGrantsXml } = require('./grantsDownloader');
+const { parseGrantsXml } = require('./grantsParser');
+const grantsService = require('../services/grantsService');
 
-export async function runDataPipeline(): Promise<void> {
-  try {
-    console.log('Starting data pipeline...');
-    
-    // Step 1: Download grants data
-    console.log('Downloading grants data...');
-    const zipFilePath = await downloadGrantsDataWithRetry();
-    console.log(`Downloaded grants data to ${zipFilePath}`);
-    
-    // Step 2: Extract and parse XML
-    console.log('Extracting and parsing XML...');
-    const parsedData = await extractAndParseXML(zipFilePath);
-    console.log('Parsed XML data');
-    
-    // Step 3: Transform data
-    console.log('Transforming grant data...');
-    const grants = transformGrantData(parsedData);
-    console.log(`Transformed ${grants.length} grants`);
-    
-    // Step 4: Validate data
-    console.log('Validating grant data...');
-    const validGrants = grants.filter(validateGrant);
-    console.log(`Validated ${validGrants.length} grants (${grants.length - validGrants.length} invalid)`);
-    
-    // Step 5: Store in database
-    console.log('Storing grants in database...');
-    await performDeltaUpdate(validGrants);
-    console.log('Stored grants in database');
-    
-    // Step 6: Process with AI
-    console.log('Processing grants with AI...');
-    await processGrantsWithAI(validGrants);
-    console.log('Processed grants with AI');
-    
-    console.log('Data pipeline completed successfully');
-  } catch (error) {
-    console.error('Error running data pipeline:', error);
-    throw error;
-  }
-}
-```
-
-### Cron Job Setup:
-
-```typescript
-// src/utils/cronJobs.ts
-
-import cron from 'node-cron';
-import { runDataPipeline } from './pipelineOrchestrator';
-
-export function setupCronJobs(): void {
-  // Run daily at 6 AM EST (11 AM UTC)
-  cron.schedule('0 11 * * *', async () => {
-    try {
-      console.log('Running scheduled data pipeline...');
-      await runDataPipeline();
-      console.log('Scheduled data pipeline completed successfully');
-    } catch (error) {
-      console.error('Error running scheduled data pipeline:', error);
-      // Send notification or alert
-    }
+/**
+ * Initialize cron jobs
+ */
+function initCronJobs() {
+  // Schedule the grants update job to run at 5 AM daily
+  // Cron format: second(optional) minute hour day-of-month month day-of-week
+  cron.schedule('0 5 * * *', async () => {
+    console.log('Running grants update job...');
+    await updateGrantsData();
+  }, {
+    scheduled: true,
+    timezone: 'America/New_York' // 5 AM EST as specified
   });
   
-  console.log('Cron jobs set up successfully');
+  console.log('Cron jobs initialized. Grants update scheduled for 5 AM EST daily.');
 }
+
+/**
+ * Update grants data from Grants.gov
+ * @param {boolean} useMock - Whether to use the mock XML file (for testing)
+ * @returns {Promise<void>}
+ */
+async function updateGrantsData(useMock = false) {
+  try {
+    console.log('Starting grants data update process...');
+    
+    // Step 1: Download the latest XML extract
+    const xmlPath = await downloadGrantsXml(new Date(), true, useMock);
+    console.log(`Using XML file at ${xmlPath}`);
+    
+    // Step 2: Parse the XML data
+    const grants = await parseGrantsXml(xmlPath);
+    console.log(`Parsed ${grants.length} grants from XML`);
+    
+    // Step 3: Store the grants in the database
+    const result = await grantsService.storeGrants(grants);
+    
+    // Log the results
+    console.log('Grants update completed successfully:');
+    console.log(`- Total grants processed: ${result.total}`);
+    console.log(`- New grants added: ${result.new}`);
+    console.log(`- Existing grants updated: ${result.updated}`);
+    console.log(`- Unchanged grants: ${result.unchanged}`);
+    console.log(`- Failed grants: ${result.failed}`);
+    console.log(`- Duration: ${(result.endTime - result.startTime) / 1000} seconds`);
+  } catch (error) {
+    console.error('Error updating grants data:', error);
+  }
+}
+
+/**
+ * Run the grants update job manually
+ * @param {boolean} useMock - Whether to use the mock XML file (for testing)
+ * @returns {Promise<void>}
+ */
+async function runGrantsUpdateJob(useMock = true) {
+  console.log('Manually running grants update job...');
+  await updateGrantsData(useMock);
+}
+
+module.exports = {
+  initCronJobs,
+  updateGrantsData,
+  runGrantsUpdateJob
+};
+```
+
+## Utility Scripts
+
+### 1. Clear Grants
+
+This script allows you to clear all grants from the database, giving you a clean slate.
+
+```javascript
+// scripts/clearGrants.js
+
+/**
+ * Script to clear all grants from the database
+ * 
+ * Usage: node scripts/clearGrants.js
+ */
+
+// Load environment variables
+require('dotenv').config();
+
+const supabase = require('../src/db/supabaseClient');
+
+async function clearGrants() {
+  try {
+    console.log('Starting grants cleanup...');
+    
+    // Delete all records from the grants table
+    console.log('Deleting all grants...');
+    const { error: grantsError } = await supabase
+      .from('grants')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // This is a trick to delete all records
+    
+    if (grantsError) {
+      console.error('Error deleting grants:', grantsError);
+    } else {
+      console.log('All grants deleted successfully');
+    }
+    
+    // Also delete all pipeline runs for a clean slate
+    console.log('Deleting all pipeline runs...');
+    const { error: pipelineError } = await supabase
+      .from('pipeline_runs')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+    
+    if (pipelineError) {
+      console.error('Error deleting pipeline runs:', pipelineError);
+    } else {
+      console.log('All pipeline runs deleted successfully');
+    }
+    
+    console.log('Database cleanup completed');
+  } catch (error) {
+    console.error('Error during database cleanup:', error);
+  }
+}
+
+// Run the cleanup
+clearGrants()
+  .then(() => {
+    console.log('Cleanup script completed');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Cleanup script failed:', error);
+    process.exit(1);
+  });
 ```
 
 ## Error Handling and Monitoring
 
 ### Logging:
 
-```typescript
-// src/utils/logger.ts
+```javascript
+// src/utils/logger.js
 
 import winston from 'winston';
 
@@ -636,234 +776,6 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 export default logger;
-```
-
-### Monitoring:
-
-```typescript
-// src/utils/monitoring.ts
-
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase credentials');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-export async function recordPipelineRun(
-  status: 'started' | 'completed' | 'failed',
-  details?: any
-): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('pipeline_runs')
-      .insert({
-        status,
-        details,
-        timestamp: new Date().toISOString(),
-      });
-    
-    if (error) {
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error recording pipeline run:', error);
-    // Don't throw, as this is a monitoring function
-  }
-}
-
-export async function getPipelineStats(): Promise<any> {
-  try {
-    const { data, error } = await supabase
-      .from('pipeline_runs')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(10);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Error getting pipeline stats:', error);
-    throw error;
-  }
-}
-```
-
-## Scalability Considerations
-
-### Handling Large Files:
-
-For large XML files, we can use a streaming approach to process the data in chunks:
-
-```typescript
-// src/utils/largeFileProcessing.ts
-
-import fs from 'fs';
-import { Extract } from 'unzipper';
-import { createClient } from '@supabase/supabase-js';
-import { Transform } from 'stream';
-import { pipeline } from 'stream/promises';
-import { XMLParser } from 'fast-xml-parser';
-
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase credentials');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-export async function processLargeXMLFile(zipFilePath: string): Promise<void> {
-  try {
-    // Create a transform stream to process XML records
-    const processRecordStream = new Transform({
-      objectMode: true,
-      transform: async function(record, encoding, callback) {
-        try {
-          // Transform record
-          const grant = transformRecord(record);
-          
-          // Validate grant
-          if (!validateGrant(grant)) {
-            return callback();
-          }
-          
-          // Store in database
-          const { error } = await supabase
-            .from('grants')
-            .upsert(grant, {
-              onConflict: 'opportunity_id',
-              ignoreDuplicates: false,
-            });
-          
-          if (error) {
-            return callback(error);
-          }
-          
-          // Queue for AI processing
-          // This could be a message to a queue system
-          
-          callback();
-        } catch (error) {
-          callback(error as Error);
-        }
-      }
-    });
-    
-    // Set up XML parser
-    const parser = new XMLParser({
-      isArray: (name) => name === 'OpportunitySynopsisDetail_1_0',
-      parseAttributeValue: true,
-      ignoreAttributes: false,
-    });
-    
-    // Process the file
-    await pipeline(
-      fs.createReadStream(zipFilePath),
-      Extract(),
-      // Some XML streaming parser
-      processRecordStream
-    );
-  } catch (error) {
-    console.error('Error processing large XML file:', error);
-    throw error;
-  }
-}
-
-function transformRecord(record: any): any {
-  // Transform record to grant object
-  // ...
-  return grant;
-}
-
-function validateGrant(grant: any): boolean {
-  // Validate grant
-  // ...
-  return true;
-}
-```
-
-### Queue System:
-
-For processing large numbers of grants, we can use a queue system:
-
-```typescript
-// src/utils/queueSystem.ts
-
-import Queue from 'bull';
-import { Grant } from '../models/grant';
-import { categorizeGrant, generateEmbeddings } from './aiProcessing';
-
-// Create queues
-const categorizationQueue = new Queue('grant-categorization', {
-  redis: {
-    host: process.env.REDIS_HOST,
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-  },
-});
-
-const embeddingsQueue = new Queue('grant-embeddings', {
-  redis: {
-    host: process.env.REDIS_HOST,
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-  },
-});
-
-// Process categorization queue
-categorizationQueue.process(async (job) => {
-  const grant = job.data.grant;
-  return categorizeGrant(grant);
-});
-
-// Process embeddings queue
-embeddingsQueue.process(async (job) => {
-  const grant = job.data.grant;
-  return generateEmbeddings(grant);
-});
-
-// Add grants to queues
-export async function queueGrantForProcessing(grant: Grant): Promise<void> {
-  try {
-    // Add to categorization queue
-    await categorizationQueue.add({ grant }, {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 5000,
-      },
-    });
-    
-    // Add to embeddings queue
-    await embeddingsQueue.add({ grant }, {
-      attempts: 3,
-      backoff: {
-        type: 'exponential',
-        delay: 5000,
-      },
-    });
-  } catch (error) {
-    console.error(`Error queuing grant ${grant.id} for processing:`, error);
-    throw error;
-  }
-}
-
-// Queue multiple grants
-export async function queueGrantsForProcessing(grants: Grant[]): Promise<void> {
-  try {
-    await Promise.all(grants.map(queueGrantForProcessing));
-  } catch (error) {
-    console.error('Error queuing grants for processing:', error);
-    throw error;
-  }
-}
 ```
 
 ## Deployment
@@ -899,21 +811,12 @@ services:
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - AI_API_KEY=${AI_API_KEY}
       - AI_API_URL=${AI_API_URL}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - redis
     volumes:
       - ./logs:/app/logs
-      - ./downloads:/app/downloads
-
-  redis:
-    image: redis:alpine
-    volumes:
-      - redis-data:/data
+      - ./data:/app/data
 
 volumes:
-  redis-data:
+  data:
 ```
 
 ## Conclusion
@@ -921,12 +824,12 @@ volumes:
 This data pipeline architecture provides a comprehensive approach to extracting, processing, and storing grant data from Grants.gov. The pipeline is designed to be robust, scalable, and maintainable, with proper error handling, monitoring, and logging.
 
 Key features of the architecture include:
-- Daily automated data extraction from Grants.gov
-- Robust error handling and retries
-- Efficient processing of large XML files
+- Daily automated data extraction from Grants.gov at 5 AM EST
+- Robust error handling and fallbacks
+- Progress bar for batch processing
+- Support for large funding amounts using bigint
 - Delta updates to minimize database operations
-- Integration with AI services for grant categorization
-- Queue system for processing large numbers of grants
+- Utility scripts for database management
 - Comprehensive monitoring and logging
 
 By following this architecture, we can ensure that the Grantify.ai platform always has access to the latest grant data, providing users with up-to-date and relevant grant opportunities.
