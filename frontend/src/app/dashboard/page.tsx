@@ -1,6 +1,10 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
+import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 
 // Mock data for demonstration
@@ -50,193 +54,241 @@ const appliedGrants = [
 ];
 
 export default function Dashboard() {
+  const { user, isLoading, signOut } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('recommended');
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isLoading, router]);
+
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // If not authenticated, don't render anything (will redirect)
+  if (!user) {
+    return null;
+  }
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/');
+  };
+
   return (
     <Layout>
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <h1 className="text-3xl font-bold">Your Dashboard</h1>
-          <Link
-            href="/dashboard/preferences"
-            className="mt-4 md:mt-0 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Edit Preferences
-          </Link>
+          <div>
+            <h1 className="text-3xl font-bold">Your Dashboard</h1>
+            <p className="text-gray-600 mt-2">Welcome, {user.email}</p>
+          </div>
+          <div className="mt-4 md:mt-0 flex space-x-4">
+            <Link
+              href="/dashboard/preferences"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Edit Preferences
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
         
         {/* Dashboard Navigation */}
         <div className="mb-8 border-b">
           <nav className="flex flex-wrap -mb-px">
-            <Link
-              href="/dashboard"
-              className="inline-block p-4 text-blue-600 border-b-2 border-blue-600 font-medium"
+            <button
+              onClick={() => setActiveTab('recommended')}
+              className={`inline-block p-4 font-medium ${
+                activeTab === 'recommended'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+              }`}
             >
               Recommended
-            </Link>
-            <Link
-              href="/dashboard/saved"
-              className="inline-block p-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 font-medium"
+            </button>
+            <button
+              onClick={() => setActiveTab('saved')}
+              className={`inline-block p-4 font-medium ${
+                activeTab === 'saved'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+              }`}
             >
               Saved Grants
-            </Link>
-            <Link
-              href="/dashboard/applied"
-              className="inline-block p-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 font-medium"
+            </button>
+            <button
+              onClick={() => setActiveTab('applied')}
+              className={`inline-block p-4 font-medium ${
+                activeTab === 'applied'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+              }`}
             >
               Applied Grants
-            </Link>
-            <Link
-              href="/dashboard/ignored"
-              className="inline-block p-4 text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 font-medium"
+            </button>
+            <button
+              onClick={() => setActiveTab('ignored')}
+              className={`inline-block p-4 font-medium ${
+                activeTab === 'ignored'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+              }`}
             >
               Ignored Grants
-            </Link>
+            </button>
           </nav>
         </div>
         
         {/* Recommended Grants Section */}
-        <section className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Recommended for You</h2>
-            <Link
-              href="/search"
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              View All
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {recommendedGrants.map((grant) => (
-              <GrantCard
-                key={grant.id}
-                id={grant.id}
-                title={grant.title}
-                agency={grant.agency}
-                closeDate={grant.closeDate}
-                fundingAmount={grant.fundingAmount}
-                description={grant.description}
-                categories={grant.categories}
-              />
-            ))}
-          </div>
-        </section>
+        {activeTab === 'recommended' && (
+          <section className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Recommended for You</h2>
+              <Link
+                href="/search"
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                View All
+              </Link>
+            </div>
+            
+            {recommendedGrants.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {recommendedGrants.map((grant) => (
+                  <GrantCard
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency}
+                    closeDate={grant.closeDate}
+                    fundingAmount={grant.fundingAmount}
+                    description={grant.description}
+                    categories={grant.categories}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">No recommended grants yet. Update your preferences to get personalized recommendations.</p>
+                <Link
+                  href="/dashboard/preferences"
+                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Update Preferences
+                </Link>
+              </div>
+            )}
+          </section>
+        )}
         
         {/* Saved Grants Section */}
-        <section className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Saved Grants</h2>
-            <Link
-              href="/dashboard/saved"
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              View All
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {savedGrants.map((grant) => (
-              <GrantCard
-                key={grant.id}
-                id={grant.id}
-                title={grant.title}
-                agency={grant.agency}
-                closeDate={grant.closeDate}
-                fundingAmount={grant.fundingAmount}
-                description={grant.description}
-                categories={grant.categories}
-              />
-            ))}
-          </div>
-        </section>
+        {activeTab === 'saved' && (
+          <section className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Saved Grants</h2>
+            </div>
+            
+            {savedGrants.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {savedGrants.map((grant) => (
+                  <GrantCard
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency}
+                    closeDate={grant.closeDate}
+                    fundingAmount={grant.fundingAmount}
+                    description={grant.description}
+                    categories={grant.categories}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">You haven't saved any grants yet.</p>
+                <Link
+                  href="/search"
+                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Search Grants
+                </Link>
+              </div>
+            )}
+          </section>
+        )}
         
         {/* Applied Grants Section */}
-        <section className="mb-12">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Applied Grants</h2>
-            <Link
-              href="/dashboard/applied"
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              View All
-            </Link>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {appliedGrants.map((grant) => (
-              <GrantCard
-                key={grant.id}
-                id={grant.id}
-                title={grant.title}
-                agency={grant.agency}
-                closeDate={grant.closeDate}
-                fundingAmount={grant.fundingAmount}
-                description={grant.description}
-                categories={grant.categories}
-              />
-            ))}
-          </div>
-        </section>
+        {activeTab === 'applied' && (
+          <section className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Applied Grants</h2>
+            </div>
+            
+            {appliedGrants.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {appliedGrants.map((grant) => (
+                  <GrantCard
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency}
+                    closeDate={grant.closeDate}
+                    fundingAmount={grant.fundingAmount}
+                    description={grant.description}
+                    categories={grant.categories}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-lg p-8 text-center">
+                <p className="text-gray-600">You haven't marked any grants as applied yet.</p>
+                <Link
+                  href="/search"
+                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Search Grants
+                </Link>
+              </div>
+            )}
+          </section>
+        )}
         
-        {/* Upcoming Deadlines */}
-        <section className="mb-12">
-          <h2 className="text-xl font-semibold mb-6">Upcoming Deadlines</h2>
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Grant
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Agency
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Deadline
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-blue-600">Digital Literacy Education Program</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">Department of Education</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">Apr 20, 2025</div>
-                    <div className="text-xs text-red-500">25 days left</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      Applied
-                    </span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-blue-600">Community Health Initiative Grant</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">Department of Health</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">May 15, 2025</div>
-                    <div className="text-xs text-orange-500">50 days left</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                      Saved
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        {/* Ignored Grants Section */}
+        {activeTab === 'ignored' && (
+          <section className="mb-12">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold">Ignored Grants</h2>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-gray-600">You haven't ignored any grants yet.</p>
+              <Link
+                href="/search"
+                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Search Grants
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
     </Layout>
   );
