@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
+const { initCronJobs } = require('./utils/cronJobs');
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +18,14 @@ app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Initialize cron jobs if enabled
+if (process.env.ENABLE_CRON_JOBS === 'true') {
+  initCronJobs();
+  console.log('Cron jobs initialized');
+} else {
+  console.log('Cron jobs disabled. Set ENABLE_CRON_JOBS=true to enable.');
+}
 
 // Routes
 app.get('/', (req, res) => {
@@ -106,6 +115,24 @@ app.post('/api/users/interactions', (req, res) => {
   res.json({
     message: `Recorded interaction for user: ${interaction.user_id}`,
     interaction
+  });
+});
+
+// Admin routes for grants pipeline
+app.get('/api/admin/pipeline/status', (req, res) => {
+  res.json({
+    message: 'Pipeline status',
+    status: 'idle',
+    lastRun: null
+  });
+});
+
+app.post('/api/admin/pipeline/run', (req, res) => {
+  // This would trigger a manual run of the grants pipeline
+  // For now, just return a success message
+  res.json({
+    message: 'Pipeline run triggered',
+    status: 'running'
   });
 });
 

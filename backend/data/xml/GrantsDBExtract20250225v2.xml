@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Grants>
+  <OpportunitySynopsisDetail_1_0>
+    <OpportunityID>12345-ABCDE</OpportunityID>
+    <OpportunityTitle>Research Grant for Renewable Energy Solutions</OpportunityTitle>
+    <OpportunityNumber>ENERGY-2025-001</OpportunityNumber>
+    <OpportunityCategory>D</OpportunityCategory>
+    <FundingInstrumentType>G</FundingInstrumentType>
+    <CategoryOfFundingActivity>EN</CategoryOfFundingActivity>
+    <CategoryExplanation>This grant supports research and development of innovative renewable energy solutions that address climate change and promote sustainability.</CategoryExplanation>
+    <CFDANumbers>81.123</CFDANumbers>
+    <EligibleApplicants>06,20,22,23</EligibleApplicants>
+    <AdditionalInformationOnEligibility>Eligible applicants include universities, research institutions, and private companies with demonstrated expertise in renewable energy research.</AdditionalInformationOnEligibility>
+    <AgencyCode>DOE</AgencyCode>
+    <AgencyName>Department of Energy</AgencyName>
+    <PostDate>01152025</PostDate>
+    <CloseDate>06302025</CloseDate>
+    <EstimatedTotalProgramFunding>5000000</EstimatedTotalProgramFunding>
+    <AwardCeiling>750000</AwardCeiling>
+    <AwardFloor>250000</AwardFloor>
+    <CostSharingOrMatchingRequirement>Yes</CostSharingOrMatchingRequirement>
+    <Description>This grant supports research and development of innovative renewable energy solutions that address climate change and promote sustainability.
+
+The Department of Energy (DOE) is seeking proposals for research projects that advance the development of renewable energy technologies with the potential to significantly reduce greenhouse gas emissions and dependence on fossil fuels.
+
+Areas of interest include but are not limited to:
+- Solar energy conversion and storage
+- Wind energy optimization
+- Geothermal energy systems
+- Bioenergy and biofuels
+- Energy-efficient building technologies
+- Grid integration of renewable energy sources
+
+Successful proposals will demonstrate innovative approaches, technical feasibility, and potential for commercialization and scalability.</Description>
+    <GrantorContactEmail>jane.smith@energy.gov</GrantorContactEmail>
+    <GrantorContactName>Dr. Jane Smith</GrantorContactName>
+    <GrantorContactPhoneNumber>(202) 555-1234</GrantorContactPhoneNumber>
+    <AdditionalInformationURL>https://www.energy.gov/grants</AdditionalInformationURL>
+  </OpportunitySynopsisDetail_1_0>
+  <OpportunitySynopsisDetail_1_0>
+    <OpportunityID>67890-FGHIJ</OpportunityID>
+    <OpportunityTitle>Community Health Initiative Grant</OpportunityTitle>
+    <OpportunityNumber>HHS-2025-002</OpportunityNumber>
+    <OpportunityCategory>D</OpportunityCategory>
+    <FundingInstrumentType>G</FundingInstrumentType>
+    <CategoryOfFundingActivity>HL</CategoryOfFundingActivity>
+    <CategoryExplanation>Funding for community-based organizations to implement health programs that address local health disparities and improve access to care.</CategoryExplanation>
+    <CFDANumbers>93.456</CFDANumbers>
+    <EligibleApplicants>12,13,06,07</EligibleApplicants>
+    <AdditionalInformationOnEligibility>Eligible applicants include nonprofit organizations, community health centers, and academic institutions with experience in community health programs.</AdditionalInformationOnEligibility>
+    <AgencyCode>HHS</AgencyCode>
+    <AgencyName>Department of Health and Human Services</AgencyName>
+    <PostDate>02012025</PostDate>
+    <CloseDate>05152025</CloseDate>
+    <EstimatedTotalProgramFunding>2500000</EstimatedTotalProgramFunding>
+    <AwardCeiling>500000</AwardCeiling>
+    <AwardFloor>100000</AwardFloor>
+    <CostSharingOrMatchingRequirement>No</CostSharingOrMatchingRequirement>
+    <Description>The Department of Health and Human Services (HHS) is soliciting applications for the Community Health Initiative Grant program. This program aims to support community-based organizations in implementing health programs that address local health disparities and improve access to care.
+
+Funded projects will focus on:
+- Increasing access to preventive health services
+- Addressing social determinants of health
+- Reducing health disparities in underserved communities
+- Implementing evidence-based health interventions
+- Building community capacity for health improvement
+
+Applicants should demonstrate strong community partnerships, a clear understanding of local health needs, and a sustainable approach to program implementation.</Description>
+    <GrantorContactEmail>john.doe@hhs.gov</GrantorContactEmail>
+    <GrantorContactName>Dr. John Doe</GrantorContactName>
+    <GrantorContactPhoneNumber>(202) 555-5678</GrantorContactPhoneNumber>
+    <AdditionalInformationURL>https://www.hhs.gov/grants</AdditionalInformationURL>
+  </OpportunitySynopsisDetail_1_0>
+  <OpportunitySynopsisDetail_1_0>
+    <OpportunityID>24680-KLMNO</OpportunityID>
+    <OpportunityTitle>Small Business Innovation Research Grant</OpportunityTitle>
+    <OpportunityNumber>SBA-2025-003</OpportunityNumber>
+    <OpportunityCategory>D</OpportunityCategory>
+    <FundingInstrumentType>G</FundingInstrumentType>
+    <CategoryOfFundingActivity>BC</CategoryOfFundingActivity>
+    <CategoryExplanation>This grant supports small businesses engaged in research and development with potential for commercialization and economic impact.</CategoryExplanation>
+    <CFDANumbers>59.789</CFDANumbers>
+    <EligibleApplicants>23</EligibleApplicants>
+    <AdditionalInformationOnEligibility>Eligible applicants must be small businesses as defined by SBA size standards and must be for-profit entities.</AdditionalInformationOnEligibility>
+    <AgencyCode>SBA</AgencyCode>
+    <AgencyName>Small Business Administration</AgencyName>
+    <PostDate>03012025</PostDate>
+    <CloseDate>07102025</CloseDate>
+    <EstimatedTotalProgramFunding>1500000</EstimatedTotalProgramFunding>
+    <AwardCeiling>150000</AwardCeiling>
+    <AwardFloor>50000</AwardFloor>
+    <CostSharingOrMatchingRequirement>No</CostSharingOrMatchingRequirement>
+    <Description>The Small Business Administration (SBA) is soliciting applications for the Small Business Innovation Research Grant program. This program aims to support small businesses engaged in research and development with potential for commercialization and economic impact.
+
+The program seeks innovative solutions in the following areas:
+- Advanced manufacturing technologies
+- Artificial intelligence and machine learning applications
+- Biotechnology and medical devices
+- Clean energy and environmental technologies
+- Cybersecurity and information technology
+
+Successful applicants will demonstrate technical innovation, commercial potential, and the capability to bring their products or services to market.</Description>
+    <GrantorContactEmail>sarah.johnson@sba.gov</GrantorContactEmail>
+    <GrantorContactName>Sarah Johnson</GrantorContactName>
+    <GrantorContactPhoneNumber>(202) 555-9012</GrantorContactPhoneNumber>
+    <AdditionalInformationURL>https://www.sba.gov/grants</AdditionalInformationURL>
+  </OpportunitySynopsisDetail_1_0>
+</Grants>
