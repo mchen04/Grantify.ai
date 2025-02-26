@@ -21,9 +21,9 @@ const SortAndFilterControls: React.FC<SortAndFilterControlsProps> = ({
     <div className="flex justify-between items-center mb-4">
       {/* Sort by */}
       <div className="w-64">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Sort by</label>
+        <label className="block text-sm font-medium text-gray-800 mb-1">Sort by</label>
         <select 
-          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
         >
