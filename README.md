@@ -13,6 +13,7 @@ Grantify.ai extracts grant data daily from Grants.gov, uses AI to categorize gra
 - Hybrid search system (AI-driven personalized results + keyword-based filtering)
 - Per-user learning to refine recommendations
 - Responsive, modern UI
+- Active grants only - automatically filters out expired opportunities
 
 ## Tech Stack
 
@@ -110,6 +111,17 @@ The data pipeline automatically fetches grant data from Grants.gov, processes it
 - `npm run update-grants-live`: Run the pipeline with real data from Grants.gov
 - `npm run clear-grants`: Clear all grants from the database
 - `npm run update-schema`: Update the database schema (requires manual SQL execution)
+- `npm run cleanup-expired`: Remove grants with past deadlines from the database
+
+### Active Grants Only
+
+The system is designed to work with active grants only:
+
+1. **During Import**: The data pipeline filters out grants with past deadlines during the import process
+2. **In the Frontend**: The search and dashboard pages only show grants with future deadlines
+3. **Maintenance**: You can run `npm run cleanup-expired` to remove any expired grants from the database
+
+This ensures users only see relevant, actionable grant opportunities.
 
 ## Deployment
 

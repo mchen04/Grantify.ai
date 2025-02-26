@@ -56,6 +56,9 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
         
+        // Get current date for filtering expired grants
+        const today = new Date().toISOString();
+        
         // Fetch saved grants
         const { data: savedInteractions, error: savedError } = await supabase
           .from('user_interactions')
@@ -83,19 +86,31 @@ export default function Dashboard() {
         
         if (ignoredError) throw ignoredError;
         
-        // Fetch recommended grants (for now, just get some random grants)
+        // Fetch recommended grants (active grants only)
         // In a real implementation, this would use AI recommendations
         const { data: allGrants, error: grantsError } = await supabase
           .from('grants')
           .select('*')
+          .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
           .limit(5);
         
         if (grantsError) throw grantsError;
         
+        // Filter out expired grants from interactions
+        const filterActiveGrants = (interaction: UserInteraction) => {
+          const grant = interaction.grants;
+          if (!grant.close_date) return true;
+          return new Date(grant.close_date) >= new Date();
+        };
+        
         // Process the data
-        setSavedGrants(savedInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
-        setAppliedGrants(appliedInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
-        setIgnoredGrants(ignoredInteractions?.map((interaction: UserInteraction) => interaction.grants) || []);
+        const filteredSavedInteractions = savedInteractions?.filter(filterActiveGrants) || [];
+        const filteredAppliedInteractions = appliedInteractions || []; // Keep all applied grants regardless of expiry
+        const filteredIgnoredInteractions = ignoredInteractions?.filter(filterActiveGrants) || [];
+        
+        setSavedGrants(filteredSavedInteractions.map((interaction: UserInteraction) => interaction.grants));
+        setAppliedGrants(filteredAppliedInteractions.map((interaction: UserInteraction) => interaction.grants));
+        setIgnoredGrants(filteredIgnoredInteractions.map((interaction: UserInteraction) => interaction.grants));
         setRecommendedGrants(allGrants || []);
       } catch (error: any) {
         console.error('Error fetching user grants:', error);

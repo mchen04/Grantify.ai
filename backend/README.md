@@ -13,6 +13,7 @@ The backend includes a data pipeline that fetches grant data from Grants.gov, pr
 3. **Data Processing**: The XML data is parsed and transformed into a structured format.
 4. **Delta Updates**: The pipeline only adds new grants and updates existing ones, preserving historical data.
 5. **Database Storage**: The processed data is stored in the Supabase database.
+6. **Active Grants Only**: The pipeline filters out expired grants (those with past deadlines).
 
 ### Files
 
@@ -25,6 +26,7 @@ The backend includes a data pipeline that fetches grant data from Grants.gov, pr
 - `scripts/update-schema.sql`: SQL script to update the database schema
 - `scripts/clearGrants.js`: Script to clear all grants from the database
 - `scripts/runSchemaUpdate.js`: Script to run the schema update SQL
+- `scripts/cleanupExpiredGrants.js`: Script to clean up expired grants from the database
 
 ### Manual Execution
 
@@ -52,9 +54,24 @@ npm run clear-grants
 
 This will delete all grants and pipeline runs from the database, giving you a clean slate.
 
+### Cleaning Up Expired Grants
+
+To remove grants with past deadlines from the database:
+
+```bash
+npm run cleanup-expired
+```
+
+This script will:
+1. Find all grants with a close_date in the past
+2. Delete them from the database
+3. Report how many grants were removed
+
+This is useful for keeping the database clean and focused on active opportunities.
+
 ### Fixing Integer Overflow Errors
 
-If you encounter errors like `value "2192000000" is out of range for type integer`, you need to update the database schema to use `bigint` instead of `integer` for the funding fields. You can do this by running:
+If you encounter errors like `value "2192000000" is out of range for type integer`, you need to update the database schema to use `bigint` instead of `integer` for the funding fields. You can run:
 
 ```bash
 npm run update-schema

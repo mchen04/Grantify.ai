@@ -31,7 +31,11 @@ async function parseGrantsXml(xmlPath) {
     console.log(`Found ${grantsData.length} grants in the XML file`);
     
     // Transform the grants data into our database schema format
-    const grants = grantsData.map(transformGrantData);
+    const grants = grantsData
+      .map(transformGrantData)
+      .filter(filterActiveGrants); // Filter out expired grants
+    
+    console.log(`After filtering, ${grants.length} active grants remain`);
     
     return grants;
   } catch (error) {
@@ -68,92 +72,25 @@ function transformGrantData(grant) {
     return cleanAmount ? parseInt(cleanAmount, 10) : null;
   };
   
-  // Helper function to convert eligible applicants to array
-  const parseEligibleApplicants = (codes) => {
-    if (!codes) return [];
+  // Parse eligible applicants
+  const parseEligibleApplicants = (eligibleApplicants) => {
+    if (!eligibleApplicants) return [];
     
-    // Split by comma if it's a string with multiple codes
-    const codeArray = typeof codes === 'string' ? codes.split(',').map(c => c.trim()) : [codes];
-    
-    // Map codes to descriptions
-    const eligibilityMap = {
-      '99': 'Unrestricted',
-      '00': 'State governments',
-      '01': 'County governments',
-      '02': 'City or township governments',
-      '04': 'Special district governments',
-      '05': 'Independent school districts',
-      '06': 'Public and State controlled institutions of higher education',
-      '07': 'Native American tribal governments (Federally recognized)',
-      '08': 'Public housing authorities/Indian housing authorities',
-      '11': 'Native American tribal organizations (other than Federally recognized tribal governments)',
-      '12': 'Nonprofits having a 501(c)(3) status with the IRS, other than institutions of higher education',
-      '13': 'Nonprofits that do not have a 501(c)(3) status with the IRS, other than institutions of higher education',
-      '20': 'Private institutions of higher education',
-      '21': 'Individuals',
-      '22': 'For-profit organizations other than small businesses',
-      '23': 'Small businesses',
-      '25': 'Others'
-    };
-    
-    return codeArray.map(code => eligibilityMap[code] || code);
-  };
-  
-  // Helper function to determine activity categories
-  const determineActivityCategories = (categoryCode, explanation) => {
-    const categories = [];
-    
-    // Add the main category
-    const categoryMap = {
-      'ACA': 'Affordable Care Act',
-      'AG': 'Agriculture',
-      'AR': 'Arts',
-      'BC': 'Business and Commerce',
-      'CD': 'Community Development',
-      'CP': 'Consumer Protection',
-      'DPR': 'Disaster Prevention and Relief',
-      'ED': 'Education',
-      'ELT': 'Employment, Labor and Training',
-      'EN': 'Energy',
-      'ENV': 'Environment',
-      'FN': 'Food and Nutrition',
-      'HL': 'Health',
-      'HO': 'Housing',
-      'HU': 'Humanities',
-      'ISS': 'Income Security and Social Services',
-      'IS': 'Information and Statistics',
-      'LJL': 'Law, Justice and Legal Services',
-      'NR': 'Natural Resources',
-      'RA': 'Recovery Act',
-      'RD': 'Regional Development',
-      'ST': 'Science and Technology',
-      'T': 'Transportation',
-      'O': 'Other'
-    };
-    
-    if (categoryCode && categoryMap[categoryCode]) {
-      categories.push(categoryMap[categoryCode]);
+    if (typeof eligibleApplicants === 'string') {
+      return [eligibleApplicants];
     }
     
-    // Extract additional categories from the explanation if available
-    if (explanation) {
-      // This is a simple approach - in a real implementation, you might use NLP or AI
-      // to extract more meaningful categories from the explanation
-      const keywords = [
-        'Research', 'Development', 'Innovation', 'Technology', 'Healthcare',
-        'Education', 'Training', 'Infrastructure', 'Climate', 'Energy',
-        'Sustainability', 'Community', 'Rural', 'Urban', 'Minority',
-        'Small Business', 'Entrepreneurship', 'International', 'Security'
-      ];
-      
-      keywords.forEach(keyword => {
-        if (explanation.includes(keyword) && !categories.includes(keyword)) {
-          categories.push(keyword);
-        }
-      });
+    if (Array.isArray(eligibleApplicants)) {
+      return eligibleApplicants;
     }
     
-    return categories;
+    if (eligibleApplicants.ApplicantType) {
+      return Array.isArray(eligibleApplicants.ApplicantType)
+        ? eligibleApplicants.ApplicantType
+        : [eligibleApplicants.ApplicantType];
+    }
+    
+    return [];
   };
   
   // Transform the grant data
@@ -163,12 +100,10 @@ function transformGrantData(grant) {
     title: grant.OpportunityTitle || '',
     category: grant.OpportunityCategory || '',
     funding_type: grant.FundingInstrumentType || '',
-    activity_category: determineActivityCategories(
-      grant.CategoryOfFundingActivity,
-      grant.CategoryExplanation
-    ),
+    activity_category: [], // Will be filled by AI categorization
     eligible_applicants: parseEligibleApplicants(grant.EligibleApplicants),
     agency_name: grant.AgencyName || '',
+    agency_code: grant.AgencyCode || '',
     post_date: convertDate(grant.PostDate),
     close_date: convertDate(grant.CloseDate),
     total_funding: parseFunding(grant.EstimatedTotalProgramFunding),
@@ -178,14 +113,32 @@ function transformGrantData(grant) {
     description: grant.Description || '',
     additional_info_url: grant.AdditionalInformationURL || '',
     grantor_contact_name: grant.GrantorContactName || grant.GrantorContactText || '',
-    grantor_contact_email: grant.GrantorContactEmail || '',
+    grantor_contact_email: grant.GrantorContactEmailAddress || '',
     grantor_contact_phone: grant.GrantorContactPhoneNumber || '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 }
 
+/**
+ * Filter out grants that have already expired
+ * @param {Object} grant - Transformed grant object
+ * @returns {boolean} - True if the grant is still active, false if expired
+ */
+function filterActiveGrants(grant) {
+  // If there's no close date, consider it active
+  if (!grant.close_date) return true;
+  
+  // Parse the close date
+  const closeDate = new Date(grant.close_date);
+  const today = new Date();
+  
+  // Keep grants that close in the future
+  return closeDate >= today;
+}
+
 module.exports = {
   parseGrantsXml,
-  transformGrantData
+  transformGrantData,
+  filterActiveGrants
 };

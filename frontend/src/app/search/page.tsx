@@ -40,6 +40,10 @@ export default function Search() {
         // Start building the query
         let query = supabase.from('grants').select('*', { count: 'exact' });
         
+        // Only show active grants (close_date is in the future or null)
+        const today = new Date().toISOString();
+        query = query.or(`close_date.gt.${today},close_date.is.null`);
+        
         // Apply filters
         if (searchTerm) {
           query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
