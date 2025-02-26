@@ -2,33 +2,120 @@
 
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout/Layout';
-import GrantCard from '@/components/GrantCard';
-import supabase, { db } from '@/lib/supabaseClient';
+import supabase from '@/lib/supabaseClient';
+import { Grant, GrantFilter, SelectOption } from '@/types/grant';
+import { buildGrantQuery } from '@/utils/grantQueryBuilder';
+import { MAX_FUNDING, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS } from '@/utils/constants';
 
-// Grant type definition
-interface Grant {
-  id: string;
-  title: string;
-  agency_name: string;
-  close_date: string | null;
-  award_ceiling: number | null;
-  description: string;
-  activity_category: string[];
-}
+// Components
+import SearchBar from '@/components/search/SearchBar';
+import MultiSelect from '@/components/filters/MultiSelect';
+import FundingRangeFilter from '@/components/filters/FundingRangeFilter';
+import DeadlineFilter from '@/components/filters/DeadlineFilter';
+import CostSharingFilter from '@/components/filters/CostSharingFilter';
+import SortAndFilterControls from '@/components/search/SortAndFilterControls';
+import ActiveFilters from '@/components/filters/ActiveFilters';
+import SearchResults from '@/components/search/SearchResults';
 
 export default function Search() {
+  // State for grants and loading
   const [grants, setGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [category, setCategory] = useState('');
-  const [agency, setAgency] = useState('');
-  const [fundingRange, setFundingRange] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [sortBy, setSortBy] = useState('relevance');
-  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const grantsPerPage = 10;
+
+  // Filter state
+  const [filter, setFilter] = useState<GrantFilter>({
+    searchTerm: '',
+    agencies: [],
+    fundingMin: 0,
+    fundingMax: MAX_FUNDING,
+    includeFundingNull: true,
+    onlyNoFunding: false,
+    deadlineMinDays: MIN_DEADLINE_DAYS,
+    deadlineMaxDays: MAX_DEADLINE_DAYS,
+    includeNoDeadline: true,
+    onlyNoDeadline: false,
+    costSharing: '',
+    sortBy: 'relevance',
+    page: 1
+  });
+
+  // Agency options
+  const agencyOptions: SelectOption[] = [
+    { value: 'Department of Health and Human Services', label: 'Department of Health and Human Services' },
+    { value: 'Department of Education', label: 'Department of Education' },
+    { value: 'National Science Foundation', label: 'National Science Foundation' },
+    { value: 'Department of Energy', label: 'Department of Energy' },
+    { value: 'Department of Agriculture', label: 'Department of Agriculture' },
+    { value: 'Department of Defense', label: 'Department of Defense' },
+    { value: 'Department of Commerce', label: 'Department of Commerce' },
+    { value: 'Small Business Administration', label: 'Small Business Administration' },
+    { value: 'Environmental Protection Agency', label: 'Environmental Protection Agency' }
+  ];
+
+  // Sort options
+  const sortOptions: SelectOption[] = [
+    { value: 'relevance', label: 'Relevance' },
+    { value: 'recent', label: 'Recently Added' },
+    { value: 'deadline', label: 'Deadline (Soonest)' },
+    { value: 'deadline_latest', label: 'Deadline (Latest)' },
+    { value: 'amount', label: 'Funding Amount (Highest)' },
+    { value: 'amount_asc', label: 'Funding Amount (Lowest)' },
+    { value: 'title_asc', label: 'Title (A-Z)' },
+    { value: 'title_desc', label: 'Title (Z-A)' }
+  ];
+
+  // Update filter state
+  const updateFilter = (key: keyof GrantFilter, value: any) => {
+    setFilter(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // Handle funding filter option changes
+  const handleFundingOptionChange = (option: 'include' | 'only', checked: boolean) => {
+    if (option === 'only') {
+      updateFilter('onlyNoFunding', checked);
+      if (checked) {
+        // If "Only show grants with no funding" is checked, disable the other option
+        updateFilter('includeFundingNull', true);
+        // Disable the sliders by setting them to their default values
+        updateFilter('fundingMin', 0);
+        updateFilter('fundingMax', MAX_FUNDING);
+      }
+    } else {
+      updateFilter('includeFundingNull', checked);
+      if (checked && filter.onlyNoFunding) {
+        // If "Include grants with no funding" is checked and "Only" was previously checked,
+        // uncheck the "Only" option
+        updateFilter('onlyNoFunding', false);
+      }
+    }
+  };
+
+  // Handle deadline filter option changes
+  const handleDeadlineOptionChange = (option: 'include' | 'only', checked: boolean) => {
+    if (option === 'only') {
+      updateFilter('onlyNoDeadline', checked);
+      if (checked) {
+        // If "Only show grants with no deadline" is checked, disable the other option
+        updateFilter('includeNoDeadline', true);
+        // Disable the sliders by setting them to their default values
+        updateFilter('deadlineMinDays', MIN_DEADLINE_DAYS);
+        updateFilter('deadlineMaxDays', MAX_DEADLINE_DAYS);
+      }
+    } else {
+      updateFilter('includeNoDeadline', checked);
+      if (checked && filter.onlyNoDeadline) {
+        // If "Include grants with no deadline" is checked and "Only" was previously checked,
+        // uncheck the "Only" option
+        updateFilter('onlyNoDeadline', false);
+      }
+    }
+  };
 
   // Fetch grants on initial load and when filters change
   useEffect(() => {
@@ -37,70 +124,31 @@ export default function Search() {
         setLoading(true);
         setError(null);
         
-        // Start building the query
-        let query = supabase.from('grants').select('*', { count: 'exact' });
-        
-        // Only show active grants (close_date is in the future or null)
-        const today = new Date().toISOString();
-        query = query.or(`close_date.gt.${today},close_date.is.null`);
-        
-        // Apply filters
-        if (searchTerm) {
-          query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
-        }
-        
-        if (category) {
-          query = query.contains('activity_category', [category]);
-        }
-        
-        if (agency) {
-          query = query.eq('agency_name', agency);
-        }
-        
-        // Apply funding range filter
-        if (fundingRange) {
-          const [min, max] = fundingRange.split('-').map(Number);
-          if (min && !max) {
-            // For "500000+" case
-            query = query.gte('award_ceiling', min);
-          } else if (min && max) {
-            query = query.gte('award_floor', min).lte('award_ceiling', max);
-          }
-        }
-        
-        // Apply deadline filter
-        if (deadline) {
-          const days = parseInt(deadline);
-          if (!isNaN(days)) {
-            const futureDate = new Date();
-            futureDate.setDate(futureDate.getDate() + days);
-            query = query.lte('close_date', futureDate.toISOString());
-          }
-        }
-        
-        // Apply sorting
-        if (sortBy === 'deadline') {
-          query = query.order('close_date', { ascending: true });
-        } else if (sortBy === 'amount') {
-          query = query.order('award_ceiling', { ascending: false });
-        } else if (sortBy === 'recent') {
-          query = query.order('post_date', { ascending: false });
-        }
-        
-        // Apply pagination
-        const from = (page - 1) * grantsPerPage;
-        const to = from + grantsPerPage - 1;
-        query = query.range(from, to);
+        // Build the query
+        console.log('Building query with filters:', filter);
+        const query = await buildGrantQuery(filter, grantsPerPage);
         
         // Execute the query
+        console.log('Executing query...');
         const { data, error, count } = await query;
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
         
+        console.log(`Query successful! Found ${count || 0} grants.`);
         setGrants(data || []);
         setTotalPages(count ? Math.ceil(count / grantsPerPage) : 1);
       } catch (error: any) {
+        // More detailed error logging
         console.error('Error fetching grants:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         setError('Failed to load grants. Please try again later.');
       } finally {
         setLoading(false);
@@ -108,19 +156,38 @@ export default function Search() {
     };
     
     fetchGrants();
-  }, [searchTerm, category, agency, fundingRange, deadline, sortBy, page]);
+  }, [filter]);
 
   // Handle search input
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1); // Reset to first page when searching
+    updateFilter('page', 1); // Reset to first page when searching
   };
 
   // Handle pagination
   const goToPage = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage);
+      updateFilter('page', newPage);
     }
+  };
+
+  // Reset all filters
+  const resetFilters = () => {
+    setFilter({
+      searchTerm: '',
+      agencies: [],
+      fundingMin: 0,
+      fundingMax: MAX_FUNDING,
+      includeFundingNull: true,
+      onlyNoFunding: false,
+      deadlineMinDays: MIN_DEADLINE_DAYS,
+      deadlineMaxDays: MAX_DEADLINE_DAYS,
+      includeNoDeadline: true,
+      onlyNoDeadline: false,
+      costSharing: '',
+      sortBy: 'relevance',
+      page: 1
+    });
   };
 
   return (
@@ -131,203 +198,76 @@ export default function Search() {
         {/* Search and Filter Section */}
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
           <form onSubmit={handleSearch}>
-            <div className="mb-6">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search grants by keyword..."
-                  className="w-full p-4 pr-12 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <button 
-                  type="submit"
-                  className="absolute right-3 top-3 text-gray-500"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              </div>
+            {/* Search Bar */}
+            <SearchBar 
+              searchTerm={filter.searchTerm}
+              setSearchTerm={(value) => updateFilter('searchTerm', value)}
+              onSubmit={handleSearch}
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Multi-select Agency Filter */}
+              <MultiSelect
+                options={agencyOptions}
+                selectedValues={filter.agencies}
+                onChange={(values) => updateFilter('agencies', values)}
+                label="Agencies"
+              />
+              
+              {/* Funding Range Filter */}
+              <FundingRangeFilter
+                fundingMin={filter.fundingMin}
+                fundingMax={filter.fundingMax}
+                includeFundingNull={filter.includeFundingNull}
+                onlyNoFunding={filter.onlyNoFunding}
+                setFundingMin={(value) => updateFilter('fundingMin', value)}
+                setFundingMax={(value) => updateFilter('fundingMax', value)}
+                handleFundingOptionChange={handleFundingOptionChange}
+              />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Filter by Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select 
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  <option value="">All Categories</option>
-                  <option value="Health">Health</option>
-                  <option value="Education">Education</option>
-                  <option value="Energy">Energy</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Research">Research</option>
-                </select>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Deadline Filter */}
+              <DeadlineFilter
+                deadlineMinDays={filter.deadlineMinDays}
+                deadlineMaxDays={filter.deadlineMaxDays}
+                includeNoDeadline={filter.includeNoDeadline}
+                onlyNoDeadline={filter.onlyNoDeadline}
+                setDeadlineMinDays={(value) => updateFilter('deadlineMinDays', value)}
+                setDeadlineMaxDays={(value) => updateFilter('deadlineMaxDays', value)}
+                handleDeadlineOptionChange={handleDeadlineOptionChange}
+              />
               
-              {/* Filter by Agency */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Agency</label>
-                <select 
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={agency}
-                  onChange={(e) => setAgency(e.target.value)}
-                >
-                  <option value="">All Agencies</option>
-                  <option value="Department of Energy">Department of Energy</option>
-                  <option value="Department of Health and Human Services">Department of Health</option>
-                  <option value="Department of Education">Department of Education</option>
-                  <option value="Small Business Administration">Small Business Administration</option>
-                </select>
-              </div>
-              
-              {/* Filter by Funding Range */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Funding Range</label>
-                <select 
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={fundingRange}
-                  onChange={(e) => setFundingRange(e.target.value)}
-                >
-                  <option value="">Any Amount</option>
-                  <option value="0-50000">Up to $50,000</option>
-                  <option value="50000-100000">$50,000 - $100,000</option>
-                  <option value="100000-500000">$100,000 - $500,000</option>
-                  <option value="500000-">$500,000+</option>
-                </select>
-              </div>
-              
-              {/* Filter by Deadline */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deadline</label>
-                <select 
-                  className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                >
-                  <option value="">Any Deadline</option>
-                  <option value="30">Next 30 Days</option>
-                  <option value="60">Next 60 Days</option>
-                  <option value="90">Next 90 Days</option>
-                  <option value="180">Next 6 Months</option>
-                </select>
-              </div>
+              {/* Cost Sharing Filter */}
+              <CostSharingFilter
+                costSharing={filter.costSharing}
+                setCostSharing={(value) => updateFilter('costSharing', value)}
+              />
             </div>
             
-            <div className="mt-6 flex justify-end">
-              <button 
-                type="submit"
-                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Apply Filters
-              </button>
-            </div>
+            {/* Sort and Filter Controls */}
+            <SortAndFilterControls
+              sortBy={filter.sortBy}
+              setSortBy={(value) => updateFilter('sortBy', value)}
+              sortOptions={sortOptions}
+              resetFilters={resetFilters}
+            />
+            
+            {/* Active Filters */}
+            <ActiveFilters filter={filter} />
           </form>
         </div>
         
-        {/* Results Section */}
-        <div>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Search Results</h2>
-            <div className="flex items-center">
-              <span className="text-gray-600 mr-2">Sort by:</span>
-              <select 
-                className="p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="relevance">Relevance</option>
-                <option value="deadline">Deadline (Soonest)</option>
-                <option value="amount">Funding Amount (Highest)</option>
-                <option value="recent">Recently Added</option>
-              </select>
-            </div>
-          </div>
-          
-          {loading ? (
-            <div className="flex justify-center items-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-          ) : error ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-              {error}
-            </div>
-          ) : grants.length === 0 ? (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">No grants found matching your criteria. Try adjusting your filters.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {grants.map((grant) => (
-                <GrantCard
-                  key={grant.id}
-                  id={grant.id}
-                  title={grant.title}
-                  agency={grant.agency_name}
-                  closeDate={grant.close_date}
-                  fundingAmount={grant.award_ceiling}
-                  description={grant.description}
-                  categories={grant.activity_category || []}
-                />
-              ))}
-            </div>
-          )}
-          
-          {/* Pagination */}
-          {!loading && grants.length > 0 && (
-            <div className="mt-8 flex justify-center">
-              <nav className="flex items-center space-x-2">
-                <button 
-                  className={`px-3 py-2 rounded-md border ${page === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
-                  onClick={() => goToPage(page - 1)}
-                  disabled={page === 1}
-                >
-                  Previous
-                </button>
-                
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  // Show pages around the current page
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (page <= 3) {
-                    pageNum = i + 1;
-                  } else if (page >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = page - 2 + i;
-                  }
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      className={`px-3 py-2 rounded-md ${
-                        page === pageNum
-                          ? 'bg-blue-600 text-white'
-                          : 'border text-gray-700 hover:bg-gray-50'
-                      }`}
-                      onClick={() => goToPage(pageNum)}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                
-                <button 
-                  className={`px-3 py-2 rounded-md border ${page === totalPages ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
-                  onClick={() => goToPage(page + 1)}
-                  disabled={page === totalPages}
-                >
-                  Next
-                </button>
-              </nav>
-            </div>
-          )}
-        </div>
+        {/* Search Results */}
+        <SearchResults
+          grants={grants}
+          loading={loading}
+          error={error}
+          page={filter.page}
+          totalPages={totalPages}
+          grantsPerPage={grantsPerPage}
+          goToPage={goToPage}
+        />
       </div>
     </Layout>
   );

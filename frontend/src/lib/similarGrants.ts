@@ -20,6 +20,10 @@ export async function fetchSimilarGrants(
       .neq('id', grantId) // Exclude the current grant
       .limit(limit);
     
+    // Only show active grants (close_date is in the future or null)
+    const today = new Date().toISOString();
+    query = query.or(`close_date.gt.${today},close_date.is.null`);
+    
     // If we have categories, use them to find similar grants
     if (categories && categories.length > 0) {
       // Find grants that share at least one category
@@ -46,16 +50,32 @@ export async function fetchSimilarGrants(
  * @returns Object - Formatted grant data
  */
 export function formatSimilarGrant(grant: any) {
+  // Format the deadline
+  let deadline = 'No deadline specified';
+  if (grant.close_date) {
+    deadline = new Date(grant.close_date).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    
+    // Add days remaining if there's a deadline
+    const daysRemaining = Math.ceil(
+      (new Date(grant.close_date).getTime() - new Date().getTime()) / 
+      (1000 * 60 * 60 * 24)
+    );
+    
+    if (daysRemaining > 0) {
+      deadline += ` (${daysRemaining} days left)`;
+    }
+  } else {
+    deadline = 'Open-ended opportunity';
+  }
+  
   return {
     id: grant.id,
     title: grant.title,
     agency: grant.agency_name,
-    deadline: grant.close_date 
-      ? new Date(grant.close_date).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : 'No deadline specified',
+    deadline,
   };
 }

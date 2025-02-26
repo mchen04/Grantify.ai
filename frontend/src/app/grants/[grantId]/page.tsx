@@ -28,6 +28,7 @@ interface Grant {
   grantor_contact_name: string | null;
   grantor_contact_email: string | null;
   grantor_contact_phone: string | null;
+  funding_type: string | null;
 }
 
 // Interaction type
@@ -142,7 +143,7 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
   
   // Format dates
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return 'No deadline specified';
     
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -164,7 +165,7 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
   
   // Format currency
   const formatCurrency = (amount: number | null) => {
-    if (amount === null) return 'N/A';
+    if (amount === null) return 'Not specified';
     
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -272,7 +273,7 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="font-medium text-gray-700">Agency:</span> {grant.agency_name} ({grant.agency_code})
+              <span className="font-medium text-gray-700">Agency:</span> {grant.agency_name} {grant.agency_code ? `(${grant.agency_code})` : ''}
             </div>
             <div>
               <span className="font-medium text-gray-700">Opportunity ID:</span> {grant.opportunity_id}
@@ -313,13 +314,13 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
               <h2 className="text-xl font-semibold mb-4">Contact Information</h2>
               <div className="space-y-3">
                 <div>
-                  <span className="font-medium text-gray-700">Name:</span> {grant.grantor_contact_name || 'N/A'}
+                  <span className="font-medium text-gray-700">Name:</span> {grant.grantor_contact_name || 'Not specified'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Email:</span> {grant.grantor_contact_email || 'N/A'}
+                  <span className="font-medium text-gray-700">Email:</span> {grant.grantor_contact_email || 'Not specified'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Phone:</span> {grant.grantor_contact_phone || 'N/A'}
+                  <span className="font-medium text-gray-700">Phone:</span> {grant.grantor_contact_phone || 'Not specified'}
                 </div>
                 {grant.additional_info_url && (
                   <div className="pt-2">
@@ -351,11 +352,20 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                 <div>
                   <div className="text-sm text-gray-500 mb-1">Close Date</div>
                   <div className="font-medium">{formatDate(grant.close_date)}</div>
-                  {daysRemaining !== null && (
+                  {daysRemaining !== null ? (
                     <div className={`text-sm ${daysRemaining < 30 ? 'text-red-600' : 'text-orange-600'}`}>
                       {daysRemaining} days remaining
                     </div>
+                  ) : (
+                    <div className="text-sm text-green-600">
+                      Open-ended opportunity
+                    </div>
                   )}
+                </div>
+                
+                <div>
+                  <div className="text-sm text-gray-500 mb-1">Funding Type</div>
+                  <div>{grant.funding_type || 'Not specified'}</div>
                 </div>
                 
                 <div>

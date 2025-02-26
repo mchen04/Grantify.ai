@@ -40,7 +40,12 @@ const GrantCard: React.FC<GrantCardProps> = ({
         day: 'numeric'
       })
     : 'No deadline specified';
-
+  
+  // Calculate days remaining
+  const daysRemaining = closeDate 
+    ? Math.ceil((new Date(closeDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  
   // Format funding amount
   const formattedAmount = fundingAmount 
     ? new Intl.NumberFormat('en-US', {
@@ -49,12 +54,12 @@ const GrantCard: React.FC<GrantCardProps> = ({
         maximumFractionDigits: 0
       }).format(fundingAmount)
     : 'Not specified';
-
+  
   // Truncate description
   const truncatedDescription = description?.length > 150
     ? `${description.substring(0, 150)}...`
     : description || 'No description available';
-
+  
   return (
     <div className={`border rounded-lg shadow-sm hover:shadow-md transition-shadow p-6 bg-white ${isIgnored ? 'opacity-70' : ''}`}>
       <div className="flex justify-between items-start mb-2">
@@ -80,6 +85,16 @@ const GrantCard: React.FC<GrantCardProps> = ({
       <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
         <div>
           <span className="font-medium">Deadline:</span> {formattedDate}
+          {daysRemaining !== null && (
+            <span className={`ml-2 ${daysRemaining < 30 ? 'text-red-600' : 'text-orange-600'}`}>
+              ({daysRemaining} days left)
+            </span>
+          )}
+          {!closeDate && (
+            <span className="ml-2 text-green-600">
+              (Open-ended)
+            </span>
+          )}
         </div>
         <div>
           <span className="font-medium">Funding:</span> {formattedAmount}

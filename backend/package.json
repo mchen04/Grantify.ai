@@ -12,7 +12,8 @@
     "update-grants-live": "node scripts/updateGrantsLive.js",
     "clear-grants": "node scripts/clearGrants.js",
     "update-schema": "node scripts/runSchemaUpdate.js",
-    "cleanup-expired": "node scripts/cleanupExpiredGrants.js"
+    "cleanup-expired": "node scripts/cleanupExpiredGrants.js",
+    "analyze-data": "node scripts/analyzeGrantData.js"
   },
   "keywords": [
     "grants",
