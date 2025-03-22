@@ -49,6 +49,61 @@ async function parseGrantsXml(xmlPath) {
  * @param {Object} grant - Raw grant data from XML
  * @returns {Object} - Transformed grant object
  */
+/**
+ * Parse contact information from a messy string
+ * @param {string} contactText - Raw contact text that may contain name, email, and phone
+ * @returns {Object} - Parsed contact information
+ */
+function parseContactInfo(contactText) {
+  if (!contactText) {
+    return {
+      name: '',
+      email: '',
+      phone: ''
+    };
+  }
+
+  // Split by HTML-encoded line breaks and clean up
+  const parts = contactText.split('&lt;br/&gt;').map(part => part.trim()).filter(Boolean);
+  
+  let name = '';
+  let email = '';
+  let phone = '';
+
+  // Regular expressions for matching
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const phoneRegex = /(?:\+?\d{1,4}[-.\s]?)?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/;
+
+  // Process each part
+  parts.forEach(part => {
+    // Check for email
+    const emailMatch = part.match(emailRegex);
+    if (emailMatch && !email) {
+      email = emailMatch[0];
+      return;
+    }
+
+    // Check for phone number
+    const phoneMatch = part.match(phoneRegex);
+    if (phoneMatch && !phone) {
+      // Standardize phone format
+      phone = phoneMatch[0].replace(/[-.\s]/g, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+      return;
+    }
+
+    // If part doesn't contain email or phone and name is empty, it's likely the name
+    if (!name && !emailRegex.test(part) && !phoneRegex.test(part)) {
+      // Clean up the name (remove titles, extra spaces, etc)
+      name = part.replace(/\.$/, '').trim(); // Remove trailing period
+      if (name.toLowerCase().includes('grantor')) {
+        name = name.replace(/grantor/i, '').trim();
+      }
+    }
+  });
+
+  return { name, email, phone };
+}
+
 function transformGrantData(grant) {
   // Helper function to convert date format from MMDDYYYY to ISO format
   const convertDate = (dateStr) => {
@@ -112,9 +167,15 @@ function transformGrantData(grant) {
     cost_sharing: grant.CostSharingOrMatchingRequirement === 'Yes',
     description: grant.Description || '',
     additional_info_url: grant.AdditionalInformationURL || '',
-    grantor_contact_name: grant.GrantorContactName || grant.GrantorContactText || '',
-    grantor_contact_email: grant.GrantorContactEmailAddress || '',
-    grantor_contact_phone: grant.GrantorContactPhoneNumber || '',
+    ...(() => {
+      const contactText = grant.GrantorContactName || grant.GrantorContactText || '';
+      const parsedContact = parseContactInfo(contactText);
+      return {
+        grantor_contact_name: parsedContact.name,
+        grantor_contact_email: parsedContact.email || grant.GrantorContactEmailAddress || '',
+        grantor_contact_phone: parsedContact.phone || grant.GrantorContactPhoneNumber || '',
+      };
+    })(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
