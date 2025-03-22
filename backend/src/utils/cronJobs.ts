@@ -1,12 +1,22 @@
-const cron = require('node-cron');
-const { downloadGrantsXml } = require('./grantsDownloader');
-const { parseGrantsXml } = require('./grantsParser');
-const grantsService = require('../services/grantsService');
+import * as cron from 'node-cron';
+import { downloadGrantsXml } from './grantsDownloader';
+import { parseGrantsXml } from './grantsParser';
+import grantsService from '../services/grantsService';
+
+interface PipelineStats {
+  total: number;
+  new: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+  startTime: Date;
+  endTime: Date;
+}
 
 /**
  * Initialize cron jobs
  */
-function initCronJobs() {
+export function initCronJobs(): void {
   // Schedule the grants update job to run at 5 AM daily
   // Cron format: second(optional) minute hour day-of-month month day-of-week
   cron.schedule('0 5 * * *', async () => {
@@ -22,22 +32,25 @@ function initCronJobs() {
 
 /**
  * Update grants data from Grants.gov
- * @param {boolean} useMock - Whether to use the mock XML file (for testing)
- * @returns {Promise<void>}
+ * @param useMock - Whether to use the mock XML file (for testing)
  */
-async function updateGrantsData(useMock = false) {
+export async function updateGrantsData(useMock = false): Promise<void> {
   try {
     console.log('Starting grants data update process...');
     
     // Step 1: Download the latest XML extract
-    const xmlPath = await downloadGrantsXml(new Date(), true, useMock);
+    const xmlPath = await downloadGrantsXml({ date: new Date(), useV2: true, useMock });
     console.log(`Using XML file at ${xmlPath}`);
     
-    // Step 2: Parse the XML data
-    const grants = await parseGrantsXml(xmlPath);
+    // Step 2: Get existing grant IDs
+    const existingGrantIds = await grantsService.getAllGrantIds();
+    console.log(`Found ${existingGrantIds.length} existing grants in database`);
+
+    // Step 3: Parse the XML data, skipping text cleaning for existing grants
+    const grants = await parseGrantsXml(xmlPath, existingGrantIds);
     console.log(`Parsed ${grants.length} grants from XML`);
     
-    // Step 3: Store the grants in the database
+    // Step 4: Store the grants in the database
     const result = await grantsService.storeGrants(grants);
     
     // Log the results
@@ -47,24 +60,18 @@ async function updateGrantsData(useMock = false) {
     console.log(`- Existing grants updated: ${result.updated}`);
     console.log(`- Unchanged grants: ${result.unchanged}`);
     console.log(`- Failed grants: ${result.failed}`);
-    console.log(`- Duration: ${(result.endTime - result.startTime) / 1000} seconds`);
+    console.log(`- Duration: ${(result.endTime.getTime() - result.startTime.getTime()) / 1000} seconds`);
   } catch (error) {
-    console.error('Error updating grants data:', error);
+    console.error('Error updating grants data:', error instanceof Error ? error.message : error);
+    throw error;
   }
 }
 
 /**
  * Run the grants update job manually
- * @param {boolean} useMock - Whether to use the mock XML file (for testing)
- * @returns {Promise<void>}
+ * @param useMock - Whether to use the mock XML file (for testing)
  */
-async function runGrantsUpdateJob(useMock = true) {
+export async function runGrantsUpdateJob(useMock = true): Promise<void> {
   console.log('Manually running grants update job...');
   await updateGrantsData(useMock);
 }
-
-module.exports = {
-  initCronJobs,
-  updateGrantsData,
-  runGrantsUpdateJob
-};

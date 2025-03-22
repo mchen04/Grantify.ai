@@ -1,15 +1,14 @@
 /**
  * Script to clean up expired grants from the database
  * 
- * Usage: node scripts/cleanupExpiredGrants.js
+ * Usage: ts-node scripts/cleanupExpiredGrants.ts
  */
 
-// Load environment variables
-require('dotenv').config();
+import 'dotenv/config';
+import supabase from '../src/db/supabaseClient';
+import { PostgrestError } from '@supabase/supabase-js';
 
-const supabase = require('../src/db/supabaseClient');
-
-async function cleanupExpiredGrants() {
+async function cleanupExpiredGrants(): Promise<void> {
   try {
     console.log('Starting expired grants cleanup...');
     
@@ -27,12 +26,12 @@ async function cleanupExpiredGrants() {
       return;
     }
     
-    console.log(`Found ${count} expired grants to clean up`);
-    
-    if (count === 0) {
+    if (!count) {
       console.log('No expired grants to clean up');
       return;
     }
+    
+    console.log(`Found ${count} expired grants to clean up`);
     
     // Delete expired grants
     console.log('Deleting expired grants...');
@@ -56,7 +55,7 @@ async function cleanupExpiredGrants() {
     
     console.log('Expired grants cleanup completed');
   } catch (error) {
-    console.error('Error during expired grants cleanup:', error);
+    console.error('Error during expired grants cleanup:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -66,7 +65,7 @@ cleanupExpiredGrants()
     console.log('Cleanup script completed');
     process.exit(0);
   })
-  .catch((error) => {
-    console.error('Cleanup script failed:', error);
+  .catch((error: unknown) => {
+    console.error('Cleanup script failed:', error instanceof Error ? error.message : error);
     process.exit(1);
   });

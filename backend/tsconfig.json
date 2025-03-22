@@ -9,13 +9,22 @@
     "rootDir": "src",
     "sourceMap": true,
     "resolveJsonModule": true,
-    "lib": ["ES2020"],
-    "types": ["node"],
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable",
+      "WebWorker",
+      "WebWorker.ImportScripts",
+      "ScriptHost"
+    ],
+    "types": ["node", "express"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     },
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -1,10 +1,10 @@
-import express from 'express';
-import { UserPreferences, UserInteraction } from '../models/user.js';
+import express, { Request, Response } from 'express';
+import { UserPreferences, UserInteraction } from '../models/user';
 
 const router = express.Router();
 
 // GET /api/users/preferences - Get user preferences
-router.get('/preferences', async (req, res) => {
+router.get('/preferences', async (req: Request, res: Response) => {
   try {
     const userId = req.query.userId as string;
     
@@ -16,18 +16,18 @@ router.get('/preferences', async (req, res) => {
     res.json({
       message: `Preferences for user: ${userId}`,
       // This is a placeholder, will be replaced with actual data
-      preferences: {}
+      preferences: {} as UserPreferences
     });
   } catch (error) {
-    console.error('Error fetching user preferences:', error);
+    console.error('Error fetching user preferences:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // POST /api/users/preferences - Update user preferences
-router.post('/preferences', async (req, res) => {
+router.post('/preferences', async (req: Request, res: Response) => {
   try {
-    const userId = req.body.userId;
+    const userId = req.body.userId as string;
     const preferences = req.body.preferences as UserPreferences;
     
     if (!userId) {
@@ -45,13 +45,13 @@ router.post('/preferences', async (req, res) => {
       preferences
     });
   } catch (error) {
-    console.error('Error updating user preferences:', error);
+    console.error('Error updating user preferences:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // POST /api/users/interactions - Record user interaction with a grant
-router.post('/interactions', async (req, res) => {
+router.post('/interactions', async (req: Request, res: Response) => {
   try {
     const interaction = req.body as UserInteraction;
     
@@ -74,7 +74,7 @@ router.post('/interactions', async (req, res) => {
       interaction
     });
   } catch (error) {
-    console.error('Error recording user interaction:', error);
+    console.error('Error recording user interaction:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

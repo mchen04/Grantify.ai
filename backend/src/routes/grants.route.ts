@@ -1,10 +1,10 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { GrantFilter } from '../models/grant';
 
 const router = express.Router();
 
 // GET /api/grants - Get all grants with filtering
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const filters: GrantFilter = {
       search: req.query.search as string,
@@ -28,14 +28,14 @@ router.get('/', async (req, res) => {
       grants: []
     });
   } catch (error) {
-    console.error('Error fetching grants:', error);
+    console.error('Error fetching grants:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // GET /api/grants/recommended - Get recommended grants for a user
 // Note: This route must be defined before the /:id route to avoid conflicts
-router.get('/recommended', async (req, res) => {
+router.get('/recommended', async (req: Request, res: Response) => {
   try {
     const userId = req.query.userId as string;
     
@@ -50,24 +50,23 @@ router.get('/recommended', async (req, res) => {
       grants: []
     });
   } catch (error) {
-    console.error('Error fetching recommended grants:', error);
+    console.error('Error fetching recommended grants:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 // GET /api/grants/:id - Get a specific grant by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const grantId = req.params.id;
     
-    // TODO: Implement grants service to fetch a specific grant
+    // TODO: Implement grants service to fetch specific grant
     res.json({
       message: `Grant with ID: ${grantId}`,
-      // This is a placeholder, will be replaced with actual data
       grant: { id: grantId }
     });
   } catch (error) {
-    console.error(`Error fetching grant ${req.params.id}:`, error);
+    console.error('Error fetching grant:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });

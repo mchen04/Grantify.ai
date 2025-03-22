@@ -2,15 +2,36 @@
  * Script to analyze grant data in the database
  * This helps us understand what filters would be most useful
  * 
- * Usage: node scripts/analyzeGrantData.js
+ * Usage: ts-node scripts/analyzeGrantData.ts
  */
 
-// Load environment variables
-require('dotenv').config();
+import 'dotenv/config';
+import supabase from '../src/db/supabaseClient';
+import { PostgrestError } from '@supabase/supabase-js';
 
-const supabase = require('../src/db/supabaseClient');
+interface NameCount {
+  name: string;
+  count: number;
+  percentage?: number;
+}
 
-async function analyzeGrantData() {
+interface FundingRange {
+  name: string;
+  min: number;
+  max: number;
+  count: number;
+  percentage?: number;
+}
+
+interface FundingStats {
+  min: number;
+  max: number;
+  median: number;
+  count: number;
+  ranges: FundingRange[];
+}
+
+async function analyzeGrantData(): Promise<void> {
   try {
     console.log('Starting grant data analysis...');
     
@@ -24,6 +45,11 @@ async function analyzeGrantData() {
       return;
     }
     
+    if (!totalCount) {
+      console.log('No grants found in database');
+      return;
+    }
+    
     console.log(`Total grants in database: ${totalCount}`);
     
     // Get count of grants with null close_date
@@ -34,7 +60,7 @@ async function analyzeGrantData() {
     
     if (nullCloseDateError) {
       console.error('Error counting grants with null close_date:', nullCloseDateError);
-    } else {
+    } else if (nullCloseDateCount !== null) {
       console.log(`Grants with no deadline (null close_date): ${nullCloseDateCount} (${Math.round(nullCloseDateCount / totalCount * 100)}%)`);
     }
     
@@ -47,7 +73,7 @@ async function analyzeGrantData() {
         if (result.error) throw result.error;
         
         // Count occurrences of each agency
-        const agencyCounts = {};
+        const agencyCounts: Record<string, number> = {};
         result.data.forEach(grant => {
           const agency = grant.agency_name;
           agencyCounts[agency] = (agencyCounts[agency] || 0) + 1;
@@ -56,7 +82,7 @@ async function analyzeGrantData() {
         // Convert to array and sort
         return {
           data: Object.entries(agencyCounts)
-            .map(([name, count]) => ({ name, count }))
+            .map(([name, count]): NameCount => ({ name, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10),
           error: null
@@ -65,7 +91,7 @@ async function analyzeGrantData() {
     
     if (agencyError) {
       console.error('Error analyzing agencies:', agencyError);
-    } else {
+    } else if (topAgencies) {
       console.log('\nTop 10 Agencies:');
       topAgencies.forEach((agency, index) => {
         console.log(`${index + 1}. ${agency.name} (${agency.count} grants, ${Math.round(agency.count / totalCount * 100)}%)`);
@@ -81,7 +107,7 @@ async function analyzeGrantData() {
         if (result.error) throw result.error;
         
         // Count occurrences of each category
-        const categoryCounts = {};
+        const categoryCounts: Record<string, number> = {};
         result.data.forEach(grant => {
           const category = grant.category;
           categoryCounts[category] = (categoryCounts[category] || 0) + 1;
@@ -90,7 +116,7 @@ async function analyzeGrantData() {
         // Convert to array and sort
         return {
           data: Object.entries(categoryCounts)
-            .map(([name, count]) => ({ name, count }))
+            .map(([name, count]): NameCount => ({ name, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10),
           error: null
@@ -99,7 +125,7 @@ async function analyzeGrantData() {
     
     if (categoryError) {
       console.error('Error analyzing categories:', categoryError);
-    } else {
+    } else if (topCategories) {
       console.log('\nTop 10 Categories:');
       topCategories.forEach((category, index) => {
         console.log(`${index + 1}. ${category.name} (${category.count} grants, ${Math.round(category.count / totalCount * 100)}%)`);
@@ -115,7 +141,7 @@ async function analyzeGrantData() {
         if (result.error) throw result.error;
         
         // Count occurrences of each funding type
-        const fundingTypeCounts = {};
+        const fundingTypeCounts: Record<string, number> = {};
         result.data.forEach(grant => {
           const fundingType = grant.funding_type;
           fundingTypeCounts[fundingType] = (fundingTypeCounts[fundingType] || 0) + 1;
@@ -124,7 +150,7 @@ async function analyzeGrantData() {
         // Convert to array and sort
         return {
           data: Object.entries(fundingTypeCounts)
-            .map(([name, count]) => ({ name, count }))
+            .map(([name, count]): NameCount => ({ name, count }))
             .sort((a, b) => b.count - a.count),
           error: null
         };
@@ -132,7 +158,7 @@ async function analyzeGrantData() {
     
     if (fundingTypeError) {
       console.error('Error analyzing funding types:', fundingTypeError);
-    } else {
+    } else if (topFundingTypes) {
       console.log('\nFunding Types:');
       topFundingTypes.forEach((type, index) => {
         console.log(`${index + 1}. ${type.name} (${type.count} grants, ${Math.round(type.count / totalCount * 100)}%)`);
@@ -147,7 +173,10 @@ async function analyzeGrantData() {
       .then(result => {
         if (result.error) throw result.error;
         
-        const amounts = result.data.map(grant => grant.award_ceiling).filter(Boolean).sort((a, b) => a - b);
+        const amounts = result.data
+          .map(grant => grant.award_ceiling)
+          .filter((amount): amount is number => Boolean(amount))
+          .sort((a, b) => a - b);
         
         if (amounts.length === 0) {
           return { data: null, error: new Error('No funding amounts found') };
@@ -159,7 +188,7 @@ async function analyzeGrantData() {
         const median = amounts[Math.floor(amounts.length / 2)];
         
         // Count grants in different funding ranges
-        const ranges = [
+        const ranges: FundingRange[] = [
           { name: 'Under $10,000', min: 0, max: 10000, count: 0 },
           { name: '$10,000 - $50,000', min: 10000, max: 50000, count: 0 },
           { name: '$50,000 - $100,000', min: 50000, max: 100000, count: 0 },
@@ -188,7 +217,7 @@ async function analyzeGrantData() {
               ...range,
               percentage: Math.round(range.count / amounts.length * 100)
             }))
-          },
+          } as FundingStats,
           error: null
         };
       });
@@ -217,7 +246,7 @@ async function analyzeGrantData() {
         if (result.error) throw result.error;
         
         // Count occurrences of each applicant type
-        const applicantCounts = {};
+        const applicantCounts: Record<string, number> = {};
         result.data.forEach(grant => {
           if (Array.isArray(grant.eligible_applicants)) {
             grant.eligible_applicants.forEach(type => {
@@ -229,7 +258,7 @@ async function analyzeGrantData() {
         // Convert to array and sort
         return {
           data: Object.entries(applicantCounts)
-            .map(([name, count]) => ({ name, count }))
+            .map(([name, count]): NameCount => ({ name, count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 15),
           error: null
@@ -238,7 +267,7 @@ async function analyzeGrantData() {
     
     if (eligibilityError) {
       console.error('Error analyzing eligible applicants:', eligibilityError);
-    } else {
+    } else if (eligibilityData) {
       console.log('\nTop 15 Eligible Applicant Types:');
       eligibilityData.forEach((type, index) => {
         console.log(`${index + 1}. ${type.name} (${type.count} grants)`);
@@ -247,7 +276,7 @@ async function analyzeGrantData() {
     
     console.log('\nGrant data analysis completed');
   } catch (error) {
-    console.error('Error during grant data analysis:', error);
+    console.error('Error during grant data analysis:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -257,7 +286,7 @@ analyzeGrantData()
     console.log('Analysis script completed');
     process.exit(0);
   })
-  .catch((error) => {
-    console.error('Analysis script failed:', error);
+  .catch((error: unknown) => {
+    console.error('Analysis script failed:', error instanceof Error ? error.message : error);
     process.exit(1);
   });

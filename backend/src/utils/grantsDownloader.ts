@@ -1,29 +1,38 @@
-const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const AdmZip = require('adm-zip');
-const { promisify } = require('util');
-const { mkdirp } = require('mkdirp');
-const { format, subDays } = require('date-fns');
-const cheerio = require('cheerio');
+import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
+import { promisify } from 'util';
+import { mkdirp } from 'mkdirp';
+import { format } from 'date-fns';
+import * as cheerio from 'cheerio';
+import { IZipEntry, IAdmZip } from '../types/zip';
+
+// Use require for AdmZip since it's a CommonJS module
+const AdmZip = require('adm-zip') as (new (filePath?: string | Buffer) => IAdmZip);
 
 // Promisify fs functions
 const writeFile = promisify(fs.writeFile);
 const readFile = promisify(fs.readFile);
 const exists = promisify(fs.exists);
 
+interface DownloadOptions {
+  date?: Date;
+  useV2?: boolean;
+  useMock?: boolean;
+}
+
 /**
  * Get the latest available XML extract URL from Grants.gov
- * @returns {Promise<string>} - URL of the latest XML extract
+ * @returns Promise<string> - URL of the latest XML extract
  */
-async function getLatestXmlExtractUrl() {
+async function getLatestXmlExtractUrl(): Promise<string> {
   try {
     // Fetch the XML extract page
     const response = await axios.get('https://www.grants.gov/xml-extract');
     const $ = cheerio.load(response.data);
     
     // Find all links to ZIP files
-    const zipLinks = [];
+    const zipLinks: string[] = [];
     $('a[href$=".zip"]').each((i, el) => {
       const href = $(el).attr('href');
       if (href && href.includes('GrantsDBExtract')) {
@@ -56,12 +65,14 @@ async function getLatestXmlExtractUrl() {
 
 /**
  * Downloads the latest grants XML extract from Grants.gov
- * @param {Date} date - The date to download (defaults to today)
- * @param {boolean} useV2 - Whether to use the v2 version of the extract
- * @param {boolean} useMock - Whether to use the mock XML file (for testing)
- * @returns {Promise<string>} - Path to the extracted XML file
+ * @param options - Download options
+ * @returns Promise<string> - Path to the extracted XML file
  */
-async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = false) {
+async function downloadGrantsXml({
+  date = new Date(),
+  useV2 = true,
+  useMock = false
+}: DownloadOptions = {}): Promise<string> {
   try {
     // Create data directory if it doesn't exist
     const dataDir = path.join(__dirname, '../../data');
@@ -98,7 +109,7 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
       console.log(`Downloading grants extract from ${zipUrl}...`);
       
       // Extract the filename from the URL
-      const urlFilename = zipUrl.split('/').pop();
+      const urlFilename = zipUrl.split('/').pop() as string;
       const zipPath = path.join(extractsDir, urlFilename);
       const extractedXmlFilename = urlFilename.replace('.zip', '.xml');
       const extractedXmlPath = path.join(xmlDir, extractedXmlFilename);
@@ -120,7 +131,7 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
         const zipEntries = zip.getEntries();
         
         // Check if the ZIP contains an XML file
-        const xmlEntry = zipEntries.find(entry => entry.entryName.endsWith('.xml'));
+        const xmlEntry = zipEntries.find((entry: IZipEntry) => entry.entryName.endsWith('.xml'));
         if (!xmlEntry) {
           throw new Error('ZIP file does not contain an XML file');
         }
@@ -164,7 +175,8 @@ async function downloadGrantsXml(date = new Date(), useV2 = true, useMock = fals
   }
 }
 
-module.exports = {
+export {
   downloadGrantsXml,
-  getLatestXmlExtractUrl
+  getLatestXmlExtractUrl,
+  type DownloadOptions
 };

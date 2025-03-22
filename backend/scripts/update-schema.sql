@@ -8,3 +8,6 @@ CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
 
 -- Add agency_code column if it doesn't exist
 ALTER TABLE grants ADD COLUMN IF NOT EXISTS agency_code TEXT;
+
+-- Update grantor_contact_phone to use TEXT type for storing formatted phone numbers with status
+ALTER TABLE grants ALTER COLUMN grantor_contact_phone TYPE TEXT;

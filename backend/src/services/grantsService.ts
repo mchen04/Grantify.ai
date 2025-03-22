@@ -1,6 +1,58 @@
-const supabase = require('../db/supabaseClient');
-const { format } = require('date-fns');
-const readline = require('readline');
+import supabase from '../db/supabaseClient';
+import { format } from 'date-fns';
+import * as readline from 'readline';
+import { TransformedGrant } from '../utils/grantsParser.js';
+
+interface ProgressBar {
+  total: number;
+  current: number;
+  bar: string;
+  percent: number;
+}
+
+interface ProcessResult {
+  status: 'new' | 'updated' | 'unchanged' | 'failed';
+  id: string;
+  error?: any;
+}
+
+interface PipelineStats {
+  total: number;
+  new: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+  startTime: Date;
+  endTime: Date;
+  failedGrants?: Array<{ id: string; error: any }>;
+  error?: string;
+}
+
+interface PipelineRun {
+  status: 'completed' | 'failed';
+  details: {
+    total: number;
+    new: number;
+    updated: number;
+    unchanged: number;
+    failed: number;
+    duration_ms: number;
+    error?: string;
+  };
+  timestamp: string;
+}
+
+interface GrantFilters {
+  search?: string;
+  category?: string;
+  agency_name?: string;
+  funding_min?: number;
+  funding_max?: number;
+  activity_categories?: string[];
+  eligible_applicant_types?: string[];
+  page?: number;
+  limit?: number;
+}
 
 /**
  * Service for managing grants in the database
@@ -8,22 +60,22 @@ const readline = require('readline');
 class GrantsService {
   /**
    * Store grants in the database with delta updates
-   * @param {Array} grants - Array of grant objects to store
-   * @returns {Promise<Object>} - Result of the operation
+   * @param grants - Array of grant objects to store
+   * @returns Result of the operation
    */
-  async storeGrants(grants) {
+  async storeGrants(grants: TransformedGrant[]): Promise<PipelineStats> {
     try {
       console.log(`Processing ${grants.length} grants for storage...`);
       
       // Track statistics
-      const stats = {
+      const stats: PipelineStats = {
         total: grants.length,
         new: 0,
         updated: 0,
         unchanged: 0,
         failed: 0,
         startTime: new Date(),
-        endTime: null,
+        endTime: new Date(),
         failedGrants: [], // Track failed grants for reporting
       };
       
@@ -59,7 +111,7 @@ class GrantsService {
           else if (result.status === 'unchanged') stats.unchanged++;
           else {
             stats.failed++;
-            if (result.error) {
+            if (result.error && stats.failedGrants) {
               stats.failedGrants.push({
                 id: result.id,
                 error: result.error
@@ -74,7 +126,7 @@ class GrantsService {
       console.log(''); // Add a newline after the progress bar
       
       // Log failed grants (limited to first 10)
-      if (stats.failedGrants.length > 0) {
+      if (stats.failedGrants && stats.failedGrants.length > 0) {
         console.log(`Failed to process ${stats.failedGrants.length} grants. First 10 errors:`);
         stats.failedGrants.slice(0, 10).forEach(failedGrant => {
           console.log(`Error processing grant ${failedGrant.id}: ${JSON.stringify(failedGrant.error)}`);
@@ -102,7 +154,7 @@ class GrantsService {
         failed: grants.length,
         startTime: new Date(),
         endTime: new Date(),
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       
       throw error;
@@ -111,11 +163,11 @@ class GrantsService {
   
   /**
    * Create a progress bar
-   * @param {number} total - Total number of items
-   * @returns {Object} - Progress bar object
+   * @param total - Total number of items
+   * @returns Progress bar object
    */
-  createProgressBar(total) {
-    const progressBar = {
+  private createProgressBar(total: number): ProgressBar {
+    const progressBar: ProgressBar = {
       total,
       current: 0,
       bar: '',
@@ -130,11 +182,11 @@ class GrantsService {
   
   /**
    * Update the progress bar
-   * @param {Object} progressBar - Progress bar object
-   * @param {number} current - Current progress
-   * @param {number} total - Total items
+   * @param progressBar - Progress bar object
+   * @param current - Current progress
+   * @param total - Total items
    */
-  updateProgressBar(progressBar, current, total) {
+  private updateProgressBar(progressBar: ProgressBar, current: number, total: number): void {
     progressBar.current = current;
     progressBar.percent = Math.floor((current / total) * 100);
     
@@ -154,10 +206,10 @@ class GrantsService {
   
   /**
    * Process a single grant (insert, update, or skip)
-   * @param {Object} grant - Grant object to process
-   * @returns {Promise<Object>} - Result of the operation
+   * @param grant - Grant object to process
+   * @returns Result of the operation
    */
-  async processGrant(grant) {
+  private async processGrant(grant: TransformedGrant): Promise<ProcessResult> {
     try {
       // Check if the grant already exists
       const { data: existingGrant, error: fetchError } = await supabase
@@ -203,10 +255,9 @@ class GrantsService {
   
   /**
    * Record a pipeline run in the database
-   * @param {Object} stats - Statistics about the pipeline run
-   * @returns {Promise<void>}
+   * @param stats - Statistics about the pipeline run
    */
-  async recordPipelineRun(stats) {
+  private async recordPipelineRun(stats: PipelineStats): Promise<void> {
     try {
       const { error } = await supabase
         .from('pipeline_runs')
@@ -218,7 +269,7 @@ class GrantsService {
             updated: stats.updated,
             unchanged: stats.unchanged,
             failed: stats.failed,
-            duration_ms: stats.endTime - stats.startTime,
+            duration_ms: stats.endTime.getTime() - stats.startTime.getTime(),
             error: stats.error,
           },
           timestamp: new Date().toISOString(),
@@ -234,9 +285,9 @@ class GrantsService {
   
   /**
    * Get the latest pipeline run
-   * @returns {Promise<Object>} - Latest pipeline run
+   * @returns Latest pipeline run
    */
-  async getLatestPipelineRun() {
+  async getLatestPipelineRun(): Promise<PipelineRun | null> {
     try {
       const { data, error } = await supabase
         .from('pipeline_runs')
@@ -256,10 +307,29 @@ class GrantsService {
   
   /**
    * Get grants with filtering
-   * @param {Object} filters - Filters to apply
-   * @returns {Promise<Array>} - Array of grants
+   * @param filters - Filters to apply
+   * @returns Array of grants
    */
-  async getGrants(filters = {}) {
+  /**
+   * Get all grant IDs from the database
+   * @returns Array of grant IDs
+   */
+  async getAllGrantIds(): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('grants')
+        .select('opportunity_id');
+      
+      if (error) throw error;
+      
+      return (data || []).map(grant => grant.opportunity_id);
+    } catch (error) {
+      console.error('Error getting grant IDs:', error);
+      return [];
+    }
+  }
+
+  async getGrants(filters: GrantFilters = {}): Promise<TransformedGrant[]> {
     try {
       let query = supabase.from('grants').select('*');
       
@@ -304,7 +374,7 @@ class GrantsService {
       
       if (error) throw error;
       
-      return data;
+      return data || [];
     } catch (error) {
       console.error('Error getting grants:', error);
       throw error;
@@ -312,4 +382,5 @@ class GrantsService {
   }
 }
 
-module.exports = new GrantsService();
+// Export a singleton instance
+export default new GrantsService();

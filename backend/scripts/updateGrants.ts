@@ -1,13 +1,12 @@
 /**
  * Script to manually run the grants update job
  * 
- * Usage: node scripts/updateGrants.js
+ * Usage: ts-node scripts/updateGrants.ts
  */
 
 // Load environment variables
-require('dotenv').config();
-
-const { runGrantsUpdateJob } = require('../src/utils/cronJobs');
+import 'dotenv/config';
+import { runGrantsUpdateJob } from '../src/utils/cronJobs';
 
 // Run the grants update job
 console.log('Starting manual grants update...');
