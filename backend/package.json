@@ -16,7 +16,8 @@
     "cleanup-expired": "ts-node scripts/cleanupExpiredGrants.ts",
     "analyze-data": "ts-node scripts/analyzeGrantData.ts",
     "prebuild": "rimraf dist",
-    "postbuild": "copyfiles -u 1 src/**/*.d.ts dist/"
+    "postbuild": "copyfiles -u 1 src/**/*.d.ts dist/",
+    "update-grants-no-ai": "ts-node scripts/updateGrantsNoAI.ts"
   },
   "keywords": [
     "grants",

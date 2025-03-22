@@ -2,6 +2,24 @@ import * as fs from 'fs';
 import * as xml2js from 'xml2js';
 import { promisify } from 'util';
 import { textCleaner } from './textCleaner';
+import { basicTextCleaner } from './basicTextCleaner';
+
+// Interface for text cleaner
+interface TextCleaner {
+  processGrantData(data: {
+    description: string;
+    contactName?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+  }): Promise<{
+    description: string;
+    contactInfo: {
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+    };
+  }>;
+}
 
 // Helper function to convert date format from MMDDYYYY to ISO format
 function convertDate(dateStr?: string): string | null {
@@ -164,7 +182,11 @@ function parseContactInfo(contactText: string): ParsedContact {
  * @param existingGrantIds - Optional array of existing grant IDs to skip text cleaning for
  * @returns Array of grant objects
  */
-async function parseGrantsXml(xmlPath: string, existingGrantIds: string[] = []): Promise<TransformedGrant[]> {
+async function parseGrantsXml(
+  xmlPath: string,
+  existingGrantIds: string[] = [],
+  customTextCleaner: TextCleaner = textCleaner
+): Promise<TransformedGrant[]> {
   try {
     console.log(`Parsing XML file: ${xmlPath}`);
     
@@ -205,7 +227,7 @@ async function parseGrantsXml(xmlPath: string, existingGrantIds: string[] = []):
 
       if (!isExisting) {
         console.log(`Processing new grant: ${grant.OpportunityID}`);
-        cleanedData = await textCleaner.processGrantData({
+        cleanedData = await customTextCleaner.processGrantData({
           description: grant.Description || '',
           contactName: grant.GrantorContactName || grant.GrantorContactText || '',
           contactEmail: grant.GrantorContactEmailAddress || '',
