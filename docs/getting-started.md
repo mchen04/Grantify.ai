@@ -112,3 +112,15 @@ Based on our development roadmap, here's what should be implemented first:
    - Set up cron job for automated updates
 
 This foundation will provide the infrastructure needed for the subsequent phases of development, including the AI integration and core features.
+
+## Environment Variables
+
+The backend requires the following environment variables:
+
+```
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+```
+
+The OpenRouter API key is used by the `TextCleaner` service to clean grant descriptions and process contact information using the Mistral-7B-Instruct model.

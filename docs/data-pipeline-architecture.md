@@ -819,6 +819,29 @@ volumes:
   data:
 ```
 
+## Data Processing
+
+### Text Cleaning
+The pipeline includes a sophisticated text cleaning service implemented in `backend/src/utils/textCleaner.ts`:
+
+1. **Description Cleaning**:
+   - Raw grant descriptions often contain HTML artifacts, inconsistent formatting, and other issues
+   - The `TextCleaner` class uses Mistral-7B-Instruct via OpenRouter API to clean descriptions
+   - Removes HTML tags, fixes spacing, ensures proper capitalization and sentence structure
+   - Falls back to basic HTML cleaning if AI service is unavailable
+
+2. **Contact Information Processing**:
+   - Parses and standardizes contact information (name, email, phone)
+   - Removes titles from names and fixes capitalization
+   - Standardizes phone numbers to XXX-XXX-XXXX format when possible
+   - Infers names from email addresses when names aren't provided
+   - Tracks data quality with source flags (provided vs. inferred)
+
+3. **Optimizations**:
+   - Implements request rate limiting to prevent API throttling
+   - Caches cleaned text to reduce duplicate API calls
+   - Uses retry with exponential backoff for failed requests
+
 ## Conclusion
 
 This data pipeline architecture provides a comprehensive approach to extracting, processing, and storing grant data from Grants.gov. The pipeline is designed to be robust, scalable, and maintainable, with proper error handling, monitoring, and logging.

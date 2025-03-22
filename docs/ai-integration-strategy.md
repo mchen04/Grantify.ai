@@ -1,6 +1,20 @@
 # Grantify.ai AI Integration Strategy
 
-This document outlines the strategy for integrating AI capabilities into the Grantify.ai platform, focusing on grant categorization, personalized recommendations, and user experience enhancement.
+## Current Implementation
+
+### Text Cleaning Service
+- **Implementation**: `TextCleaner` class in `backend/src/utils/textCleaner.ts`
+- **AI Model**: Mistral-7B-Instruct via OpenRouter API
+- **Features**:
+  - Grant description cleaning (removes HTML artifacts, fixes formatting)
+  - Contact information parsing and standardization
+  - Phone number validation and formatting
+  - Name inference from email addresses when name not provided
+- **Optimizations**:
+  - Request rate limiting to prevent API throttling
+  - Caching of cleaned text to reduce API calls
+  - Retry with exponential backoff for failed requests
+  - Fallback to basic cleaning when AI service unavailable
 
 ## AI Integration Goals
 

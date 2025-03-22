@@ -10,24 +10,6 @@ Grantify.ai follows a modern web application architecture with a clear separatio
 4. **AI Services**: Gemini API / DeepSeek for grant categorization and recommendations
 5. **Scheduled Jobs**: Cron jobs for data extraction and processing
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│             │     │             │     │             │
-│  Frontend   │◄───►│  Backend    │◄───►│  Database   │
-│  (Next.js)  │     │  (Node.js)  │     │  (Supabase) │
-│             │     │             │     │             │
-└─────────────┘     └──────┬──────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌─────────────┐     ┌─────────────┐
-                    │             │     │             │
-                    │ AI Services │     │ Grants.gov  │
-                    │ (Gemini/    │     │ XML Data    │
-                    │  DeepSeek)  │     │             │
-                    │             │     │             │
-                    └─────────────┘     └─────────────┘
-```
-
 ## Component Details
 
 ### 1. Frontend (Next.js)
@@ -122,32 +104,28 @@ Supabase provides a PostgreSQL database with additional features like authentica
 └─────────────────┘       └─────────────────┘
 ```
 
-### 4. AI Services (Gemini API / DeepSeek)
+### AI Services Integration
 
-The AI services are used for grant categorization and personalized recommendations.
+The system currently uses OpenRouter API with Mistral-7B-Instruct for text processing:
 
-#### Key Functions:
-
-- **Grant Categorization**: Analyze grant descriptions to assign topics
-- **Similarity Matching**: Generate embeddings for grants and user preferences
-- **Recommendation Ranking**: Score grants based on user preferences and interactions
+#### Text Cleaning Service
+- Implemented in `backend/src/utils/textCleaner.ts`
+- Cleans grant descriptions by removing HTML artifacts and fixing formatting
+- Processes contact information to standardize format
+- Validates and formats phone numbers
+- Infers names from email addresses when names aren't provided
+- Implements caching, rate limiting, and retry mechanisms
 
 #### AI Integration Flow:
-
 ```
-1. New grants extracted from Grants.gov
-2. Grant text (title, description) sent to AI service
-3. AI service returns categories and embeddings
-4. Categories and embeddings stored in database
-5. When user searches, AI service ranks grants based on user preferences
-6. User interactions (save, apply, ignore) used to refine future recommendations
+1. Grant data extracted from Grants.gov
+2. Raw description and contact information sent to TextCleaner
+3. TextCleaner uses Mistral-7B via OpenRouter API to clean and format text
+4. Cleaned data stored in database
+5. Frontend displays clean, formatted grant information
 ```
 
 ### 5. Data Pipeline
-
-The data pipeline extracts grant data from Grants.gov, processes it, and stores it in the database.
-
-#### Pipeline Flow:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
