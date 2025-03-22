@@ -271,15 +271,15 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
             ))}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-800">
             <div>
-              <span className="font-medium text-gray-700">Agency:</span> {grant.agency_name} {grant.agency_code ? `(${grant.agency_code})` : ''}
+              <span className="font-medium text-gray-800">Agency:</span> {grant.agency_name} {grant.agency_code ? `(${grant.agency_code})` : ''}
             </div>
             <div>
-              <span className="font-medium text-gray-700">Opportunity ID:</span> {grant.opportunity_id}
+              <span className="font-medium text-gray-800">Opportunity ID:</span> {grant.opportunity_id}
             </div>
             <div>
-              <span className="font-medium text-gray-700">Opportunity Number:</span> {grant.opportunity_number}
+              <span className="font-medium text-gray-800">Opportunity Number:</span> {grant.opportunity_number}
             </div>
           </div>
         </div>
@@ -289,8 +289,8 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
           {/* Left Column - Main Content */}
           <div className="md:col-span-2">
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Description</h2>
-              <div className="prose max-w-none">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Description</h2>
+              <div className="prose max-w-none text-gray-800">
                 {grant.description.split('\n\n').map((paragraph, index) => (
                   <p key={index} className="mb-4">{paragraph}</p>
                 ))}
@@ -298,29 +298,29 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
             </div>
             
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Eligible Applicants</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Eligible Applicants</h2>
               {grant.eligible_applicants && grant.eligible_applicants.length > 0 ? (
-                <ul className="list-disc pl-5 space-y-1">
+                <ul className="list-disc pl-5 space-y-1 text-gray-800">
                   {grant.eligible_applicants.map((applicant, index) => (
                     <li key={index}>{applicant}</li>
                   ))}
                 </ul>
               ) : (
-                <p>No eligibility information available.</p>
+                <p className="text-gray-800">No eligibility information available.</p>
               )}
             </div>
             
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold mb-4">Contact Information</h2>
-              <div className="space-y-3">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Contact Information</h2>
+              <div className="space-y-3 text-gray-800">
                 <div>
-                  <span className="font-medium text-gray-700">Name:</span> {grant.grantor_contact_name || 'Not specified'}
+                  <span className="font-medium text-gray-800">Name:</span> {grant.grantor_contact_name || 'Not specified'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Email:</span> {grant.grantor_contact_email || 'Not specified'}
+                  <span className="font-medium text-gray-800">Email:</span> {grant.grantor_contact_email || 'Not specified'}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Phone:</span> {grant.grantor_contact_phone || 'Not specified'}
+                  <span className="font-medium text-gray-800">Phone:</span> {grant.grantor_contact_phone || 'Not specified'}
                 </div>
                 {grant.additional_info_url && (
                   <div className="pt-2">
@@ -341,16 +341,16 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
           {/* Right Column - Sidebar */}
           <div>
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Key Information</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Grant Details</h2>
               
-              <div className="space-y-4">
+              <div className="space-y-4 text-gray-800">
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Posted Date</div>
+                  <div className="text-sm text-gray-600 mb-1">Posted Date</div>
                   <div>{formatDate(grant.post_date)}</div>
                 </div>
                 
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Close Date</div>
+                  <div className="text-sm text-gray-600 mb-1">Close Date</div>
                   <div className="font-medium">{formatDate(grant.close_date)}</div>
                   {daysRemaining !== null ? (
                     <div className={`text-sm ${daysRemaining < 30 ? 'text-red-600' : 'text-orange-600'}`}>
@@ -364,31 +364,31 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                 </div>
                 
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Funding Type</div>
+                  <div className="text-sm text-gray-600 mb-1">Funding Type</div>
                   <div>{grant.funding_type || 'Not specified'}</div>
                 </div>
                 
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Total Funding</div>
+                  <div className="text-sm text-gray-600 mb-1">Total Funding</div>
                   <div>{formatCurrency(grant.total_funding)}</div>
                 </div>
                 
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Award Range</div>
+                  <div className="text-sm text-gray-600 mb-1">Award Range</div>
                   <div>
                     {formatCurrency(grant.award_floor)} - {formatCurrency(grant.award_ceiling)}
                   </div>
                 </div>
                 
                 <div>
-                  <div className="text-sm text-gray-500 mb-1">Cost Sharing Required</div>
+                  <div className="text-sm text-gray-600 mb-1">Cost Sharing Required</div>
                   <div>{grant.cost_sharing ? 'Yes' : 'No'}</div>
                 </div>
               </div>
             </div>
             
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold mb-4">Actions</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Actions</h2>
               <div className="space-y-3">
                 <a 
                   href={`https://www.grants.gov/web/grants/view-opportunity.html?oppId=${grant.opportunity_id}`} 
@@ -436,7 +436,7 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
         
         {/* Similar Grants */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Similar Grants</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Similar Grants</h2>
           {loadingSimilar ? (
             <div className="flex justify-center items-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
