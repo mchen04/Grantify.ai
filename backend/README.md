@@ -1,165 +1,165 @@
 # Grantify.ai Backend
 
-This is the backend API for Grantify.ai, an AI-powered grant matching platform.
+## Technology Stack
+- Node.js
+- Express
+- TypeScript
+- PostgreSQL (Supabase)
+- OpenAI Integration
 
-## Data Pipeline
-
-The backend includes a data pipeline that fetches grant data from Grants.gov, processes it, and stores it in the Supabase database.
-
-### How It Works
-
-1. **Daily Cron Job**: The pipeline runs automatically at 5 AM EST every day.
-2. **Data Extraction**: The pipeline downloads the latest XML extract from Grants.gov.
-3. **Data Processing**: The XML data is parsed and transformed into a structured format.
-4. **Delta Updates**: The pipeline only adds new grants and updates existing ones, preserving historical data.
-5. **Database Storage**: The processed data is stored in the Supabase database.
-6. **Active Grants Only**: The pipeline filters out expired grants (those with past deadlines).
-
-### Files
-
-- `src/utils/grantsDownloader.js`: Downloads the XML extract from Grants.gov
-- `src/utils/grantsParser.js`: Parses the XML data and transforms it into a structured format
-- `src/services/grantsService.js`: Handles storing the data in the database with delta updates
-- `src/utils/cronJobs.js`: Sets up the cron job to run the pipeline daily
-- `scripts/updateGrants.js`: Script to manually run the pipeline with mock data
-- `scripts/updateGrantsLive.js`: Script to manually run the pipeline with live data from Grants.gov
-- `scripts/update-schema.sql`: SQL script to update the database schema
-- `scripts/clearGrants.js`: Script to clear all grants from the database
-- `scripts/runSchemaUpdate.js`: Script to run the schema update SQL
-- `scripts/cleanupExpiredGrants.js`: Script to clean up expired grants from the database
-
-### Manual Execution
-
-To manually run the data pipeline with mock data (for testing):
-
-```bash
-npm run update-grants
+## Directory Structure
 ```
-
-To manually run the data pipeline with live data from Grants.gov:
-
-```bash
-npm run update-grants-live
+backend/
+├── src/
+│   ├── db/           # Database connections and schemas
+│   ├── models/       # Data models and interfaces
+│   ├── routes/       # API route handlers
+│   ├── services/     # Business logic implementation
+│   ├── types/        # TypeScript type definitions
+│   └── utils/        # Utility functions and helpers
+├── scripts/          # Database and utility scripts
+└── tests/           # Test suites
 ```
-
-The live data script will attempt to download the latest XML extract from Grants.gov. If the current day's file is not available, it will try previous days until it finds a valid file.
-
-### Clearing Grants from the Database
-
-If you need to clear all grants from the database (for example, to start fresh or fix data issues), you can run:
-
-```bash
-npm run clear-grants
-```
-
-This will delete all grants and pipeline runs from the database, giving you a clean slate.
-
-### Cleaning Up Expired Grants
-
-To remove grants with past deadlines from the database:
-
-```bash
-npm run cleanup-expired
-```
-
-This script will:
-1. Find all grants with a close_date in the past
-2. Delete them from the database
-3. Report how many grants were removed
-
-This is useful for keeping the database clean and focused on active opportunities.
-
-### Fixing Integer Overflow Errors
-
-If you encounter errors like `value "2192000000" is out of range for type integer`, you need to update the database schema to use `bigint` instead of `integer` for the funding fields. You can run:
-
-```bash
-npm run update-schema
-```
-
-This will execute the SQL in `scripts/update-schema.sql` to update the funding fields to use `bigint` instead of `integer`, allowing them to handle larger funding amounts.
-
-Alternatively, you can run the SQL manually in your Supabase SQL Editor:
-
-1. Go to your Supabase dashboard
-2. Navigate to the SQL Editor
-3. Open a new query
-4. Copy and paste the contents of `scripts/update-schema.sql`
-5. Run the query
-
-### Configuration
-
-The pipeline can be configured using environment variables in the `.env` file:
-
-- `ENABLE_CRON_JOBS`: Set to `true` to enable the cron jobs (default: `false`)
-- `SUPABASE_URL`: The URL of your Supabase project
-- `SUPABASE_SERVICE_KEY`: The service key for your Supabase project
 
 ## API Endpoints
 
 ### Grants
-
-- `GET /api/grants`: Get all grants with optional filtering
-- `GET /api/grants/:id`: Get a specific grant by ID
-- `GET /api/grants/recommended`: Get recommended grants for a user
+- `GET /api/grants` - List grants with filtering
+- `GET /api/grants/:id` - Get grant details
+- `POST /api/grants/search` - Search grants
+- `GET /api/grants/recommendations` - Get personalized recommendations
 
 ### Users
+- `GET /api/users/profile` - Get user profile
+- `PUT /api/users/profile` - Update user profile
+- `GET /api/users/preferences` - Get user preferences
+- `PUT /api/users/preferences` - Update user preferences
 
-- `GET /api/users/preferences`: Get user preferences
-- `POST /api/users/preferences`: Update user preferences
-- `POST /api/users/interactions`: Record user interaction with a grant
-
-### Admin
-
-- `GET /api/admin/pipeline/status`: Get the status of the data pipeline
-- `POST /api/admin/pipeline/run`: Trigger a manual run of the data pipeline
-
-## Development
+## Development Setup
 
 ### Prerequisites
-
-- Node.js 14+
-- npm 6+
+- Node.js v18+
+- npm or yarn
 - Supabase account
 
 ### Installation
-
-1. Clone the repository
-2. Install dependencies:
-
 ```bash
+# Install dependencies
 npm install
-```
 
-3. Create a `.env` file with the required environment variables:
+# Set up environment variables
+cp .env.example .env
 
-```
-PORT=3001
-NODE_ENV=development
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_supabase_service_key
-ENABLE_CRON_JOBS=true
-```
-
-4. Start the development server:
-
-```bash
+# Run development server
 npm run dev
 ```
 
-### Database Setup
+### Environment Variables
+```
+DATABASE_URL=your_supabase_connection_string
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+PORT=3001
+NODE_ENV=development
+```
 
-The database schema is defined in `src/db/schema.sql`. You can run this file in the Supabase SQL Editor to create the necessary tables and indexes.
+## Database Operations
 
-## Production Deployment
+### Migrations
+```bash
+# Run migrations
+npm run db:migrate
 
-For production deployment, you'll need to:
+# Create new migration
+npm run db:migration:create
 
-1. Set up a server or cloud service (e.g., AWS, Heroku, DigitalOcean)
-2. Configure environment variables for production
-3. Set up a process manager (e.g., PM2) to keep the server running
-4. Configure a reverse proxy (e.g., Nginx) to handle HTTPS
+# Reset database
+npm run db:reset
+```
 
-## License
+### Seeding
+```bash
+# Seed database with sample data
+npm run db:seed
+```
 
-MIT
+## Testing
+
+### Running Tests
+```bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm test -- grants.test.ts
+
+# Run tests with coverage
+npm run test:coverage
+```
+
+## Code Quality
+
+### Linting
+```bash
+# Run linter
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+```
+
+### Type Checking
+```bash
+# Run TypeScript compiler
+npm run type-check
+```
+
+## Build and Deployment
+
+### Building
+```bash
+# Build for production
+npm run build
+```
+
+### Production Deployment
+```bash
+# Start production server
+npm start
+```
+
+## Monitoring
+
+### Logging
+- Winston for logging
+- Error tracking with source maps
+- Request logging middleware
+
+### Performance
+- Response time monitoring
+- Database query performance
+- Memory usage tracking
+
+## Security Features
+- JWT authentication
+- Request rate limiting
+- Input validation
+- SQL injection prevention
+- XSS protection
+
+## Error Handling
+- Centralized error handling
+- Custom error classes
+- Error logging
+- Client-friendly error messages
+
+## Caching Strategy
+- Redis caching (optional)
+- Query result caching
+- Static data caching
+- Cache invalidation
+
+## Documentation
+- API documentation with Swagger
+- Code documentation with TSDoc
+- Database schema documentation
+- Architecture documentation

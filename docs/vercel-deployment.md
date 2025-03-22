@@ -1,127 +1,189 @@
-# Vercel Deployment Guide for Grantify.ai
+# Vercel Deployment Guide
 
-This guide outlines the steps to deploy the Grantify.ai frontend to Vercel.
+## Prerequisites
+- Vercel account
+- GitHub repository
+- Environment variables ready
+- Production-ready build
 
-## Overview
+## Frontend Deployment
 
-Grantify.ai is a monorepo with separate frontend and backend directories. For deployment, we'll use Vercel to host the Next.js frontend and a separate service (like Heroku, Railway, or a VPS) for the backend API.
+### Environment Variables
+Required environment variables in Vercel project settings:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_API_URL=your_api_url
+```
 
-## Deployment Configuration
+### Deployment Steps
+1. Connect GitHub repository to Vercel
+2. Select the frontend directory as root
+3. Configure build settings:
+   ```
+   Build Command: npm run build
+   Output Directory: .next
+   Install Command: npm install
+   ```
+4. Set environment variables
+5. Deploy project
 
-### 1. Vercel Configuration
-
-We've added a `vercel.json` file to the root of the project to configure the Vercel deployment:
-
+### Build Settings
 ```json
 {
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/.next",
-  "installCommand": "cd frontend && npm install",
-  "framework": "nextjs"
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install"
 }
 ```
 
-This configuration tells Vercel to:
-- Run the install command in the frontend directory
-- Run the build command in the frontend directory
-- Use the frontend/.next directory as the output directory
-- Recognize the project as a Next.js project
+## Backend Deployment
 
-### 2. Package.json Scripts
-
-We've updated the root `package.json` to include separate build scripts:
-
-```json
-"scripts": {
-  "build": "cd frontend && npm run build",
-  "build:all": "cd frontend && npm run build && cd ../backend && npm run build"
-}
+### Environment Variables
+Required environment variables:
 ```
-
-- `npm run build`: Builds only the frontend (used by Vercel)
-- `npm run build:all`: Builds both frontend and backend (used for full deployment)
-
-## Deployment Steps
-
-### 1. Deploy Frontend to Vercel
-
-1. Push your code to a Git repository (GitHub, GitLab, or Bitbucket)
-2. Log in to Vercel and create a new project
-3. Import your Git repository
-4. Vercel will automatically detect the Next.js project and use the configuration from vercel.json
-5. Configure environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anonymous API key
-   - `NEXT_PUBLIC_API_URL`: URL of your deployed backend API
-
-### 2. Deploy Backend Separately
-
-The backend needs to be deployed to a separate service that can run Node.js applications:
-
-1. **Heroku**:
-   ```bash
-   cd backend
-   heroku create
-   git subtree push --prefix backend heroku main
-   ```
-
-2. **Railway**:
-   - Create a new project in Railway
-   - Connect your Git repository
-   - Set the root directory to `/backend`
-   - Configure environment variables
-
-3. **VPS/Docker**:
-   - Set up a VPS with Node.js
-   - Clone the repository
-   - Navigate to the backend directory
-   - Install dependencies and start the server
-
-### 3. Configure Environment Variables
-
-Make sure to set the following environment variables in your backend deployment:
-
-```
-PORT=3001 (or let the platform set it)
-NODE_ENV=production
-SUPABASE_URL=your_supabase_url
+DATABASE_URL=your_supabase_connection_string
 SUPABASE_SERVICE_KEY=your_supabase_service_key
-ENABLE_CRON_JOBS=true
+NODE_ENV=production
 ```
+
+### Deployment Steps
+1. Navigate to backend directory
+2. Configure Vercel project:
+   ```
+   Build Command: npm run build
+   Output Directory: dist
+   Install Command: npm install
+   ```
+3. Set environment variables
+4. Deploy API
+
+### Serverless Function Configuration
+```json
+{
+  "functions": {
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
+}
+```
+
+## Domain Configuration
+
+### Custom Domain Setup
+1. Add custom domain in Vercel
+2. Configure DNS settings
+3. Verify domain ownership
+4. Enable HTTPS
+5. Configure redirects
+
+### DNS Configuration
+```
+Type    Name    Value
+A       @       76.76.21.21
+CNAME   www     cname.vercel-dns.com
+```
+
+## Monitoring and Logging
+
+### Vercel Analytics
+- Enable Analytics
+- Configure usage metrics
+- Set up error tracking
+- Monitor performance
+- Track deployments
+
+### Logging Configuration
+- Enable function logs
+- Set log retention
+- Configure log levels
+- Set up alerts
+- Monitor errors
+
+## Performance Optimization
+
+### Edge Network
+- Enable edge caching
+- Configure CDN
+- Set cache headers
+- Optimize assets
+- Enable compression
+
+### Build Optimization
+- Minimize bundle size
+- Enable tree shaking
+- Optimize images
+- Configure lazy loading
+- Enable code splitting
+
+## Security Configuration
+
+### SSL/TLS
+- Force HTTPS
+- Configure SSL
+- Set security headers
+- Enable HSTS
+- Configure CSP
+
+### Access Control
+- Set up authentication
+- Configure CORS
+- Rate limiting
+- IP filtering
+- Bot protection
+
+## Deployment Workflow
+
+### Continuous Integration
+- GitHub Actions integration
+- Automated testing
+- Code quality checks
+- Security scanning
+- Performance testing
+
+### Continuous Deployment
+- Automatic deployments
+- Preview deployments
+- Branch deployments
+- Rollback capability
+- Deployment notifications
 
 ## Troubleshooting
 
-### Common Deployment Issues
+### Common Issues
+1. Build failures
+   - Check build logs
+   - Verify dependencies
+   - Check environment variables
+   
+2. Runtime errors
+   - Check function logs
+   - Monitor performance
+   - Check API endpoints
+   
+3. Domain issues
+   - Verify DNS settings
+   - Check SSL status
+   - Monitor propagation
 
-1. **Build Fails with "next: command not found"**:
-   - This happens when Vercel tries to run the build command in the root directory
-   - Solution: Use the vercel.json configuration to specify the correct build command
+### Maintenance
+- Regular updates
+- Dependency management
+- Performance monitoring
+- Security patches
+- Backup verification
 
-2. **API Connection Issues**:
-   - Check that the `NEXT_PUBLIC_API_URL` environment variable is set correctly
-   - Ensure CORS is properly configured in the backend
-
-3. **Environment Variable Issues**:
-   - Make sure all required environment variables are set in the Vercel dashboard
-   - Check for typos in environment variable names
-
-## Continuous Deployment
-
-Vercel automatically deploys when you push to your Git repository. To set up continuous deployment for the backend:
-
-1. Configure your CI/CD pipeline to deploy the backend when changes are pushed
-2. Use branch protection rules to ensure only reviewed code is deployed
-
-## Monitoring and Logs
-
-- Use Vercel's built-in analytics and logs for the frontend
-- Set up monitoring for the backend using the platform's tools or a service like New Relic or Datadog
-
-## Next Steps
-
-After deployment:
-
-1. Set up a custom domain in Vercel
-2. Configure SSL certificates
-3. Set up monitoring and alerts
-4. Implement a CI/CD pipeline for the backend
+## Production Checklist
+- [ ] Environment variables configured
+- [ ] Custom domain setup
+- [ ] SSL certificates active
+- [ ] Build optimization complete
+- [ ] Security headers configured
+- [ ] Monitoring enabled
+- [ ] Logging configured
+- [ ] Backup system verified
+- [ ] Performance optimized
+- [ ] Error tracking active

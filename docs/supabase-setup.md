@@ -1,196 +1,165 @@
-# Supabase Setup Guide for Grantify.ai
+# Supabase Configuration Guide
 
-This guide outlines the steps to set up Supabase for the Grantify.ai project, including database configuration, authentication, and security policies.
+## Database Schema
 
-## 1. Create a Supabase Account and Project
-
-1. Go to [Supabase](https://supabase.com/) and sign up for an account if you don't have one already.
-2. Once logged in, create a new project:
-   - Click "New Project"
-   - Enter a name (e.g., "Grantify")
-   - Choose a database password (save this securely)
-   - Select a region closest to your users
-   - Click "Create new project"
-
-## 2. Get Your API Keys
-
-After your project is created:
-
-1. Go to the project dashboard
-2. Navigate to Settings > API
-3. Copy the following values:
-   - **URL**: Your Supabase project URL
-   - **anon public key**: Your anonymous API key
-   - **service_role key**: Your service role key (for backend use)
-
-## 3. Update Environment Variables
-
-Add these values to your environment files:
-
-### Frontend (.env.local)
-
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### Backend (.env)
-
-```
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_supabase_service_key
-ENABLE_CRON_JOBS=true
-```
-
-Note: The service key is different from the anon key. You can find it in the same API settings page.
-
-## 4. Set Up Database Schema
-
-We'll use the SQL schema we've already created. You can run this SQL in the Supabase SQL Editor:
-
-1. Go to the SQL Editor in your Supabase dashboard
-2. Create a new query
-3. Paste the contents of `backend/src/db/schema.sql`
-4. Run the query
-
-Alternatively, you can use the Supabase CLI to apply migrations.
-
-## 5. Update Schema for Large Funding Amounts
-
-Some grants have funding amounts that exceed PostgreSQL's integer limit (2.1 billion). To handle these large amounts, you need to update the schema to use `bigint` instead of `integer`:
-
-1. Go to the SQL Editor in your Supabase dashboard
-2. Create a new query
-3. Paste the following SQL:
-
+### Users Table
 ```sql
--- Update funding fields to use bigint instead of integer to handle large funding amounts
-ALTER TABLE grants ALTER COLUMN total_funding TYPE bigint;
-ALTER TABLE grants ALTER COLUMN award_ceiling TYPE bigint;
-ALTER TABLE grants ALTER COLUMN award_floor TYPE bigint;
-
--- Add an index on opportunity_id for faster lookups
-CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);
+create table public.users (
+  id uuid references auth.users primary key,
+  email text unique not null,
+  full_name text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 ```
 
-4. Run the query
-
-This will update the funding fields to use `bigint` instead of `integer`, allowing them to handle larger funding amounts.
-
-## 6. Configure Authentication
-
-### Enable Email Authentication
-
-1. Go to Authentication > Providers
-2. Ensure "Email" is enabled
-3. Configure settings as needed:
-   - Disable email confirmations for development (optional)
-   - Customize email templates if desired
-
-### (Optional) Enable OAuth Providers
-
-If you want to allow login with Google, GitHub, etc.:
-
-1. Go to Authentication > Providers
-2. Select the provider you want to enable
-3. Follow the instructions to set up the OAuth credentials
-4. Toggle the provider to "Enabled"
-
-## 7. Set Up Row-Level Security (RLS)
-
-Our schema already includes RLS policies, but ensure they're enabled:
-
-1. Go to Database > Tables
-2. For each table, check that RLS is enabled
-3. Verify the policies match what's in our schema
-
-## 8. Create Initial Data (Optional)
-
-You may want to create some initial data for testing:
-
-1. Go to the Table Editor
-2. Add some sample grants
-3. Create a test user account
-
-Alternatively, you can use our data pipeline to fetch real grants from Grants.gov:
-
-```bash
-cd backend
-npm run update-grants-live
+### Grants Table
+```sql
+create table public.grants (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  description text,
+  funding_amount numeric,
+  deadline timestamp with time zone,
+  eligibility_criteria text,
+  application_url text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 ```
 
-## 9. Test the Connection
-
-After setting up Supabase, test the connection:
-
-```typescript
-// In your frontend code
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Test query
-const { data, error } = await supabase.from('grants').select('*').limit(1);
-console.log(data, error);
+### User Preferences Table
+```sql
+create table public.user_preferences (
+  user_id uuid references public.users primary key,
+  notification_settings jsonb default '{}'::jsonb,
+  search_preferences jsonb default '{}'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
 ```
 
-## 10. Implement Authentication UI
+## Authentication Setup
 
-Now that Supabase is set up, you can implement the authentication UI using Supabase Auth components or custom components.
+### Configuration
+1. Enable Email Authentication
+2. Configure Password Reset
+3. Set up OAuth Providers (if needed)
+4. Configure Email Templates
 
-### Using Supabase Auth UI
+### Row Level Security (RLS)
+```sql
+-- Users table RLS
+alter table public.users enable row level security;
 
-```bash
-# Install the Auth UI package
-npm install @supabase/auth-ui-react @supabase/auth-ui-shared
+create policy "Users can view their own data"
+  on public.users for select
+  using (auth.uid() = id);
+
+create policy "Users can update their own data"
+  on public.users for update
+  using (auth.uid() = id);
+
+-- Grants table RLS
+alter table public.grants enable row level security;
+
+create policy "Grants are viewable by all authenticated users"
+  on public.grants for select
+  using (auth.role() = 'authenticated');
+
+-- User Preferences RLS
+alter table public.user_preferences enable row level security;
+
+create policy "Users can manage their own preferences"
+  on public.user_preferences for all
+  using (auth.uid() = user_id);
 ```
 
-```typescript
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
-import { supabase } from '@/lib/supabaseClient';
+## Database Functions
 
-const LoginPage = () => {
-  return (
-    <Auth
-      supabaseClient={supabase}
-      appearance={{ theme: ThemeSupa }}
-      providers={['google', 'github']}
-    />
-  );
-};
+### Search Function
+```sql
+create function public.search_grants(
+  search_query text,
+  min_amount numeric default null,
+  max_amount numeric default null,
+  deadline_after timestamp with time zone default null
+) returns setof public.grants
+language sql
+security definer
+as $$
+  select *
+  from public.grants
+  where
+    (search_query is null or
+     title ilike '%' || search_query || '%' or
+     description ilike '%' || search_query || '%')
+    and (min_amount is null or funding_amount >= min_amount)
+    and (max_amount is null or funding_amount <= max_amount)
+    and (deadline_after is null or deadline >= deadline_after)
+  order by deadline asc;
+$$;
 ```
 
-## 11. Set Up User Management
+## Indexes
+```sql
+-- Grants table indexes
+create index grants_title_idx on public.grants using gin (to_tsvector('english', title));
+create index grants_description_idx on public.grants using gin (to_tsvector('english', description));
+create index grants_deadline_idx on public.grants (deadline);
+create index grants_funding_amount_idx on public.grants (funding_amount);
 
-After a user signs up, you'll need to:
+-- Users table indexes
+create index users_email_idx on public.users (email);
+```
 
-1. Create a record in the `users` table
-2. Initialize their preferences in the `user_preferences` table
+## Triggers
+```sql
+-- Updated at trigger
+create function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = timezone('utc'::text, now());
+  return new;
+end;
+$$ language plpgsql;
 
-This can be done using Supabase Functions or in your application code.
+create trigger set_updated_at
+  before update on public.users
+  for each row
+  execute function public.set_updated_at();
 
-## 12. Database Maintenance
+create trigger set_updated_at
+  before update on public.grants
+  for each row
+  execute function public.set_updated_at();
 
-For database maintenance, we've created several utility scripts:
+create trigger set_updated_at
+  before update on public.user_preferences
+  for each row
+  execute function public.set_updated_at();
+```
 
-- **Clear Grants**: To clear all grants from the database, run:
-  ```bash
-  cd backend
-  npm run clear-grants
-  ```
+## Backup Configuration
+- Enable Point-in-Time Recovery
+- Configure Daily Backups
+- Set Backup Retention Period
+- Configure Backup Notifications
 
-- **Update Schema**: To update the database schema, run the SQL in the Supabase SQL Editor as described in step 5.
+## Security Settings
+- Enable SSL Enforcement
+- Configure Network Restrictions
+- Set up Database Passwords
+- Configure Connection Pooling
 
-## Next Steps
+## Monitoring
+- Enable Query Performance Insights
+- Set up Database Alerts
+- Configure Log Management
+- Enable Performance Analytics
 
-After completing the Supabase setup:
-
-1. Implement the signup and login pages
-2. Create the user profile and preferences management
-3. Implement the dashboard subpages (saved, applied, ignored grants)
-4. Set up the data pipeline for extracting grant data
-5. Integrate with an AI service for grant categorization
+## API Configuration
+- Generate API Keys
+- Configure CORS Settings
+- Set up Rate Limiting
+- Enable API Documentation
