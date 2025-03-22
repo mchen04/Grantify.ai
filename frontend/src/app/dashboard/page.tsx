@@ -285,7 +285,7 @@ export default function Dashboard() {
               <div className="bg-gray-50 rounded-lg p-8 text-center">
                 <p className="text-gray-600">No recommended grants yet. Update your preferences to get personalized recommendations.</p>
                 <Link
-                  href="/dashboard/preferences"
+                  href="/preferences"
                   className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Update Preferences

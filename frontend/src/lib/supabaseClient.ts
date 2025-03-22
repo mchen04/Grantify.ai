@@ -10,6 +10,39 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Export helper functions
+export const supabaseHelpers = {
+  // User profiles
+  getUserProfile: async (userId: string) => {
+    return supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+  },
+
+  updateUserProfile: async (userId: string, profileData: any) => {
+    return supabase
+      .from('user_profiles')
+      .upsert({
+        user_id: userId,
+        ...profileData,
+        updated_at: new Date().toISOString(),
+      });
+  },
+  
+  // User interactions
+  getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
+    let query = supabase.from('user_interactions').select('*, grants(*)').eq('user_id', userId);
+    
+    if (action) {
+      query = query.eq('action', action);
+    }
+    
+    return query;
+  }
+};
+
 export default supabase;
 
 // Auth helpers

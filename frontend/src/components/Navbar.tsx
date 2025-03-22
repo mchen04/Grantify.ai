@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { User } from '@supabase/supabase-js';
 
 const Navbar: React.FC = () => {
   const pathname = usePathname();
@@ -67,11 +68,14 @@ const Navbar: React.FC = () => {
                       {user.email}
                     </div>
                     <Link 
-                      href="/dashboard/preferences"
+                      href="/preferences"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setDropdownOpen(false)}
                     >
                       Settings
+                    </Link>
+                    <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      Profile
                     </Link>
                     <button
                       onClick={() => {
