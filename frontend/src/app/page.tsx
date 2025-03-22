@@ -321,8 +321,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FAQ Section - Softer cards and better spacing */}
-      <section className="py-24">
+      {/* FAQ Section - White background for better contrast */}
+      <section className="py-24 bg-white">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-16 text-gray-800">
             Frequently Asked Questions
