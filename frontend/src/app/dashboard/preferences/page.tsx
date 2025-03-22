@@ -213,7 +213,7 @@ export default function Preferences() {
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
           {/* Research Topics */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Research Topics</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Research Topics</h2>
             <p className="text-gray-600 mb-4">Select topics that interest you to receive relevant grant recommendations.</p>
             
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -236,7 +236,7 @@ export default function Preferences() {
           
           {/* Funding Range */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Funding Range</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Funding Range</h2>
             <p className="text-gray-600 mb-4">Specify your preferred funding range.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -274,7 +274,7 @@ export default function Preferences() {
           
           {/* Funding Agencies */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Funding Agencies</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Funding Agencies</h2>
             <p className="text-gray-600 mb-4">Select agencies you're interested in receiving grants from.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -297,7 +297,7 @@ export default function Preferences() {
           
           {/* Eligible Applicant Types */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Eligible Applicant Types</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Eligible Applicant Types</h2>
             <p className="text-gray-600 mb-4">Select the types of applicants you qualify as.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -332,7 +332,7 @@ export default function Preferences() {
           
           {/* Notification Settings */}
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Notification Settings</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Notification Settings</h2>
             <p className="text-gray-600 mb-4">Configure how you want to receive notifications.</p>
             
             <div className="space-y-4">

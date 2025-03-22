@@ -30,7 +30,7 @@ interface UserInteraction {
 }
 
 export default function Dashboard() {
-  const { user, isLoading, signOut } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('recommended');
   const [loading, setLoading] = useState(false);
@@ -195,20 +195,6 @@ export default function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold">Your Dashboard</h1>
             <p className="text-gray-600 mt-2">Welcome, {user.email}</p>
-          </div>
-          <div className="mt-4 md:mt-0 flex space-x-4">
-            <Link
-              href="/dashboard/preferences"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Edit Preferences
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              Sign Out
-            </button>
           </div>
         </div>
         
