@@ -1,21 +1,138 @@
+@import url('https://rsms.me/inter/inter.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core colors */
+  --primary-50: #f0f7ff;
+  --primary-100: #e0effe;
+  --primary-200: #bae0fd;
+  --primary-300: #7cc8fb;
+  --primary-400: #36aaf4;
+  --primary-500: #0c8ee7;
+  --primary-600: #0070c4;
+  --primary-700: #015a9e;
+  --primary-800: #064b83;
+  --primary-900: #0a406d;
+  
+  /* Neutral colors */
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    font-family: 'Inter var', 'Inter', system-ui, -apple-system, sans-serif;
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  /* Typography */
+  h1 {
+    @apply text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl;
+  }
+
+  h2 {
+    @apply text-3xl font-semibold text-gray-900;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold text-gray-900;
+  }
+
+  p {
+    @apply text-base text-gray-600;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Button styles */
+  .btn-primary {
+    @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-white rounded-xl shadow-soft border border-gray-200 overflow-hidden transition duration-200 hover:shadow-card;
+  }
+
+  /* Form styles */
+  .form-input {
+    @apply block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+
+  /* Search bar styles */
+  .search-container {
+    @apply relative max-w-2xl mx-auto;
+  }
+
+  .search-input {
+    @apply block w-full rounded-xl border-gray-300 shadow-soft pl-12 pr-4 py-3 text-gray-900 placeholder-gray-500 focus:border-primary-500 focus:ring-primary-500 sm:text-base;
+  }
+
+  .search-icon {
+    @apply pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400;
+  }
+
+  /* Ad placement styles */
+  .ad-container {
+    @apply bg-white rounded-lg shadow-soft border border-gray-200 p-4 my-4;
+  }
+
+  /* Grant card styles */
+  .grant-card {
+    @apply card p-4 sm:p-6 flex flex-col gap-4;
+  }
+
+  .grant-card-title {
+    @apply text-lg font-semibold text-gray-900 line-clamp-2 hover:text-primary-600;
+  }
+
+  .grant-card-amount {
+    @apply text-base font-medium text-primary-600;
+  }
+
+  .grant-card-deadline {
+    @apply text-sm text-gray-500;
+  }
+
+  .grant-card-description {
+    @apply text-sm text-gray-600 line-clamp-3;
+  }
+
+  .grant-card-tags {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .grant-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }

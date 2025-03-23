@@ -10,11 +10,12 @@ interface SearchResultsProps {
   totalPages: number;
   grantsPerPage: number;
   goToPage: (page: number) => void;
+  onApply: (grantId: string) => void;
+  onSave: (grantId: string) => Promise<void>;
+  onShare: (grantId: string) => Promise<void>;
+  onIgnore: (grantId: string) => Promise<void>;
 }
 
-/**
- * Search results component that displays grants, loading state, errors, and pagination
- */
 const SearchResults: React.FC<SearchResultsProps> = ({
   grants,
   loading,
@@ -22,33 +23,48 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   page,
   totalPages,
   grantsPerPage,
-  goToPage
+  goToPage,
+  onApply,
+  onSave,
+  onShare,
+  onIgnore
 }) => {
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">Search Results</h2>
-        {!loading && grants.length > 0 && (
-          <div className="text-gray-600">
-            Showing {grants.length} of {(totalPages * grantsPerPage) > grantsPerPage ? `${totalPages * grantsPerPage}+` : totalPages * grantsPerPage} grants
-          </div>
-        )}
+      {/* Results header */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">Available Grants</h2>
+          {!loading && grants.length > 0 && (
+            <span className="text-sm text-gray-500">
+              Showing {grants.length} of {(totalPages * grantsPerPage) > grantsPerPage ? `${totalPages * grantsPerPage}+` : totalPages * grantsPerPage} grants
+            </span>
+          )}
+        </div>
       </div>
       
+      {/* Loading state */}
       {loading ? (
         <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary-600"></div>
         </div>
       ) : error ? (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-          {error}
+        <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-lg mb-4">
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <p>{error}</p>
+          </div>
         </div>
       ) : grants.length === 0 ? (
         <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <p className="text-gray-600">No grants found matching your criteria. Try adjusting your filters.</p>
+          <p className="text-gray-600 mb-2">No grants found matching your criteria.</p>
+          <p className="text-sm text-gray-500">Try adjusting your search terms or filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        /* Grant cards grid - 2x3 layout */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {grants.map((grant) => (
             <GrantCard
               key={grant.id}
@@ -59,6 +75,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               fundingAmount={grant.award_ceiling}
               description={grant.description}
               categories={grant.activity_category || []}
+              onApply={() => onApply(grant.id)}
+              onSave={() => onSave(grant.id)}
+              onShare={() => onShare(grant.id)}
+              onIgnore={() => onIgnore(grant.id)}
             />
           ))}
         </div>
@@ -67,17 +87,22 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       {/* Pagination */}
       {!loading && grants.length > 0 && (
         <div className="mt-8 flex justify-center">
-          <nav className="flex items-center space-x-2">
+          <nav className="flex items-center space-x-1">
             <button 
-              className={`px-3 py-2 rounded-md border ${page === 1 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`p-2 rounded-md ${
+                page === 1 
+                  ? 'text-gray-300 cursor-not-allowed' 
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-primary-600'
+              }`}
               onClick={() => goToPage(page - 1)}
               disabled={page === 1}
             >
-              Previous
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
             </button>
             
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              // Show pages around the current page
               let pageNum;
               if (totalPages <= 5) {
                 pageNum = i + 1;
@@ -92,10 +117,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               return (
                 <button
                   key={pageNum}
-                  className={`px-3 py-2 rounded-md ${
+                  className={`px-3 py-1.5 text-sm rounded-md ${
                     page === pageNum
-                      ? 'bg-blue-600 text-white'
-                      : 'border text-gray-700 hover:bg-gray-50'
+                      ? 'bg-primary-50 text-primary-600 font-medium'
+                      : 'text-gray-600 hover:bg-gray-100'
                   }`}
                   onClick={() => goToPage(pageNum)}
                 >
@@ -105,11 +130,17 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             })}
             
             <button 
-              className={`px-3 py-2 rounded-md border ${page === totalPages ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`p-2 rounded-md ${
+                page === totalPages 
+                  ? 'text-gray-300 cursor-not-allowed' 
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-primary-600'
+              }`}
               onClick={() => goToPage(page + 1)}
               disabled={page === totalPages}
             >
-              Next
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
             </button>
           </nav>
         </div>

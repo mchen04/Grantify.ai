@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { User } from '@supabase/supabase-js';
 
 const Navbar: React.FC = () => {
   const pathname = usePathname();
@@ -12,7 +11,6 @@ const Navbar: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -31,50 +29,65 @@ const Navbar: React.FC = () => {
   ];
 
   return (
-    <nav className="bg-blue-600 text-white shadow-md">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex justify-between items-center">
-          <Link href="/" className="text-2xl font-bold">
-            Grantify.ai
-          </Link>
-          
-          <div className="hidden md:flex space-x-6">
+    <nav className="bg-white border-b border-gray-200">
+      <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+          <div className="flex items-center">
+            <Link 
+              href="/" 
+              className="flex items-center space-x-2"
+            >
+              <span className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-700 bg-clip-text text-transparent">
+                Grantify.ai
+              </span>
+            </Link>
+          </div>
+
+          {/* Desktop navigation */}
+          <div className="hidden md:flex items-center space-x-8">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
-                className={`hover:text-blue-200 transition-colors ${
-                  pathname === item.path ? 'font-bold text-white' : 'text-blue-100'
+                className={`text-sm font-medium transition-colors hover:text-primary-600 ${
+                  pathname === item.path 
+                    ? 'text-primary-600' 
+                    : 'text-gray-600'
                 }`}
               >
                 {item.name}
               </Link>
             ))}
           </div>
-          
-          <div className="flex space-x-4">
+
+          {/* Auth section */}
+          <div className="flex items-center space-x-4">
             {user ? (
               <div className="relative" ref={dropdownRef}>
                 <button 
                   onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-700 hover:bg-blue-800 transition-colors"
+                  className="flex items-center justify-center w-9 h-9 rounded-full bg-primary-100 text-primary-700 hover:bg-primary-200 transition-colors"
                 >
                   {user.email?.charAt(0).toUpperCase() || 'U'}
                 </button>
                 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                    <div className="px-4 py-2 text-sm text-gray-700 border-b truncate">
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-card border border-gray-200 py-1 z-10">
+                    <div className="px-4 py-2 text-sm text-gray-600 border-b border-gray-100 truncate">
                       {user.email}
                     </div>
                     <Link 
                       href="/preferences"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
                       onClick={() => setDropdownOpen(false)}
                     >
                       Settings
                     </Link>
-                    <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                    <Link 
+                      href="/profile" 
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
+                      onClick={() => setDropdownOpen(false)}
+                    >
                       Profile
                     </Link>
                     <button
@@ -82,7 +95,7 @@ const Navbar: React.FC = () => {
                         signOut();
                         setDropdownOpen(false);
                       }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
                     >
                       Sign Out
                     </button>
@@ -93,15 +106,15 @@ const Navbar: React.FC = () => {
               <>
                 <Link
                   href="/login"
-                  className="bg-white text-blue-600 px-4 py-2 rounded-md hover:bg-blue-50 transition-colors"
+                  className="btn-secondary"
                 >
-                  Login
+                  Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-800 transition-colors"
+                  className="btn-primary"
                 >
-                  Sign Up
+                  Sign up
                 </Link>
               </>
             )}
