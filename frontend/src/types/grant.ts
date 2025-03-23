@@ -11,6 +11,7 @@ export interface Grant {
   funding_type: string;
   eligible_applicants: string[];
   cost_sharing: boolean;
+  match_score?: number;
 }
 
 export interface GrantFilter {

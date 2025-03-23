@@ -1,10 +1,62 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
+import supabase from '@/lib/supabaseClient';
+import { Grant } from '@/types/grant';
 
 export default function Home() {
+  const [featuredGrants, setFeaturedGrants] = useState<Grant[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeaturedGrants = async () => {
+      try {
+        const today = new Date().toISOString();
+        // Get grants with upcoming deadlines and high funding amounts
+        const { data, error } = await supabase
+          .from('grants')
+          .select('*')
+          .gt('close_date', today)
+          .not('award_ceiling', 'is', null)
+          .order('award_ceiling', { ascending: false })
+          .order('close_date', { ascending: true })
+          .limit(3);
+
+        if (error) throw error;
+        setFeaturedGrants(data || []);
+      } catch (error) {
+        console.error('Error fetching featured grants:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeaturedGrants();
+  }, []);
+
+  // Format currency
+  const formatCurrency = (amount: number | null) => {
+    if (!amount) return 'Amount not specified';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+      notation: 'compact',
+      compactDisplay: 'short',
+    }).format(amount);
+  };
+
+  // Calculate days until deadline
+  const getDaysUntil = (dateString: string | null) => {
+    if (!dateString) return 'No deadline';
+    const days = Math.ceil(
+      (new Date(dateString).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return days === 1 ? '1 day' : `${days} days`;
+  };
+
   return (
     <Layout>
       {/* Hero Section - Instant Clarity & No Risk */}
@@ -40,19 +92,56 @@ export default function Home() {
               <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8">
                 <div className="bg-white rounded-xl shadow-soft p-6">
                   <div className="flex items-center gap-4 mb-6">
-                    <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
                     <span className="text-sm text-gray-600">Live updates from Grants.gov</span>
                   </div>
                   <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="text-primary-600 font-medium">Research Grant #{i}</div>
-                          <div className="text-green-600 text-sm">98% Match</div>
+                    {loading ? (
+                      // Loading skeleton
+                      [...Array(3)].map((_, i) => (
+                        <div key={i} className="bg-gray-50 rounded-lg p-4 animate-pulse">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                         </div>
-                        <div className="text-sm text-gray-600">$250,000 • Due in 30 days</div>
+                      ))
+                    ) : featuredGrants.length > 0 ? (
+                      // Real grants
+                      featuredGrants.map((grant) => (
+                        <Link
+                          key={grant.id}
+                          href={`/grants/${grant.id}`}
+                          className="block bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="text-primary-600 font-medium line-clamp-1" title={grant.title}>
+                              {grant.title}
+                            </div>
+                            <div className="text-green-600 text-sm whitespace-nowrap ml-2">
+                              {grant.match_score ? `${grant.match_score}% Match` : 'New'}
+                            </div>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {formatCurrency(grant.award_ceiling)} • Due in {getDaysUntil(grant.close_date)}
+                          </div>
+                        </Link>
+                      ))
+                    ) : (
+                      // Fallback content
+                      <div className="text-center text-gray-500 py-4">
+                        No grants available
                       </div>
-                    ))}
+                    )}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <Link
+                      href="/search"
+                      className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center justify-center gap-1"
+                    >
+                      View all grants
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
                   </div>
                 </div>
               </div>
