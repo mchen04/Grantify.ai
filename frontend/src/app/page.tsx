@@ -79,7 +79,7 @@ export default function Home() {
                 </Link>
                 <Link
                   href="#how-it-works"
-                  className="btn-secondary border-white text-white hover:bg-white/10 px-8 py-4 text-lg"
+                  className="bg-primary-700 text-white hover:bg-primary-800 px-8 py-4 text-lg rounded-xl border border-primary-500 shadow-lg hover:shadow-xl transition-all"
                 >
                   How It Works
                 </Link>
