@@ -66,7 +66,8 @@ const GrantCard: React.FC<GrantCardProps> = ({
           <div className="flex-1 min-w-0">
             <Link 
               href={`/grants/${id}`}
-              className="grant-card-title text-lg mb-1 block hover:text-primary-600 transition-colors line-clamp-2"
+              className="grant-card-title text-lg mb-1 block hover:text-primary-600 transition-colors line-clamp-2 max-h-[3.5rem]"
+              title={title}
             >
               {title}
             </Link>
