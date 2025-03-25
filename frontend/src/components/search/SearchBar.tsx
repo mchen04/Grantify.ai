@@ -22,9 +22,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
         </p>
       </div>
 
-      <form onSubmit={onSubmit} className="relative">
+      <div className="relative">
         {/* Search icon */}
-        <div className="search-icon">
+        <div className="absolute left-3 top-3 text-gray-400">
           <svg 
             xmlns="http://www.w3.org/2000/svg" 
             className="h-5 w-5" 
@@ -52,12 +52,15 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
         {/* Search button */}
         <button
-          type="submit"
+          onClick={(e) => {
+            e.preventDefault();
+            onSubmit(e as any);
+          }}
           className="absolute right-2 top-2 btn-primary py-2"
         >
           Search
         </button>
-      </form>
+      </div>
 
       {/* Search tips */}
       <div className="mt-3 flex items-center justify-center space-x-4 text-sm text-gray-500">

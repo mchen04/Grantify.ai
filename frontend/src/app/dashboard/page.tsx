@@ -7,6 +7,7 @@ import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 import supabase from '@/lib/supabaseClient';
+import DashboardSearchBar from '@/components/dashboard/DashboardSearchBar';
 
 // Grant type definition
 interface Grant {
@@ -39,6 +40,25 @@ export default function Dashboard() {
   const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
   const [ignoredGrants, setIgnoredGrants] = useState<Grant[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter grants based on search term
+  const filterGrants = (grants: Grant[]) => {
+    if (!searchTerm) return grants;
+    const term = searchTerm.toLowerCase();
+    return grants.filter(grant =>
+      grant.title.toLowerCase().includes(term) ||
+      grant.description.toLowerCase().includes(term) ||
+      grant.agency_name.toLowerCase().includes(term)
+    );
+  };
+
+  const displayedGrants = {
+    recommended: filterGrants(recommendedGrants),
+    saved: filterGrants(savedGrants),
+    applied: filterGrants(appliedGrants),
+    ignored: filterGrants(ignoredGrants)
+  };
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -123,12 +143,6 @@ export default function Dashboard() {
     fetchUserGrants();
   }, [user]);
 
-  // Handle sign out
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/');
-  };
-
   // Handle grant interaction (save, apply, ignore)
   const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
     if (!user) return;
@@ -141,8 +155,8 @@ export default function Dashboard() {
           user_id: user.id,
           grant_id: grantId,
           action,
-          timestamp: new Date().toISOString(),
-        }, { onConflict: 'user_id,grant_id,action' });
+          timestamp: new Date().toISOString()
+        });
       
       if (error) throw error;
       
@@ -167,8 +181,8 @@ export default function Dashboard() {
         }
       }
     } catch (error: any) {
-      console.error(`Error ${action} grant:`, error);
-      setError(`Failed to ${action.replace('ed', '')} grant. Please try again.`);
+      console.error(`Error ${action} grant:`, error.message || error);
+      setError(`Failed to ${action.replace('ed', '')} grant: ${error.message || 'Please try again.'}`);
     }
   };
 
@@ -253,19 +267,26 @@ export default function Dashboard() {
         {/* Recommended Grants Section */}
         {activeTab === 'recommended' && (
           <section className="mb-12">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Recommended for You</h2>
-              <Link
-                href="/search"
-                className="text-blue-600 hover:text-blue-800 font-medium"
-              >
-                View All
-              </Link>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Recommended for You</h2>
+                <Link
+                  href="/search"
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View All
+                </Link>
+              </div>
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search recommended grants..."
+              />
             </div>
             
-            {recommendedGrants.length > 0 ? (
+            {displayedGrants.recommended.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {recommendedGrants.map((grant) => (
+                {displayedGrants.recommended.map((grant) => (
                   <GrantCard
                     key={grant.id}
                     id={grant.id}
@@ -298,13 +319,20 @@ export default function Dashboard() {
         {/* Saved Grants Section */}
         {activeTab === 'saved' && (
           <section className="mb-12">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Saved Grants</h2>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Saved Grants</h2>
+              </div>
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search saved grants..."
+              />
             </div>
             
-            {savedGrants.length > 0 ? (
+            {displayedGrants.saved.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {savedGrants.map((grant) => (
+                {displayedGrants.saved.map((grant) => (
                   <GrantCard
                     key={grant.id}
                     id={grant.id}
@@ -336,13 +364,20 @@ export default function Dashboard() {
         {/* Applied Grants Section */}
         {activeTab === 'applied' && (
           <section className="mb-12">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Applied Grants</h2>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Applied Grants</h2>
+              </div>
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search applied grants..."
+              />
             </div>
             
-            {appliedGrants.length > 0 ? (
+            {displayedGrants.applied.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {appliedGrants.map((grant) => (
+                {displayedGrants.applied.map((grant) => (
                   <GrantCard
                     key={grant.id}
                     id={grant.id}
@@ -373,13 +408,20 @@ export default function Dashboard() {
         {/* Ignored Grants Section */}
         {activeTab === 'ignored' && (
           <section className="mb-12">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold">Ignored Grants</h2>
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Ignored Grants</h2>
+              </div>
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search ignored grants..."
+              />
             </div>
             
-            {ignoredGrants.length > 0 ? (
+            {displayedGrants.ignored.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {ignoredGrants.map((grant) => (
+                {displayedGrants.ignored.map((grant) => (
                   <GrantCard
                     key={grant.id}
                     id={grant.id}

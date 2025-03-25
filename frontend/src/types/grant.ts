@@ -12,6 +12,8 @@ export interface Grant {
   eligible_applicants: string[];
   cost_sharing: boolean;
   match_score?: number;
+  status?: 'saved' | 'applied' | 'ignored' | null;
+  status_updated_at?: string | null;
 }
 
 export interface GrantFilter {
@@ -28,6 +30,7 @@ export interface GrantFilter {
   costSharing: string;
   sortBy: string;
   page: number;
+  showInteracted: boolean;
 }
 
 export interface SelectOption {

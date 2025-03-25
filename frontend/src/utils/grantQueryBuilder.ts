@@ -11,8 +11,22 @@ export const buildGrantQuery = async (
   filter: GrantFilter,
   grantsPerPage: number = 10
 ) => {
+  const { user } = await supabase.auth.getUser();
+  
   // Start building the base query
   let query = supabase.from('grants').select('*', { count: 'exact' });
+
+  // Filter out interacted grants if user is logged in and showInteracted is false
+  if (user && !filter.showInteracted) {
+    const { data: interactedGrantIds } = await supabase
+      .from('user_interactions')
+      .select('grant_id')
+      .eq('user_id', user.data.user?.id);
+
+    if (interactedGrantIds && interactedGrantIds.length > 0) {
+      query = query.not('id', 'in', `(${interactedGrantIds.map(g => g.grant_id).join(',')})`);
+    }
+  }
   
   // --- APPLY DEADLINE FILTER ---
   if (filter.onlyNoDeadline) {

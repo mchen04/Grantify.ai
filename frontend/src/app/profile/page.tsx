@@ -78,9 +78,8 @@ export default function Profile() {
       const { error } = await supabase
         .from('user_profiles')
         .upsert({
-          user_id: user.id,
           ...profile,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         });
       
       if (error) {

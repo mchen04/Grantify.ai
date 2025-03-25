@@ -5,6 +5,7 @@ import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
 import { buildGrantQuery } from '@/utils/grantQueryBuilder';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   MAX_FUNDING, 
   MIN_DEADLINE_DAYS, 
@@ -41,10 +42,12 @@ export default function Search() {
     onlyNoDeadline: false,
     costSharing: '',
     sortBy: 'relevance',
-    page: 1
+    page: 1,
+    showInteracted: false
   });
 
-  // Agency options and handlers remain the same...
+  const { user } = useAuth();
+
   const agencyOptions: SelectOption[] = [
     { value: 'Department of Health and Human Services', label: 'Department of Health and Human Services' },
     { value: 'Department of Education', label: 'Department of Education' },
@@ -110,9 +113,9 @@ export default function Search() {
         setLoading(true);
         setError(null);
         const query = await buildGrantQuery(filter, GRANTS_PER_PAGE);
-        const { data, error, count } = await query;
+        const { data, error: queryError, count } = await query;
         
-        if (error) throw error;
+        if (queryError) throw queryError;
         
         setGrants(data || []);
         setTotalPages(count ? Math.ceil(count / GRANTS_PER_PAGE) : 1);
@@ -152,50 +155,102 @@ export default function Search() {
       onlyNoDeadline: false,
       costSharing: '',
       sortBy: 'relevance',
-      page: 1
+      page: 1,
+      showInteracted: false
     });
   };
 
-  // Grant action handlers
-  const handleApply = (grantId: string) => {
-    // Open Grants.gov in new tab
-    window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
+  const handleApply = async (grantId: string) => {
+    if (!user) return;
+
+    try {
+      const { error: interactionError } = await supabase
+        .from('user_interactions')
+        .upsert({
+          user_id: user.id,
+          grant_id: grantId,
+          action: 'applied',
+          timestamp: new Date().toISOString()
+        });
+
+      if (interactionError) throw interactionError;
+
+      if (!filter.showInteracted) {
+        setGrants(grants.filter(g => g.id !== grantId));
+      }
+
+      window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
+    } catch (error: any) {
+      console.error('Error applying to grant:', error.message || error);
+      setError(`Failed to apply to grant: ${error.message || 'Please try again.'}`);
+    }
   };
 
   const handleSave = async (grantId: string) => {
-    // TODO: Implement save functionality
-    console.log('Save grant:', grantId);
+    if (!user) return;
+
+    try {
+      const { error: interactionError } = await supabase
+        .from('user_interactions')
+        .upsert({
+          user_id: user.id,
+          grant_id: grantId,
+          action: 'saved',
+          timestamp: new Date().toISOString()
+        });
+
+      if (interactionError) throw interactionError;
+
+      if (!filter.showInteracted) {
+        setGrants(grants.filter(g => g.id !== grantId));
+      }
+    } catch (error: any) {
+      console.error('Error saving grant:', error.message || error);
+      setError(`Failed to save grant: ${error.message || 'Please try again.'}`);
+    }
   };
 
   const handleShare = async (grantId: string) => {
-    // Share URL
     const shareUrl = `${window.location.origin}/grants/${grantId}`;
     
-    // Try to use Web Share API if available
-    if (navigator.share) {
-      try {
+    try {
+      if (navigator.share) {
         await navigator.share({
           title: 'Check out this grant',
           text: 'I found this interesting grant opportunity',
           url: shareUrl
         });
-      } catch (err) {
-        // Fallback to copying to clipboard
+      } else {
         await navigator.clipboard.writeText(shareUrl);
-        // TODO: Show toast notification
-        console.log('URL copied to clipboard');
       }
-    } else {
-      // Fallback for browsers that don't support Web Share API
+    } catch (error: any) {
+      console.error('Error sharing grant:', error);
       await navigator.clipboard.writeText(shareUrl);
-      // TODO: Show toast notification
-      console.log('URL copied to clipboard');
     }
   };
 
   const handleIgnore = async (grantId: string) => {
-    // TODO: Implement ignore functionality
-    console.log('Ignore grant:', grantId);
+    if (!user) return;
+
+    try {
+      const { error: interactionError } = await supabase
+        .from('user_interactions')
+        .upsert({
+          user_id: user.id,
+          grant_id: grantId,
+          action: 'ignored',
+          timestamp: new Date().toISOString()
+        });
+
+      if (interactionError) throw interactionError;
+
+      if (!filter.showInteracted) {
+        setGrants(grants.filter(g => g.id !== grantId));
+      }
+    } catch (error: any) {
+      console.error('Error ignoring grant:', error.message || error);
+      setError(`Failed to ignore grant: ${error.message || 'Please try again.'}`);
+    }
   };
 
   return (
@@ -217,7 +272,7 @@ export default function Search() {
         <div className="flex-1 min-w-0 px-4">
           {/* Search and Filter Section */}
           <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-            <form onSubmit={handleSearch}>
+            <div>
               <SearchBar 
                 searchTerm={filter.searchTerm}
                 setSearchTerm={(value) => updateFilter('searchTerm', value)}
@@ -265,10 +320,12 @@ export default function Search() {
                 setSortBy={(value) => updateFilter('sortBy', value)}
                 sortOptions={sortOptions}
                 resetFilters={resetFilters}
+                showInteracted={filter.showInteracted}
+                setShowInteracted={(value) => updateFilter('showInteracted', value)}
               />
               
               <ActiveFilters filter={filter} />
-            </form>
+            </div>
           </div>
           
           {/* Search Results */}
