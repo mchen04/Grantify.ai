@@ -413,7 +413,30 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                   </div>
                 ) : null}
                 
-                <button className="block w-full bg-white border border-gray-300 text-gray-700 text-center px-4 py-2 rounded-md hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => {
+                    const shareUrl = `${window.location.origin}/grants/${grantId}`;
+                    try {
+                      if (navigator.share) {
+                        navigator.share({
+                          title: grant.title,
+                          text: 'Check out this grant opportunity',
+                          url: shareUrl
+                        });
+                      } else {
+                        navigator.clipboard.writeText(shareUrl);
+                        // Could add a toast notification here
+                      }
+                    } catch (error: any) {
+                      // Don't log errors if the user canceled the share
+                      if (error.name !== 'AbortError') {
+                        // Only copy to clipboard if it's not a cancel action
+                        navigator.clipboard.writeText(shareUrl);
+                      }
+                    }
+                  }}
+                  className="block w-full bg-white border border-gray-300 text-gray-700 text-center px-4 py-2 rounded-md hover:bg-gray-50 transition-colors"
+                >
                   Share Grant
                 </button>
                 

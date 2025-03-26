@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 
 import React, { useState, useEffect } from 'react';
 import Layout from '@/components/Layout/Layout';
@@ -43,7 +43,9 @@ export default function Search() {
     costSharing: '',
     sortBy: 'relevance',
     page: 1,
-    showInteracted: false
+    showSaved: false,
+    showApplied: false,
+    showIgnored: false
   });
 
   const { user } = useAuth();
@@ -156,58 +158,87 @@ export default function Search() {
       costSharing: '',
       sortBy: 'relevance',
       page: 1,
-      showInteracted: false
+      showSaved: false,
+      showApplied: false,
+      showIgnored: false
     });
   };
 
-  const handleApply = async (grantId: string) => {
+  const handleInteraction = async (grantId: string, action: 'applied' | 'saved' | 'ignored'): Promise<void> => {
     if (!user) return;
 
     try {
-      const { error: interactionError } = await supabase
-        .from('user_interactions')
-        .upsert({
-          user_id: user.id,
-          grant_id: grantId,
-          action: 'applied',
-          timestamp: new Date().toISOString()
-        });
+      const grant = grants.find(g => g.id === grantId);
+      const currentAction = grant?.interactions?.[0]?.action;
 
-      if (interactionError) throw interactionError;
+      // If clicking the same action, remove the interaction
+      if (currentAction === action) {
+        await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId);
 
-      if (!filter.showInteracted) {
-        setGrants(grants.filter(g => g.id !== grantId));
+        // Update UI to remove interaction
+        setGrants(prevGrants =>
+          prevGrants.map(g =>
+            g.id === grantId
+              ? { ...g, interactions: null }
+              : g
+          )
+        );
+      } else {
+        // First delete any existing interactions
+        await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId);
+
+        // Then insert the new interaction
+        const { error: insertError } = await supabase
+          .from('user_interactions')
+          .insert({
+            user_id: user.id,
+            grant_id: grantId,
+            action: action,
+            timestamp: new Date().toISOString()
+          });
+
+        if (insertError) throw insertError;
+
+        // Update the grant's interaction status in the UI
+        setGrants(prevGrants =>
+          prevGrants.map(g =>
+            g.id === grantId
+              ? {
+                  ...g,
+                  interactions: [{
+                    action: action,
+                    timestamp: new Date().toISOString()
+                  }]
+                }
+              : g
+          )
+        );
+
+        // Open grants.gov if applying
+        if (action === 'applied') {
+          window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
+        }
       }
-
-      window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
     } catch (error: any) {
-      console.error('Error applying to grant:', error.message || error);
-      setError(`Failed to apply to grant: ${error.message || 'Please try again.'}`);
+      console.error(`Error ${action} grant:`, error.message || error);
+      setError(`Failed to ${action} grant: ${error.message || 'Please try again.'}`);
     }
   };
 
-  const handleSave = async (grantId: string) => {
-    if (!user) return;
+  const handleApply = async (grantId: string): Promise<void> => {
+    await handleInteraction(grantId, 'applied');
+  };
 
-    try {
-      const { error: interactionError } = await supabase
-        .from('user_interactions')
-        .upsert({
-          user_id: user.id,
-          grant_id: grantId,
-          action: 'saved',
-          timestamp: new Date().toISOString()
-        });
-
-      if (interactionError) throw interactionError;
-
-      if (!filter.showInteracted) {
-        setGrants(grants.filter(g => g.id !== grantId));
-      }
-    } catch (error: any) {
-      console.error('Error saving grant:', error.message || error);
-      setError(`Failed to save grant: ${error.message || 'Please try again.'}`);
-    }
+  const handleSave = async (grantId: string): Promise<void> => {
+    await handleInteraction(grantId, 'saved');
   };
 
   const handleShare = async (grantId: string) => {
@@ -224,33 +255,16 @@ export default function Search() {
         await navigator.clipboard.writeText(shareUrl);
       }
     } catch (error: any) {
-      console.error('Error sharing grant:', error);
-      await navigator.clipboard.writeText(shareUrl);
+      // Don't log errors if the user canceled the share
+      if (error.name !== 'AbortError') {
+        // Only copy to clipboard if it's not a cancel action
+        await navigator.clipboard.writeText(shareUrl);
+      }
     }
   };
 
-  const handleIgnore = async (grantId: string) => {
-    if (!user) return;
-
-    try {
-      const { error: interactionError } = await supabase
-        .from('user_interactions')
-        .upsert({
-          user_id: user.id,
-          grant_id: grantId,
-          action: 'ignored',
-          timestamp: new Date().toISOString()
-        });
-
-      if (interactionError) throw interactionError;
-
-      if (!filter.showInteracted) {
-        setGrants(grants.filter(g => g.id !== grantId));
-      }
-    } catch (error: any) {
-      console.error('Error ignoring grant:', error.message || error);
-      setError(`Failed to ignore grant: ${error.message || 'Please try again.'}`);
-    }
+  const handleIgnore = async (grantId: string): Promise<void> => {
+    await handleInteraction(grantId, 'ignored');
   };
 
   return (
@@ -312,6 +326,12 @@ export default function Search() {
                 <CostSharingFilter
                   costSharing={filter.costSharing}
                   setCostSharing={(value) => updateFilter('costSharing', value)}
+                  showSaved={filter.showSaved}
+                  setShowSaved={(value) => updateFilter('showSaved', value)}
+                  showApplied={filter.showApplied}
+                  setShowApplied={(value) => updateFilter('showApplied', value)}
+                  showIgnored={filter.showIgnored}
+                  setShowIgnored={(value) => updateFilter('showIgnored', value)}
                 />
               </div>
               
@@ -320,8 +340,6 @@ export default function Search() {
                 setSortBy={(value) => updateFilter('sortBy', value)}
                 sortOptions={sortOptions}
                 resetFilters={resetFilters}
-                showInteracted={filter.showInteracted}
-                setShowInteracted={(value) => updateFilter('showInteracted', value)}
               />
               
               <ActiveFilters filter={filter} />

@@ -143,40 +143,99 @@ export default function Dashboard() {
     fetchUserGrants();
   }, [user]);
 
+  // Handle grant sharing
+  const handleShare = async (grantId: string) => {
+    const shareUrl = `${window.location.origin}/grants/${grantId}`;
+    
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Check out this grant',
+          text: 'I found this interesting grant opportunity',
+          url: shareUrl
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+      }
+    } catch (error: any) {
+      // Don't log errors if the user canceled the share
+      if (error.name !== 'AbortError') {
+        // Only copy to clipboard if it's not a cancel action
+        await navigator.clipboard.writeText(shareUrl);
+      }
+    }
+  };
+
   // Handle grant interaction (save, apply, ignore)
   const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
     if (!user) return;
     
     try {
-      // Record the interaction in Supabase
-      const { error } = await supabase
-        .from('user_interactions')
-        .upsert({
-          user_id: user.id,
-          grant_id: grantId,
-          action,
-          timestamp: new Date().toISOString()
-        });
-      
-      if (error) throw error;
-      
-      // Update the local state based on the action
-      // This is a simplified approach - in a real app, you'd refetch the data
-      if (action === 'saved') {
-        const grantToSave = recommendedGrants.find(g => g.id === grantId);
-        if (grantToSave && !savedGrants.some(g => g.id === grantId)) {
-          setSavedGrants([...savedGrants, grantToSave]);
+      // Find the grant in any of the lists
+      const grant = recommendedGrants.find(g => g.id === grantId) ||
+                   savedGrants.find(g => g.id === grantId) ||
+                   appliedGrants.find(g => g.id === grantId) ||
+                   ignoredGrants.find(g => g.id === grantId);
+
+      if (!grant) return;
+
+      // Check if the grant already has this status
+      const isCurrentStatus = (
+        (action === 'saved' && savedGrants.some(g => g.id === grantId)) ||
+        (action === 'applied' && appliedGrants.some(g => g.id === grantId)) ||
+        (action === 'ignored' && ignoredGrants.some(g => g.id === grantId))
+      );
+
+      if (isCurrentStatus) {
+        // Remove the interaction if clicking the same status
+        await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId);
+
+        // Update local state to remove the grant from its current list
+        if (action === 'saved') {
+          setSavedGrants(savedGrants.filter(g => g.id !== grantId));
+        } else if (action === 'applied') {
+          setAppliedGrants(appliedGrants.filter(g => g.id !== grantId));
+        } else if (action === 'ignored') {
+          setIgnoredGrants(ignoredGrants.filter(g => g.id !== grantId));
         }
-      } else if (action === 'applied') {
-        const grantToApply = recommendedGrants.find(g => g.id === grantId) || 
-                            savedGrants.find(g => g.id === grantId);
-        if (grantToApply && !appliedGrants.some(g => g.id === grantId)) {
-          setAppliedGrants([...appliedGrants, grantToApply]);
+
+        // Add the grant back to recommended if it was removed
+        if (!recommendedGrants.some(g => g.id === grantId)) {
+          setRecommendedGrants([...recommendedGrants, grant]);
         }
-      } else if (action === 'ignored') {
-        const grantToIgnore = recommendedGrants.find(g => g.id === grantId);
-        if (grantToIgnore && !ignoredGrants.some(g => g.id === grantId)) {
-          setIgnoredGrants([...ignoredGrants, grantToIgnore]);
+      } else {
+        // Add new interaction
+        const { error } = await supabase
+          .from('user_interactions')
+          .upsert({
+            user_id: user.id,
+            grant_id: grantId,
+            action,
+            timestamp: new Date().toISOString()
+          });
+        
+        if (error) throw error;
+
+        // Remove from current lists
+        setSavedGrants(savedGrants.filter(g => g.id !== grantId));
+        setAppliedGrants(appliedGrants.filter(g => g.id !== grantId));
+        setIgnoredGrants(ignoredGrants.filter(g => g.id !== grantId));
+
+        // Add to new list
+        if (action === 'saved') {
+          setSavedGrants([...savedGrants, grant]);
+        } else if (action === 'applied') {
+          setAppliedGrants([...appliedGrants, grant]);
+        } else if (action === 'ignored') {
+          setIgnoredGrants([...ignoredGrants, grant]);
+        }
+
+        // Remove from recommended if ignored
+        if (action === 'ignored') {
           setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
         }
       }
@@ -299,6 +358,10 @@ export default function Dashboard() {
                     onSave={() => handleGrantInteraction(grant.id, 'saved')}
                     onApply={() => handleGrantInteraction(grant.id, 'applied')}
                     onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
+                    isSaved={savedGrants.some(g => g.id === grant.id)}
+                    isApplied={appliedGrants.some(g => g.id === grant.id)}
+                    isIgnored={ignoredGrants.some(g => g.id === grant.id)}
                   />
                 ))}
               </div>
@@ -342,8 +405,10 @@ export default function Dashboard() {
                     fundingAmount={grant.award_ceiling}
                     description={grant.description}
                     categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
                     onApply={() => handleGrantInteraction(grant.id, 'applied')}
                     onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
                     isSaved={true}
                   />
                 ))}
@@ -388,6 +453,10 @@ export default function Dashboard() {
                     fundingAmount={grant.award_ceiling}
                     description={grant.description}
                     categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
                     isApplied={true}
                   />
                 ))}
@@ -432,6 +501,10 @@ export default function Dashboard() {
                     fundingAmount={grant.award_ceiling}
                     description={grant.description}
                     categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
                     isIgnored={true}
                   />
                 ))}

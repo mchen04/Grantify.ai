@@ -11,20 +11,33 @@ export const buildGrantQuery = async (
   filter: GrantFilter,
   grantsPerPage: number = 10
 ) => {
-  const { user } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   
-  // Start building the base query
-  let query = supabase.from('grants').select('*', { count: 'exact' });
+  // Start building the base query with grant data and interaction status
+  let query = supabase
+    .from('grants')
+    .select(`
+      *,
+      interactions:user_interactions!left(action, timestamp)
+    `, { count: 'exact' });
 
-  // Filter out interacted grants if user is logged in and showInteracted is false
-  if (user && !filter.showInteracted) {
-    const { data: interactedGrantIds } = await supabase
-      .from('user_interactions')
-      .select('grant_id')
-      .eq('user_id', user.data.user?.id);
+  // Add user interaction filters if user is logged in
+  if (user) {
+    // Filter to only show interactions for the current user
+    query = query.eq('interactions.user_id', user.id);
 
-    if (interactedGrantIds && interactedGrantIds.length > 0) {
-      query = query.not('id', 'in', `(${interactedGrantIds.map(g => g.grant_id).join(',')})`);
+    // Apply status filters if any are selected
+    const showAny = filter.showSaved || filter.showApplied || filter.showIgnored;
+    if (showAny) {
+      const actions = [];
+      if (filter.showSaved) actions.push('saved');
+      if (filter.showApplied) actions.push('applied');
+      if (filter.showIgnored) actions.push('ignored');
+
+      if (actions.length > 0) {
+        // Show either grants with matching interactions or uninteracted grants
+        query = query.or(`interactions.action.in.(${actions.join(',')}),interactions.is.null`);
+      }
     }
   }
   

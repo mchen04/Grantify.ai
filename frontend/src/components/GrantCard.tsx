@@ -61,7 +61,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
     : description || 'No description available';
 
   return (
-    <div className="grant-card p-4">
+    <div className="grant-card p-4 transition-opacity duration-300 ease-in-out">
       <div className="flex flex-col h-full">
         {/* Header with action buttons */}
         <div className="flex items-start justify-between gap-4 mb-3">
@@ -85,42 +85,42 @@ const GrantCard: React.FC<GrantCardProps> = ({
             {/* Save Grant */}
             <button 
               className={`p-1.5 transition-colors group relative ${isSaved ? 'text-primary-600' : 'text-gray-400 hover:text-primary-600'}`}
-              title="Save Grant"
+              title={isSaved ? "Unsave Grant" : "Save Grant"}
               onClick={onSave}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill={isSaved ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               <span className="absolute top-full right-0 w-max bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                Save Grant
+                {isSaved ? "Unsave Grant" : "Save Grant"}
               </span>
             </button>
 
             {/* Ignore Grant */}
             <button 
               className={`p-1.5 transition-colors group relative ${isIgnored ? 'text-red-600' : 'text-gray-400 hover:text-red-600'}`}
-              title="Ignore Grant"
+              title={isIgnored ? "Unignore Grant" : "Ignore Grant"}
               onClick={onIgnore}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill={isIgnored ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
               <span className="absolute top-full right-0 w-max bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                Ignore Grant
+                {isIgnored ? "Unignore Grant" : "Ignore Grant"}
               </span>
             </button>
 
             {/* Apply on Grants.gov */}
             <button 
               className={`p-1.5 transition-colors group relative ${isApplied ? 'text-green-600' : 'text-gray-400 hover:text-green-600'}`}
-              title="Apply on Grants.gov"
+              title={isApplied ? "Unapply Grant" : "Apply on Grants.gov"}
               onClick={onApply}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill={isApplied ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span className="absolute top-full right-0 w-max bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                Apply on Grants.gov
+                {isApplied ? "Unapply Grant" : "Apply on Grants.gov"}
               </span>
             </button>
 

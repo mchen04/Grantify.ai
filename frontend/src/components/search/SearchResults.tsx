@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import GrantCard from '@/components/GrantCard';
 import { Grant } from '@/types/grant';
 
@@ -10,7 +10,7 @@ interface SearchResultsProps {
   totalPages: number;
   grantsPerPage: number;
   goToPage: (page: number) => void;
-  onApply: (grantId: string) => void;
+  onApply: (grantId: string) => Promise<void>;
   onSave: (grantId: string) => Promise<void>;
   onShare: (grantId: string) => Promise<void>;
   onIgnore: (grantId: string) => Promise<void>;
@@ -29,6 +29,24 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   onShare,
   onIgnore
 }) => {
+  const [fadingGrants, setFadingGrants] = useState<Set<string>>(new Set());
+
+  const handleInteraction = async (grantId: string, action: () => Promise<void>) => {
+    setFadingGrants(prev => new Set([...prev, grantId]));
+    
+    try {
+      await action();
+      // Wait for fade animation to complete
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error) {
+      // If there's an error, remove the fading state
+      setFadingGrants(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(grantId);
+        return newSet;
+      });
+    }
+  };
   return (
     <div>
       {/* Results header */}
@@ -66,20 +84,29 @@ const SearchResults: React.FC<SearchResultsProps> = ({
         /* Grant cards grid - 2x3 layout */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {grants.map((grant) => (
-            <GrantCard
+            <div
               key={grant.id}
-              id={grant.id}
-              title={grant.title}
-              agency={grant.agency_name}
-              closeDate={grant.close_date}
-              fundingAmount={grant.award_ceiling}
-              description={grant.description}
-              categories={grant.activity_category || []}
-              onApply={() => onApply(grant.id)}
-              onSave={() => onSave(grant.id)}
-              onShare={() => onShare(grant.id)}
-              onIgnore={() => onIgnore(grant.id)}
-            />
+              className={`transition-opacity duration-300 ${
+                fadingGrants.has(grant.id) ? 'opacity-0' : 'opacity-100'
+              }`}
+            >
+              <GrantCard
+                id={grant.id}
+                title={grant.title}
+                agency={grant.agency_name}
+                closeDate={grant.close_date}
+                fundingAmount={grant.award_ceiling}
+                description={grant.description}
+                categories={grant.activity_category || []}
+                onApply={() => handleInteraction(grant.id, () => onApply(grant.id))}
+                onSave={() => handleInteraction(grant.id, () => onSave(grant.id))}
+                onShare={() => onShare(grant.id)}
+                onIgnore={() => handleInteraction(grant.id, () => onIgnore(grant.id))}
+                isApplied={grant.interactions?.[0]?.action === 'applied'}
+                isIgnored={grant.interactions?.[0]?.action === 'ignored'}
+                isSaved={grant.interactions?.[0]?.action === 'saved'}
+              />
+            </div>
           ))}
         </div>
       )}
