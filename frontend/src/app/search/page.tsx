@@ -42,10 +42,7 @@ export default function Search() {
     onlyNoDeadline: false,
     costSharing: '',
     sortBy: 'relevance',
-    page: 1,
-    showSaved: false,
-    showApplied: false,
-    showIgnored: false
+    page: 1
   });
 
   const { user } = useAuth();
@@ -157,10 +154,7 @@ export default function Search() {
       onlyNoDeadline: false,
       costSharing: '',
       sortBy: 'relevance',
-      page: 1,
-      showSaved: false,
-      showApplied: false,
-      showIgnored: false
+      page: 1
     });
   };
 
@@ -168,64 +162,45 @@ export default function Search() {
     if (!user) return;
 
     try {
-      const grant = grants.find(g => g.id === grantId);
-      const currentAction = grant?.interactions?.[0]?.action;
+      // Insert the new interaction
+      const { error: insertError } = await supabase
+        .from('user_interactions')
+        .insert({
+          user_id: user.id,
+          grant_id: grantId,
+          action: action,
+          timestamp: new Date().toISOString()
+        });
 
-      // If clicking the same action, remove the interaction
-      if (currentAction === action) {
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId);
+      if (insertError) throw insertError;
 
-        // Update UI to remove interaction
-        setGrants(prevGrants =>
-          prevGrants.map(g =>
-            g.id === grantId
-              ? { ...g, interactions: null }
-              : g
-          )
-        );
-      } else {
-        // First delete any existing interactions
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId);
+      // Remove the grant from the UI
+      setGrants(prevGrants => prevGrants.filter(g => g.id !== grantId));
 
-        // Then insert the new interaction
-        const { error: insertError } = await supabase
-          .from('user_interactions')
-          .insert({
-            user_id: user.id,
-            grant_id: grantId,
-            action: action,
-            timestamp: new Date().toISOString()
-          });
+      // Fetch one more grant to replace the one that was removed
+      const currentCount = grants.length;
+      if (currentCount > 0) {
+        const lastGrant = grants[currentCount - 1];
+        const { data: newGrants, error } = await supabase
+          .from('grants')
+          .select(`
+            *,
+            interactions:user_interactions!left(action, timestamp)
+          `)
+          .eq('interactions.user_id', user.id)
+          .is('interactions', null)
+          .gt('id', lastGrant.id)
+          .limit(1);
 
-        if (insertError) throw insertError;
-
-        // Update the grant's interaction status in the UI
-        setGrants(prevGrants =>
-          prevGrants.map(g =>
-            g.id === grantId
-              ? {
-                  ...g,
-                  interactions: [{
-                    action: action,
-                    timestamp: new Date().toISOString()
-                  }]
-                }
-              : g
-          )
-        );
-
-        // Open grants.gov if applying
-        if (action === 'applied') {
-          window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
+        if (!error && newGrants && newGrants.length > 0) {
+          // Add the new grant to the end of the list
+          setGrants(prevGrants => [...prevGrants, ...newGrants]);
         }
+      }
+
+      // Open grants.gov if applying
+      if (action === 'applied') {
+        window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
       }
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error.message || error);
@@ -326,12 +301,6 @@ export default function Search() {
                 <CostSharingFilter
                   costSharing={filter.costSharing}
                   setCostSharing={(value) => updateFilter('costSharing', value)}
-                  showSaved={filter.showSaved}
-                  setShowSaved={(value) => updateFilter('showSaved', value)}
-                  showApplied={filter.showApplied}
-                  setShowApplied={(value) => updateFilter('showApplied', value)}
-                  showIgnored={filter.showIgnored}
-                  setShowIgnored={(value) => updateFilter('showIgnored', value)}
                 />
               </div>
               

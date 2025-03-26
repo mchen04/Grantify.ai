@@ -25,20 +25,9 @@ export const buildGrantQuery = async (
   if (user) {
     // Filter to only show interactions for the current user
     query = query.eq('interactions.user_id', user.id);
-
-    // Apply status filters if any are selected
-    const showAny = filter.showSaved || filter.showApplied || filter.showIgnored;
-    if (showAny) {
-      const actions = [];
-      if (filter.showSaved) actions.push('saved');
-      if (filter.showApplied) actions.push('applied');
-      if (filter.showIgnored) actions.push('ignored');
-
-      if (actions.length > 0) {
-        // Show either grants with matching interactions or uninteracted grants
-        query = query.or(`interactions.action.in.(${actions.join(',')}),interactions.is.null`);
-      }
-    }
+    
+    // Exclude grants that have any interactions (saved, applied, or ignored)
+    query = query.is('interactions', null);
   }
   
   // --- APPLY DEADLINE FILTER ---

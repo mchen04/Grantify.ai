@@ -32,9 +32,6 @@ export interface GrantFilter {
   costSharing: string;
   sortBy: string;
   page: number;
-  showSaved: boolean;
-  showApplied: boolean;
-  showIgnored: boolean;
 }
 
 export interface SelectOption {

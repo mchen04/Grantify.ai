@@ -106,15 +106,19 @@ export default function Dashboard() {
         
         if (ignoredError) throw ignoredError;
         
-        // Fetch recommended grants (active grants only)
-        // In a real implementation, this would use AI recommendations
-        const { data: allGrants, error: grantsError } = await supabase
+        // Fetch recommended grants (active grants that the user hasn't interacted with)
+        const { data: recommendedData, error: recommendedError } = await supabase
           .from('grants')
-          .select('*')
+          .select(`
+            *,
+            interactions:user_interactions!left(action, timestamp)
+          `)
+          .eq('interactions.user_id', user.id)
+          .is('interactions', null)
           .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
-          .limit(5);
+          .limit(10);
         
-        if (grantsError) throw grantsError;
+        if (recommendedError) throw recommendedError;
         
         // Filter out expired grants from interactions
         const filterActiveGrants = (interaction: UserInteraction) => {
@@ -131,7 +135,7 @@ export default function Dashboard() {
         setSavedGrants(filteredSavedInteractions.map((interaction: UserInteraction) => interaction.grants));
         setAppliedGrants(filteredAppliedInteractions.map((interaction: UserInteraction) => interaction.grants));
         setIgnoredGrants(filteredIgnoredInteractions.map((interaction: UserInteraction) => interaction.grants));
-        setRecommendedGrants(allGrants || []);
+        setRecommendedGrants(recommendedData || []);
       } catch (error: any) {
         console.error('Error fetching user grants:', error);
         setError('Failed to load your grants. Please try again later.');
@@ -192,7 +196,8 @@ export default function Dashboard() {
           .from('user_interactions')
           .delete()
           .eq('user_id', user.id)
-          .eq('grant_id', grantId);
+          .eq('grant_id', grantId)
+          .eq('action', action);
 
         // Update local state to remove the grant from its current list
         if (action === 'saved') {
@@ -208,10 +213,17 @@ export default function Dashboard() {
           setRecommendedGrants([...recommendedGrants, grant]);
         }
       } else {
-        // Add new interaction
+        // First delete any existing interactions
+        await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId);
+
+        // Then insert the new interaction
         const { error } = await supabase
           .from('user_interactions')
-          .upsert({
+          .insert({
             user_id: user.id,
             grant_id: grantId,
             action,
@@ -220,7 +232,37 @@ export default function Dashboard() {
         
         if (error) throw error;
 
-        // Remove from current lists
+        // Remove from current lists if it's in them
+        if (recommendedGrants.some(g => g.id === grantId)) {
+          setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
+          
+          // Fetch one more grant to replace the one that was removed from recommended
+          const currentCount = recommendedGrants.length;
+          if (currentCount > 0) {
+            // Get current date for filtering expired grants
+            const today = new Date().toISOString();
+            
+            // Fetch a new grant that isn't in the current list
+            const { data: newGrants, error: fetchError } = await supabase
+              .from('grants')
+              .select(`
+                *,
+                interactions:user_interactions!left(action, timestamp)
+              `)
+              .eq('interactions.user_id', user.id)
+              .is('interactions', null)
+              .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
+              .not('id', 'in', `(${recommendedGrants.map(g => g.id).join(',')})`)
+              .limit(1);
+            
+            if (!fetchError && newGrants && newGrants.length > 0) {
+              // Add the new grant to the recommended list
+              setRecommendedGrants(prevGrants => [...prevGrants, ...newGrants]);
+            }
+          }
+        }
+        
+        // Remove from other lists
         setSavedGrants(savedGrants.filter(g => g.id !== grantId));
         setAppliedGrants(appliedGrants.filter(g => g.id !== grantId));
         setIgnoredGrants(ignoredGrants.filter(g => g.id !== grantId));
@@ -232,11 +274,6 @@ export default function Dashboard() {
           setAppliedGrants([...appliedGrants, grant]);
         } else if (action === 'ignored') {
           setIgnoredGrants([...ignoredGrants, grant]);
-        }
-
-        // Remove from recommended if ignored
-        if (action === 'ignored') {
-          setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
         }
       }
     } catch (error: any) {
@@ -260,269 +297,268 @@ export default function Dashboard() {
   if (!user) {
     return null;
   }
-
-  return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Your Dashboard</h1>
-            <p className="text-gray-600 mt-2">Welcome, {user.email}</p>
-          </div>
+return (
+  <Layout>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Your Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome, {user.email}</p>
         </div>
-        
-        {error && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
-        
-        {/* Dashboard Navigation */}
-        <div className="mb-8 border-b">
-          <nav className="flex flex-wrap -mb-px">
-            <button
-              onClick={() => setActiveTab('recommended')}
-              className={`inline-block p-4 font-medium ${
-                activeTab === 'recommended'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
-              }`}
-            >
-              Recommended
-            </button>
-            <button
-              onClick={() => setActiveTab('saved')}
-              className={`inline-block p-4 font-medium ${
-                activeTab === 'saved'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
-              }`}
-            >
-              Saved Grants
-            </button>
-            <button
-              onClick={() => setActiveTab('applied')}
-              className={`inline-block p-4 font-medium ${
-                activeTab === 'applied'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
-              }`}
-            >
-              Applied Grants
-            </button>
-            <button
-              onClick={() => setActiveTab('ignored')}
-              className={`inline-block p-4 font-medium ${
-                activeTab === 'ignored'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
-              }`}
-            >
-              Ignored Grants
-            </button>
-          </nav>
-        </div>
-        
-        {/* Recommended Grants Section */}
-        {activeTab === 'recommended' && (
-          <section className="mb-12">
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Recommended for You</h2>
-                <Link
-                  href="/search"
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  View All
-                </Link>
-              </div>
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search recommended grants..."
-              />
-            </div>
-            
-            {displayedGrants.recommended.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {displayedGrants.recommended.map((grant) => (
-                  <GrantCard
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isSaved={savedGrants.some(g => g.id === grant.id)}
-                    isApplied={appliedGrants.some(g => g.id === grant.id)}
-                    isIgnored={ignoredGrants.some(g => g.id === grant.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <p className="text-gray-600">No recommended grants yet. Update your preferences to get personalized recommendations.</p>
-                <Link
-                  href="/preferences"
-                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Update Preferences
-                </Link>
-              </div>
-            )}
-          </section>
-        )}
-        
-        {/* Saved Grants Section */}
-        {activeTab === 'saved' && (
-          <section className="mb-12">
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Saved Grants</h2>
-              </div>
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search saved grants..."
-              />
-            </div>
-            
-            {displayedGrants.saved.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {displayedGrants.saved.map((grant) => (
-                  <GrantCard
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isSaved={true}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <p className="text-gray-600">You haven't saved any grants yet.</p>
-                <Link
-                  href="/search"
-                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Search Grants
-                </Link>
-              </div>
-            )}
-          </section>
-        )}
-        
-        {/* Applied Grants Section */}
-        {activeTab === 'applied' && (
-          <section className="mb-12">
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Applied Grants</h2>
-              </div>
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search applied grants..."
-              />
-            </div>
-            
-            {displayedGrants.applied.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {displayedGrants.applied.map((grant) => (
-                  <GrantCard
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isApplied={true}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <p className="text-gray-600">You haven't marked any grants as applied yet.</p>
-                <Link
-                  href="/search"
-                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Search Grants
-                </Link>
-              </div>
-            )}
-          </section>
-        )}
-        
-        {/* Ignored Grants Section */}
-        {activeTab === 'ignored' && (
-          <section className="mb-12">
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Ignored Grants</h2>
-              </div>
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search ignored grants..."
-              />
-            </div>
-            
-            {displayedGrants.ignored.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {displayedGrants.ignored.map((grant) => (
-                  <GrantCard
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleGrantInteraction(grant.id, 'applied')}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isIgnored={true}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gray-50 rounded-lg p-8 text-center">
-                <p className="text-gray-600">You haven't ignored any grants yet.</p>
-                <Link
-                  href="/search"
-                  className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Search Grants
-                </Link>
-              </div>
-            )}
-          </section>
-        )}
       </div>
-    </Layout>
-  );
+      
+      {error && (
+        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+          {error}
+        </div>
+      )}
+      
+      {/* Dashboard Navigation */}
+      <div className="mb-8 border-b">
+        <nav className="flex flex-wrap -mb-px">
+          <button
+            onClick={() => setActiveTab('recommended')}
+            className={`inline-block p-4 font-medium ${
+              activeTab === 'recommended'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+            }`}
+          >
+            Recommended
+          </button>
+          <button
+            onClick={() => setActiveTab('saved')}
+            className={`inline-block p-4 font-medium ${
+              activeTab === 'saved'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+            }`}
+          >
+            Saved Grants
+          </button>
+          <button
+            onClick={() => setActiveTab('applied')}
+            className={`inline-block p-4 font-medium ${
+              activeTab === 'applied'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+            }`}
+          >
+            Applied Grants
+          </button>
+          <button
+            onClick={() => setActiveTab('ignored')}
+            className={`inline-block p-4 font-medium ${
+              activeTab === 'ignored'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+            }`}
+          >
+            Ignored Grants
+          </button>
+        </nav>
+      </div>
+      
+      {/* Recommended Grants Section */}
+      {activeTab === 'recommended' && (
+        <section className="mb-12">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Recommended for You</h2>
+              <Link
+                href="/search"
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                View All
+              </Link>
+            </div>
+            <DashboardSearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Search recommended grants..."
+            />
+          </div>
+          
+          {displayedGrants.recommended.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayedGrants.recommended.map((grant) => (
+                <GrantCard
+                  key={grant.id}
+                  id={grant.id}
+                  title={grant.title}
+                  agency={grant.agency_name}
+                  closeDate={grant.close_date}
+                  fundingAmount={grant.award_ceiling}
+                  description={grant.description}
+                  categories={grant.activity_category || []}
+                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                  onShare={() => handleShare(grant.id)}
+                  isSaved={false}
+                  isApplied={false}
+                  isIgnored={false}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-gray-600">No recommended grants yet. Update your preferences to get personalized recommendations.</p>
+              <Link
+                href="/preferences"
+                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Update Preferences
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+      
+      {/* Saved Grants Section */}
+      {activeTab === 'saved' && (
+        <section className="mb-12">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Saved Grants</h2>
+            </div>
+            <DashboardSearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Search saved grants..."
+            />
+          </div>
+          
+          {displayedGrants.saved.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayedGrants.saved.map((grant) => (
+                <GrantCard
+                  key={grant.id}
+                  id={grant.id}
+                  title={grant.title}
+                  agency={grant.agency_name}
+                  closeDate={grant.close_date}
+                  fundingAmount={grant.award_ceiling}
+                  description={grant.description}
+                  categories={grant.activity_category || []}
+                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                  onShare={() => handleShare(grant.id)}
+                  isSaved={true}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-gray-600">You haven't saved any grants yet.</p>
+              <Link
+                href="/search"
+                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Search Grants
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+      
+      {/* Applied Grants Section */}
+      {activeTab === 'applied' && (
+        <section className="mb-12">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Applied Grants</h2>
+            </div>
+            <DashboardSearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Search applied grants..."
+            />
+          </div>
+          
+          {displayedGrants.applied.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayedGrants.applied.map((grant) => (
+                <GrantCard
+                  key={grant.id}
+                  id={grant.id}
+                  title={grant.title}
+                  agency={grant.agency_name}
+                  closeDate={grant.close_date}
+                  fundingAmount={grant.award_ceiling}
+                  description={grant.description}
+                  categories={grant.activity_category || []}
+                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                  onShare={() => handleShare(grant.id)}
+                  isApplied={true}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-gray-600">You haven't marked any grants as applied yet.</p>
+              <Link
+                href="/search"
+                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Search Grants
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+      
+      {/* Ignored Grants Section */}
+      {activeTab === 'ignored' && (
+        <section className="mb-12">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Ignored Grants</h2>
+            </div>
+            <DashboardSearchBar
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              placeholder="Search ignored grants..."
+            />
+          </div>
+          
+          {displayedGrants.ignored.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {displayedGrants.ignored.map((grant) => (
+                <GrantCard
+                  key={grant.id}
+                  id={grant.id}
+                  title={grant.title}
+                  agency={grant.agency_name}
+                  closeDate={grant.close_date}
+                  fundingAmount={grant.award_ceiling}
+                  description={grant.description}
+                  categories={grant.activity_category || []}
+                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                  onShare={() => handleShare(grant.id)}
+                  isIgnored={true}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-8 text-center">
+              <p className="text-gray-600">You haven't ignored any grants yet.</p>
+              <Link
+                href="/search"
+                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Search Grants
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  </Layout>
+);
 }
