@@ -344,6 +344,7 @@ export default function Dashboard() {
                     categories={grant.activity_category || []}
                     onApply={() => handleGrantInteraction(grant.id, 'applied')}
                     onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    isSaved={true}
                   />
                 ))}
               </div>
