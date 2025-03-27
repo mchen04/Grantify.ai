@@ -7,8 +7,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { GRANT_CATEGORIES, GRANT_AGENCIES, DEFAULT_USER_PREFERENCES } from '@/lib/config';
 import supabase from '@/lib/supabaseClient';
 
-type EmailFrequency = 'daily' | 'weekly' | 'never';
-
 export default function Preferences() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
@@ -22,9 +20,6 @@ export default function Preferences() {
   const [fundingMax, setFundingMax] = useState<number>(1000000);
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [eligibleTypes, setEligibleTypes] = useState<string[]>([]);
-  const [emailFrequency, setEmailFrequency] = useState<EmailFrequency>('weekly');
-  const [notifyNewMatches, setNotifyNewMatches] = useState<boolean>(true);
-  const [notifyDeadlines, setNotifyDeadlines] = useState<boolean>(true);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -59,13 +54,6 @@ export default function Preferences() {
           setFundingMax(data.funding_max || 1000000);
           setSelectedAgencies(data.agencies || []);
           setEligibleTypes(data.eligible_applicant_types || []);
-          
-          if (data.notification_settings) {
-            const frequency = data.notification_settings.email_frequency || 'weekly';
-            setEmailFrequency(frequency as EmailFrequency);
-            setNotifyNewMatches(data.notification_settings.notify_new_matches || true);
-            setNotifyDeadlines(data.notification_settings.notify_deadlines || true);
-          }
         } else {
           // If no preferences exist yet, use defaults
           setSelectedTopics(DEFAULT_USER_PREFERENCES.topics || []);
@@ -73,13 +61,6 @@ export default function Preferences() {
           setFundingMax(DEFAULT_USER_PREFERENCES.funding_max || 1000000);
           setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
           setEligibleTypes(DEFAULT_USER_PREFERENCES.eligible_applicant_types || []);
-          
-          if (DEFAULT_USER_PREFERENCES.notification_settings) {
-            const frequency = DEFAULT_USER_PREFERENCES.notification_settings.email_frequency || 'weekly';
-            setEmailFrequency(frequency as EmailFrequency);
-            setNotifyNewMatches(DEFAULT_USER_PREFERENCES.notification_settings.notify_new_matches || true);
-            setNotifyDeadlines(DEFAULT_USER_PREFERENCES.notification_settings.notify_deadlines || true);
-          }
         }
       } catch (error) {
         console.error('Error loading preferences:', error);
@@ -109,11 +90,6 @@ export default function Preferences() {
         funding_max: fundingMax,
         agencies: selectedAgencies,
         eligible_applicant_types: eligibleTypes,
-        notification_settings: {
-          email_frequency: emailFrequency,
-          notify_new_matches: notifyNewMatches,
-          notify_deadlines: notifyDeadlines,
-        },
         updated_at: new Date().toISOString(),
       };
       
@@ -167,13 +143,6 @@ export default function Preferences() {
     }
   };
 
-  // Handle email frequency change
-  const handleEmailFrequencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    if (value === 'daily' || value === 'weekly' || value === 'never') {
-      setEmailFrequency(value);
-    }
-  };
 
   // Show loading state while checking authentication
   if (isLoading || loading) {
@@ -330,55 +299,6 @@ export default function Preferences() {
             </div>
           </div>
           
-          {/* Notification Settings */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Notification Settings</h2>
-            <p className="text-gray-600 mb-4">Configure how you want to receive notifications.</p>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="emailFrequency" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Frequency
-                </label>
-                <select
-                  id="emailFrequency"
-                  value={emailFrequency}
-                  onChange={handleEmailFrequencyChange}
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="never">Never</option>
-                </select>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="notifyNewMatches"
-                  checked={notifyNewMatches}
-                  onChange={(e) => setNotifyNewMatches(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="notifyNewMatches" className="ml-2 text-sm text-gray-700">
-                  Notify me about new matching grants
-                </label>
-              </div>
-              
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="notifyDeadlines"
-                  checked={notifyDeadlines}
-                  onChange={(e) => setNotifyDeadlines(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="notifyDeadlines" className="ml-2 text-sm text-gray-700">
-                  Notify me about upcoming deadlines
-                </label>
-              </div>
-            </div>
-          </div>
           
           {/* Submit Button */}
           <div className="flex justify-end">

@@ -376,8 +376,15 @@ export default function Dashboard() {
         }
 
         // Add the grant back to recommended if it was removed
-        if (!recommendedGrants.some(g => g.id === grantId)) {
-          setRecommendedGrants([...recommendedGrants, grant]);
+        // First check if it's already in any other list to avoid duplicates
+        const isInAnyList =
+          savedGrants.some(g => g.id === grantId) ||
+          appliedGrants.some(g => g.id === grantId) ||
+          ignoredGrants.some(g => g.id === grantId) ||
+          recommendedGrants.some(g => g.id === grantId);
+          
+        if (!isInAnyList) {
+          setRecommendedGrants(prev => [...prev, grant]);
         }
       } else {
         // First delete any existing interactions
@@ -399,48 +406,54 @@ export default function Dashboard() {
         
         if (error) throw error;
 
-        // Remove from recommended list only if specified
-        if (removeFromRecommended && recommendedGrants.some(g => g.id === grantId)) {
-          setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
-          
+        // First, remove from all lists to avoid duplicates
+        setRecommendedGrants(prev => prev.filter(g => g.id !== grantId));
+        setSavedGrants(prev => prev.filter(g => g.id !== grantId));
+        setAppliedGrants(prev => prev.filter(g => g.id !== grantId));
+        setIgnoredGrants(prev => prev.filter(g => g.id !== grantId));
+
+        // Then add to the appropriate list
+        if (action === 'saved') {
+          setSavedGrants(prev => [...prev, grant]);
+        } else if (action === 'applied') {
+          setAppliedGrants(prev => [...prev, grant]);
+        } else if (action === 'ignored') {
+          setIgnoredGrants(prev => [...prev, grant]);
+        }
+
+        // If we removed from recommended, try to fetch a new one
+        if (removeFromRecommended) {
           // Fetch one more grant to replace the one that was removed from recommended
-          const currentCount = recommendedGrants.length;
-          if (currentCount > 0) {
+          try {
             // Get current date for filtering expired grants
             const today = new Date().toISOString();
             
-            // Fetch a new grant that isn't in the current list
-            const { data: newGrants, error: fetchError } = await supabase
-              .from('grants')
-              .select(`
-                *,
-                interactions:user_interactions!left(action, timestamp)
-              `)
-              .eq('interactions.user_id', user.id)
-              .is('interactions', null)
-              .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
-              .not('id', 'in', `(${recommendedGrants.map(g => g.id).join(',')})`)
-              .limit(1);
+            // Get all current grant IDs to exclude
+            const allCurrentGrantIds = [
+              ...recommendedGrants.map(g => g.id),
+              ...savedGrants.map(g => g.id),
+              ...appliedGrants.map(g => g.id),
+              ...ignoredGrants.map(g => g.id)
+            ];
             
-            if (!fetchError && newGrants && newGrants.length > 0) {
-              // Add the new grant to the recommended list
-              setRecommendedGrants(prevGrants => [...prevGrants, ...newGrants]);
+            // Only fetch if we have grants to exclude
+            if (allCurrentGrantIds.length > 0) {
+              // Fetch a new grant that isn't in any current list
+              const { data: newGrants } = await supabase
+                .from('grants')
+                .select('*')
+                .not('id', 'in', `(${allCurrentGrantIds.join(',')})`)
+                .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
+                .limit(1);
+              
+              if (newGrants && newGrants.length > 0) {
+                // Add the new grant to the recommended list
+                setRecommendedGrants(prev => [...prev, ...newGrants]);
+              }
             }
+          } catch (e) {
+            console.log('Error fetching replacement grant:', e);
           }
-        }
-        
-        // Remove from other lists
-        setSavedGrants(savedGrants.filter(g => g.id !== grantId));
-        setAppliedGrants(appliedGrants.filter(g => g.id !== grantId));
-        setIgnoredGrants(ignoredGrants.filter(g => g.id !== grantId));
-
-        // Add to new list
-        if (action === 'saved') {
-          setSavedGrants([...savedGrants, grant]);
-        } else if (action === 'applied') {
-          setAppliedGrants([...appliedGrants, grant]);
-        } else if (action === 'ignored') {
-          setIgnoredGrants([...ignoredGrants, grant]);
         }
       }
     } catch (error: any) {
