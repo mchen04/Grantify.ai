@@ -26,6 +26,9 @@ export interface DashboardGrantCardRef {
   fadeAndRemoveCard: () => Promise<void>;
 }
 
+/**
+ * Enhanced GrantCard component for dashboard with fade-out animation capability
+ */
 const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardProps>((props, ref) => {
   const [fading, setFading] = useState(false);
 
@@ -52,7 +55,7 @@ const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardP
   );
 
   return (
-    <div className={`transition-opacity duration-300 ${fading ? 'opacity-0' : 'opacity-100'}`}>
+    <div className={`transition-opacity duration-300 h-full ${fading ? 'opacity-0' : 'opacity-100'}`}>
       <GrantCard {...props} />
     </div>
   );

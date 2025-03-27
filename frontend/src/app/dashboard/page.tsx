@@ -446,7 +446,7 @@ return (
           </div>
           
           {displayedGrants.recommended.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
               {displayedGrants.recommended.map((grant) => (
                 <DashboardGrantCard
                   ref={grant.id === pendingGrantId ? cardRef : undefined}
@@ -498,7 +498,7 @@ return (
           </div>
           
           {displayedGrants.saved.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
               {displayedGrants.saved.map((grant) => (
                 <DashboardGrantCard
                   ref={grant.id === pendingGrantId ? cardRef : undefined}
@@ -548,7 +548,7 @@ return (
           </div>
           
           {displayedGrants.applied.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
               {displayedGrants.applied.map((grant) => (
                 <DashboardGrantCard
                   ref={grant.id === pendingGrantId ? cardRef : undefined}
@@ -598,7 +598,7 @@ return (
           </div>
           
           {displayedGrants.ignored.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
               {displayedGrants.ignored.map((grant) => (
                 <DashboardGrantCard
                   ref={grant.id === pendingGrantId ? cardRef : undefined}
