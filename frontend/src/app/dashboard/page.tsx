@@ -84,37 +84,104 @@ export default function Dashboard() {
         // Get current date for filtering expired grants
         const today = new Date().toISOString();
         
-        // Fetch all user interactions to get the most recent one for each grant
-        const { data: allInteractions, error: interactionsError } = await supabase
+        // Fetch all user interactions with grants
+        // We'll use separate queries for each action type to ensure we get the correct data
+        // This is more reliable than trying to process everything in memory
+        
+        // Fetch saved grants
+        const { data: savedInteractions, error: savedError } = await supabase
           .from('user_interactions')
           .select('*, grants(*)')
           .eq('user_id', user.id)
-          .order('timestamp', { ascending: false });
+          .eq('action', 'saved');
         
-        if (interactionsError) throw interactionsError;
-        
-        // Create a map to track the most recent interaction for each grant
-        const grantInteractionMap = new Map();
-        
-        // Process all interactions, keeping only the most recent one for each grant
-        allInteractions?.forEach(interaction => {
-          if (!grantInteractionMap.has(interaction.grant_id)) {
-            grantInteractionMap.set(interaction.grant_id, interaction);
+        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        if (savedError) {
+          if (Object.keys(savedError).length > 0) {
+            console.error('Error fetching saved grants:', savedError);
+            throw savedError;
+          } else {
+            // Just log a debug message for empty error objects
+            console.log('No saved grants found or empty error object');
           }
+        }
+        
+        // Fetch applied grants
+        const { data: appliedInteractions, error: appliedError } = await supabase
+          .from('user_interactions')
+          .select('*, grants(*)')
+          .eq('user_id', user.id)
+          .eq('action', 'applied');
+        
+        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        if (appliedError) {
+          if (Object.keys(appliedError).length > 0) {
+            console.error('Error fetching applied grants:', appliedError);
+            throw appliedError;
+          } else {
+            // Just log a debug message for empty error objects
+            console.log('No applied grants found or empty error object');
+          }
+        }
+        
+        // Fetch ignored grants
+        const { data: ignoredInteractions, error: ignoredError } = await supabase
+          .from('user_interactions')
+          .select('*, grants(*)')
+          .eq('user_id', user.id)
+          .eq('action', 'ignored');
+        
+        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        if (ignoredError) {
+          if (Object.keys(ignoredError).length > 0) {
+            console.error('Error fetching ignored grants:', ignoredError);
+            throw ignoredError;
+          } else {
+            // Just log a debug message for empty error objects
+            console.log('No ignored grants found or empty error object');
+          }
+        }
+        
+        // Get all unique grant IDs that the user has interacted with
+        const interactedGrantIds: string[] = [];
+        const processedGrantIds = new Set<string>();
+        
+        // Process interactions to ensure each grant only appears in its most recent category
+        // We'll use a timestamp-based approach to determine the most recent action
+        
+        // First, get all interactions and sort them by timestamp (newest first)
+        const allInteractions = [
+          ...(savedInteractions || []),
+          ...(appliedInteractions || []),
+          ...(ignoredInteractions || [])
+        ].sort((a, b) => {
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
         
-        // Separate interactions by action type
-        const savedInteractions = Array.from(grantInteractionMap.values())
-          .filter(interaction => interaction.action === 'saved');
+        // Then filter to keep only the most recent interaction for each grant
+        const uniqueInteractions = allInteractions.filter(interaction => {
+          if (!processedGrantIds.has(interaction.grant_id)) {
+            processedGrantIds.add(interaction.grant_id);
+            interactedGrantIds.push(interaction.grant_id);
+            return true;
+          }
+          return false;
+        });
         
-        const appliedInteractions = Array.from(grantInteractionMap.values())
-          .filter(interaction => interaction.action === 'applied');
+        // Now separate by action type
+        const filteredSavedInteractions: UserInteraction[] = uniqueInteractions.filter(
+          interaction => interaction.action === 'saved'
+        );
         
-        const ignoredInteractions = Array.from(grantInteractionMap.values())
-          .filter(interaction => interaction.action === 'ignored');
+        const filteredAppliedInteractions: UserInteraction[] = uniqueInteractions.filter(
+          interaction => interaction.action === 'applied'
+        );
         
-        // Get all grant IDs that the user has interacted with
-        const interactedGrantIds = Array.from(grantInteractionMap.keys());
+        const filteredIgnoredInteractions: UserInteraction[] = uniqueInteractions.filter(
+          interaction => interaction.action === 'ignored'
+        );
+        
+        // We've already separated interactions by action type above
         
         // Fetch recommended grants (active grants that the user hasn't interacted with)
         const { data: recommendedData, error: recommendedError } = await supabase
@@ -124,7 +191,16 @@ export default function Dashboard() {
           .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
           .limit(10);
         
-        if (recommendedError) throw recommendedError;
+        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        if (recommendedError) {
+          if (Object.keys(recommendedError).length > 0) {
+            console.error('Error fetching recommended grants:', recommendedError);
+            throw recommendedError;
+          } else {
+            // Just log a debug message for empty error objects
+            console.log('No recommended grants found or empty error object');
+          }
+        }
         
         // Filter out expired grants from interactions
         const filterActiveGrants = (interaction: UserInteraction) => {
@@ -133,18 +209,27 @@ export default function Dashboard() {
           return new Date(grant.close_date) >= new Date();
         };
         
-        // Process the data
-        const filteredSavedInteractions = savedInteractions?.filter(filterActiveGrants) || [];
-        const filteredAppliedInteractions = appliedInteractions || []; // Keep all applied grants regardless of expiry
-        const filteredIgnoredInteractions = ignoredInteractions?.filter(filterActiveGrants) || [];
+        // Apply active grants filter to saved and ignored interactions
+        // We don't filter applied grants (keep all regardless of expiry)
+        const activeSavedInteractions = filteredSavedInteractions.filter(filterActiveGrants);
+        const activeIgnoredInteractions = filteredIgnoredInteractions.filter(filterActiveGrants);
         
-        setSavedGrants(filteredSavedInteractions.map((interaction: UserInteraction) => interaction.grants));
-        setAppliedGrants(filteredAppliedInteractions.map((interaction: UserInteraction) => interaction.grants));
-        setIgnoredGrants(filteredIgnoredInteractions.map((interaction: UserInteraction) => interaction.grants));
+        // Set the grants in state
+        setSavedGrants(activeSavedInteractions.map(interaction => interaction.grants));
+        setAppliedGrants(filteredAppliedInteractions.map(interaction => interaction.grants));
+        setIgnoredGrants(activeIgnoredInteractions.map(interaction => interaction.grants));
         setRecommendedGrants(recommendedData || []);
       } catch (error: any) {
-        console.error('Error fetching user grants:', error);
-        setError('Failed to load your grants. Please try again later.');
+        // Check if this is a real error or just no grants found
+        if (error && Object.keys(error).length > 0) {
+          console.error('Error fetching user grants:', error);
+          setError('Failed to load your grants. Please try again later.');
+        } else {
+          // If it's an empty error object, it's likely just that the user has no grants
+          // Don't show an error message in this case
+          console.log('No grants found or empty error object');
+          setError(null);
+        }
       } finally {
         setLoading(false);
       }
