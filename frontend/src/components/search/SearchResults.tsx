@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import GrantCard from '@/components/GrantCard';
 import { Grant } from '@/types/grant';
 
@@ -14,9 +14,15 @@ interface SearchResultsProps {
   onSave: (grantId: string) => Promise<void>;
   onShare: (grantId: string) => Promise<void>;
   onIgnore: (grantId: string) => Promise<void>;
+  onConfirmApply?: (grantId: string) => Promise<void>; // New prop for handling confirmation
 }
 
-const SearchResults: React.FC<SearchResultsProps> = ({
+// Define the ref type
+export interface SearchResultsRef {
+  fadeAndRemoveCard: (grantId: string) => Promise<void>;
+}
+
+const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
   grants,
   loading,
   error,
@@ -27,10 +33,12 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   onApply,
   onSave,
   onShare,
-  onIgnore
-}) => {
+  onIgnore,
+  onConfirmApply
+}, ref) => {
   const [fadingGrants, setFadingGrants] = useState<Set<string>>(new Set());
 
+  // Handle interactions that should immediately fade the card (save, ignore)
   const handleInteraction = async (grantId: string, action: () => Promise<void>) => {
     setFadingGrants(prev => new Set([...prev, grantId]));
     
@@ -47,6 +55,34 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       });
     }
   };
+
+  // Special handler for apply button that doesn't fade the card immediately
+  const handleApplyClick = (grantId: string) => {
+    // Just call the onApply callback without fading the card
+    onApply(grantId);
+  };
+
+  // This function will be called after the user confirms in the dialog
+  const fadeAndRemoveCard = async (grantId: string) => {
+    setFadingGrants(prev => new Set([...prev, grantId]));
+    
+    // Wait for fade animation to complete
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Call the onConfirmApply callback if provided
+    if (onConfirmApply) {
+      await onConfirmApply(grantId);
+    }
+  };
+
+  // Expose the fadeAndRemoveCard function to parent components
+  React.useImperativeHandle(
+    ref,
+    () => ({
+      fadeAndRemoveCard
+    }),
+    [fadeAndRemoveCard]
+  );
   return (
     <div>
       {/* Results header */}
@@ -98,7 +134,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                 fundingAmount={grant.award_ceiling}
                 description={grant.description}
                 categories={grant.activity_category || []}
-                onApply={() => handleInteraction(grant.id, () => onApply(grant.id))}
+                onApply={() => handleApplyClick(grant.id)}
                 onSave={() => handleInteraction(grant.id, () => onSave(grant.id))}
                 onShare={() => onShare(grant.id)}
                 onIgnore={() => handleInteraction(grant.id, () => onIgnore(grant.id))}
@@ -174,6 +210,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       )}
     </div>
   );
-};
+});
+
+// Add display name for debugging
+SearchResults.displayName = 'SearchResults';
 
 export default SearchResults;

@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
+import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
 import DashboardSearchBar from '@/components/dashboard/DashboardSearchBar';
 
@@ -41,6 +43,9 @@ export default function Dashboard() {
   const [ignoredGrants, setIgnoredGrants] = useState<Grant[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
+  const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
+  const [pendingGrantTitle, setPendingGrantTitle] = useState<string>('');
 
   // Filter grants based on search term
   const filterGrants = (grants: Grant[]) => {
@@ -170,8 +175,69 @@ export default function Dashboard() {
     }
   };
 
+  // Reference to the card component's fadeAndRemoveCard function
+  const cardRef = useRef<{
+    fadeAndRemoveCard: () => Promise<void>;
+  } | null>(null);
+
+  // Function to handle apply button click and show confirmation popup
+  const handleApplyClick = (grantId: string): Promise<void> => {
+    return new Promise<void>(resolve => {
+      // Find the grant in any of the lists
+      const grant = recommendedGrants.find(g => g.id === grantId) ||
+                   savedGrants.find(g => g.id === grantId) ||
+                   appliedGrants.find(g => g.id === grantId) ||
+                   ignoredGrants.find(g => g.id === grantId);
+      
+      if (!grant) {
+        resolve();
+        return;
+      }
+      
+      // Set the pending grant ID and title
+      setPendingGrantId(grantId);
+      setPendingGrantTitle(grant.title);
+      
+      // Show the confirmation popup
+      setShowApplyConfirmation(true);
+      resolve();
+    });
+  };
+  
+  // Function to handle confirmation response
+  const handleApplyConfirmation = async (didApply: boolean) => {
+    // Hide the confirmation popup
+    setShowApplyConfirmation(false);
+    
+    // If the user clicked "Yes" and we have a pending grant ID
+    if (didApply && pendingGrantId) {
+      // First fade out the card if we have a reference to it
+      if (cardRef.current) {
+        try {
+          await cardRef.current.fadeAndRemoveCard();
+        } catch (error) {
+          console.error('Error fading card:', error);
+        }
+      }
+      
+      // Then update the database
+      await handleGrantInteraction(pendingGrantId, 'applied', true); // true = remove from recommended
+    }
+    // If the user clicked "No", we don't need to do anything - the card stays in place
+    
+    // Reset the pending grant ID and title
+    setPendingGrantId(null);
+    setPendingGrantTitle('');
+  };
+  
+  // Function to be called after the card has faded out
+  const handleConfirmApply = async (grantId: string): Promise<void> => {
+    // This function will be called after the card has faded out
+    // The database update is already handled in handleApplyConfirmation
+  };
+
   // Handle grant interaction (save, apply, ignore)
-  const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+  const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored', removeFromRecommended: boolean = true) => {
     if (!user) return;
     
     try {
@@ -232,8 +298,8 @@ export default function Dashboard() {
         
         if (error) throw error;
 
-        // Remove from current lists if it's in them
-        if (recommendedGrants.some(g => g.id === grantId)) {
+        // Remove from recommended list only if specified
+        if (removeFromRecommended && recommendedGrants.some(g => g.id === grantId)) {
           setRecommendedGrants(recommendedGrants.filter(g => g.id !== grantId));
           
           // Fetch one more grant to replace the one that was removed from recommended
@@ -382,7 +448,8 @@ return (
           {displayedGrants.recommended.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {displayedGrants.recommended.map((grant) => (
-                <GrantCard
+                <DashboardGrantCard
+                  ref={grant.id === pendingGrantId ? cardRef : undefined}
                   key={grant.id}
                   id={grant.id}
                   title={grant.title}
@@ -392,12 +459,13 @@ return (
                   description={grant.description}
                   categories={grant.activity_category || []}
                   onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onApply={() => handleApplyClick(grant.id)}
                   onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   onShare={() => handleShare(grant.id)}
                   isSaved={false}
                   isApplied={false}
                   isIgnored={false}
+                  onConfirmApply={() => handleConfirmApply(grant.id)}
                 />
               ))}
             </div>
@@ -432,7 +500,8 @@ return (
           {displayedGrants.saved.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {displayedGrants.saved.map((grant) => (
-                <GrantCard
+                <DashboardGrantCard
+                  ref={grant.id === pendingGrantId ? cardRef : undefined}
                   key={grant.id}
                   id={grant.id}
                   title={grant.title}
@@ -442,10 +511,11 @@ return (
                   description={grant.description}
                   categories={grant.activity_category || []}
                   onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onApply={() => handleApplyClick(grant.id)}
                   onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   onShare={() => handleShare(grant.id)}
                   isSaved={true}
+                  onConfirmApply={() => handleConfirmApply(grant.id)}
                 />
               ))}
             </div>
@@ -480,7 +550,8 @@ return (
           {displayedGrants.applied.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {displayedGrants.applied.map((grant) => (
-                <GrantCard
+                <DashboardGrantCard
+                  ref={grant.id === pendingGrantId ? cardRef : undefined}
                   key={grant.id}
                   id={grant.id}
                   title={grant.title}
@@ -490,10 +561,11 @@ return (
                   description={grant.description}
                   categories={grant.activity_category || []}
                   onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onApply={() => handleApplyClick(grant.id)}
                   onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   onShare={() => handleShare(grant.id)}
                   isApplied={true}
+                  onConfirmApply={() => handleConfirmApply(grant.id)}
                 />
               ))}
             </div>
@@ -528,7 +600,8 @@ return (
           {displayedGrants.ignored.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {displayedGrants.ignored.map((grant) => (
-                <GrantCard
+                <DashboardGrantCard
+                  ref={grant.id === pendingGrantId ? cardRef : undefined}
                   key={grant.id}
                   id={grant.id}
                   title={grant.title}
@@ -538,10 +611,11 @@ return (
                   description={grant.description}
                   categories={grant.activity_category || []}
                   onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleGrantInteraction(grant.id, 'applied')}
+                  onApply={() => handleApplyClick(grant.id)}
                   onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                   onShare={() => handleShare(grant.id)}
                   isIgnored={true}
+                  onConfirmApply={() => handleConfirmApply(grant.id)}
                 />
               ))}
             </div>
@@ -559,6 +633,13 @@ return (
         </section>
       )}
     </div>
+    {/* Apply Confirmation Popup */}
+    <ApplyConfirmationPopup
+      isOpen={showApplyConfirmation}
+      grantTitle={pendingGrantTitle}
+      onConfirm={() => handleApplyConfirmation(true)}
+      onCancel={() => handleApplyConfirmation(false)}
+    />
   </Layout>
 );
 }

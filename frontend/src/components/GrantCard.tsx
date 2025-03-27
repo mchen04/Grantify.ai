@@ -36,7 +36,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
   isIgnored,
   isSaved
 }) => {
-  const formattedDate = closeDate 
+  const formattedDate = closeDate
     ? new Date(closeDate).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -44,11 +44,11 @@ const GrantCard: React.FC<GrantCardProps> = ({
       })
     : 'No deadline specified';
   
-  const daysRemaining = closeDate 
+  const daysRemaining = closeDate
     ? Math.ceil((new Date(closeDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
     : null;
   
-  const formattedAmount = fundingAmount 
+  const formattedAmount = fundingAmount
     ? new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -60,13 +60,29 @@ const GrantCard: React.FC<GrantCardProps> = ({
     ? `${description.substring(0, 150)}...`
     : description || 'No description available';
 
+  const handleApplyClick = () => {
+    // If already applied, just call the original handler
+    if (isApplied) {
+      onApply?.();
+      return;
+    }
+    
+    // Open the application link in a new tab
+    window.open(`https://www.grants.gov/view-grant.html?oppId=${id}`, '_blank');
+    
+    // Call the onApply handler which will show the confirmation popup
+    if (onApply) {
+      onApply();
+    }
+  };
+
   return (
     <div className="grant-card p-4 transition-opacity duration-300 ease-in-out">
       <div className="flex flex-col h-full">
         {/* Header with action buttons */}
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
-            <Link 
+            <Link
               href={`/grants/${id}`}
               className="grant-card-title text-lg mb-1 block hover:text-primary-600 transition-colors line-clamp-2 max-h-[3.5rem]"
               title={title}
@@ -83,7 +99,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
           {/* Action buttons in top right */}
           <div className="flex items-start gap-1 flex-shrink-0">
             {/* Save Grant */}
-            <button 
+            <button
               className={`p-1.5 transition-colors group relative ${isSaved ? 'text-primary-600' : 'text-gray-400 hover:text-primary-600'}`}
               title={isSaved ? "Unsave Grant" : "Save Grant"}
               onClick={onSave}
@@ -97,7 +113,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
             </button>
 
             {/* Ignore Grant */}
-            <button 
+            <button
               className={`p-1.5 transition-colors group relative ${isIgnored ? 'text-red-600' : 'text-gray-400 hover:text-red-600'}`}
               title={isIgnored ? "Unignore Grant" : "Ignore Grant"}
               onClick={onIgnore}
@@ -111,10 +127,10 @@ const GrantCard: React.FC<GrantCardProps> = ({
             </button>
 
             {/* Apply on Grants.gov */}
-            <button 
+            <button
               className={`p-1.5 transition-colors group relative ${isApplied ? 'text-green-600' : 'text-gray-400 hover:text-green-600'}`}
               title={isApplied ? "Unapply Grant" : "Apply on Grants.gov"}
-              onClick={onApply}
+              onClick={handleApplyClick}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill={isApplied ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -125,7 +141,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
             </button>
 
             {/* Share Grant */}
-            <button 
+            <button
               className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors group relative"
               title="Share Grant"
               onClick={onShare}
@@ -144,6 +160,8 @@ const GrantCard: React.FC<GrantCardProps> = ({
         <p className="text-sm text-gray-600 mb-3 line-clamp-2">
           {truncatedDescription}
         </p>
+
+        {/* No Apply Confirmation here - moved to a global popup */}
 
         {/* Footer */}
         <div className="mt-auto">
@@ -165,8 +183,8 @@ const GrantCard: React.FC<GrantCardProps> = ({
           <div className="flex items-center text-sm">
             <span className="text-gray-500">Deadline:</span>
             <span className={`ml-1.5 ${
-              daysRemaining !== null && daysRemaining < 30 ? 'text-red-600' : 
-              daysRemaining !== null && daysRemaining < 60 ? 'text-orange-600' : 
+              daysRemaining !== null && daysRemaining < 30 ? 'text-red-600' :
+              daysRemaining !== null && daysRemaining < 60 ? 'text-orange-600' :
               'text-green-600'
             }`}>
               {daysRemaining !== null ? `${daysRemaining} days left` : 'Open-ended'}

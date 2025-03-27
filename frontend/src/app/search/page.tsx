@@ -1,6 +1,7 @@
  "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
 import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
@@ -28,6 +29,9 @@ export default function Search() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
+  const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
+  const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
+  const [pendingGrantTitle, setPendingGrantTitle] = useState<string>('');
 
   const [filter, setFilter] = useState<GrantFilter>({
     searchTerm: '',
@@ -158,7 +162,7 @@ export default function Search() {
     });
   };
 
-  const handleInteraction = async (grantId: string, action: 'applied' | 'saved' | 'ignored'): Promise<void> => {
+  const handleInteraction = async (grantId: string, action: 'applied' | 'saved' | 'ignored', removeFromUI: boolean = true): Promise<void> => {
     if (!user) return;
 
     try {
@@ -174,46 +178,100 @@ export default function Search() {
 
       if (insertError) throw insertError;
 
-      // Remove the grant from the UI
-      setGrants(prevGrants => prevGrants.filter(g => g.id !== grantId));
+      // Only remove the grant from the UI if specified (for "applied" action, this depends on user confirmation)
+      if (removeFromUI) {
+        // Remove the grant from the UI
+        setGrants(prevGrants => prevGrants.filter(g => g.id !== grantId));
 
-      // Fetch one more grant to replace the one that was removed
-      const currentCount = grants.length;
-      if (currentCount > 0) {
-        const lastGrant = grants[currentCount - 1];
-        const { data: newGrants, error } = await supabase
-          .from('grants')
-          .select(`
-            *,
-            interactions:user_interactions!left(action, timestamp)
-          `)
-          .eq('interactions.user_id', user.id)
-          .is('interactions', null)
-          .gt('id', lastGrant.id)
-          .limit(1);
+        // Fetch one more grant to replace the one that was removed
+        const currentCount = grants.length;
+        if (currentCount > 0) {
+          const lastGrant = grants[currentCount - 1];
+          const { data: newGrants, error } = await supabase
+            .from('grants')
+            .select(`
+              *,
+              interactions:user_interactions!left(action, timestamp)
+            `)
+            .eq('interactions.user_id', user.id)
+            .is('interactions', null)
+            .gt('id', lastGrant.id)
+            .limit(1);
 
-        if (!error && newGrants && newGrants.length > 0) {
-          // Add the new grant to the end of the list
-          setGrants(prevGrants => [...prevGrants, ...newGrants]);
+          if (!error && newGrants && newGrants.length > 0) {
+            // Add the new grant to the end of the list
+            setGrants(prevGrants => [...prevGrants, ...newGrants]);
+          }
         }
       }
-
-      // Open grants.gov if applying
-      if (action === 'applied') {
-        window.open(`https://www.grants.gov/view-grant.html?oppId=${grantId}`, '_blank');
-      }
+      
+      // Note: We no longer open grants.gov here as it's handled in the GrantCard component
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error.message || error);
       setError(`Failed to ${action} grant: ${error.message || 'Please try again.'}`);
     }
   };
 
+  // Function to handle apply button click and show confirmation popup
+  const handleApplyClick = (grantId: string): Promise<void> => {
+    return new Promise<void>(resolve => {
+      // Find the grant in the list
+      const grant = grants.find(g => g.id === grantId);
+      
+      if (!grant) {
+        resolve();
+        return;
+      }
+      
+      // Set the pending grant ID and title
+      setPendingGrantId(grantId);
+      setPendingGrantTitle(grant.title);
+      
+      // Show the confirmation popup
+      setShowApplyConfirmation(true);
+      resolve();
+    });
+  };
+  
+  // Reference to the SearchResults component's fadeAndRemoveCard function
+  const searchResultsRef = React.useRef<{
+    fadeAndRemoveCard: (grantId: string) => Promise<void>;
+  } | null>(null);
+
+  // Function to handle confirmation response
+  const handleApplyConfirmation = async (didApply: boolean) => {
+    // Hide the confirmation popup
+    setShowApplyConfirmation(false);
+    
+    // If the user clicked "Yes" and we have a pending grant ID
+    if (didApply && pendingGrantId) {
+      // First fade out the card using the SearchResults component's function
+      if (searchResultsRef.current) {
+        await searchResultsRef.current.fadeAndRemoveCard(pendingGrantId);
+      }
+      
+      // Then update the database
+      await handleInteraction(pendingGrantId, 'applied', true); // true = remove from UI
+    }
+    // If "No", do nothing and the card remains visible
+    
+    // Reset the pending grant ID and title
+    setPendingGrantId(null);
+    setPendingGrantTitle('');
+  };
+
+  // Function to be passed to SearchResults for handling confirmation
+  const handleConfirmApply = async (grantId: string): Promise<void> => {
+    // This function will be called after the card has faded out
+    // The database update is already handled in handleApplyConfirmation
+  };
+  
   const handleApply = async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'applied');
+    await handleInteraction(grantId, 'applied', true);
   };
 
   const handleSave = async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'saved');
+    await handleInteraction(grantId, 'saved', true);
   };
 
   const handleShare = async (grantId: string) => {
@@ -239,7 +297,7 @@ export default function Search() {
   };
 
   const handleIgnore = async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'ignored');
+    await handleInteraction(grantId, 'ignored', true);
   };
 
   return (
@@ -317,6 +375,7 @@ export default function Search() {
           
           {/* Search Results */}
           <SearchResults
+            ref={searchResultsRef}
             grants={grants}
             loading={loading}
             error={error}
@@ -324,10 +383,11 @@ export default function Search() {
             totalPages={totalPages}
             grantsPerPage={GRANTS_PER_PAGE}
             goToPage={goToPage}
-            onApply={handleApply}
+            onApply={handleApplyClick}
             onSave={handleSave}
             onShare={handleShare}
             onIgnore={handleIgnore}
+            onConfirmApply={handleConfirmApply}
           />
         </div>
 
@@ -343,6 +403,14 @@ export default function Search() {
           </div>
         </div>
       </div>
+      
+      {/* Apply Confirmation Popup */}
+      <ApplyConfirmationPopup
+        isOpen={showApplyConfirmation}
+        grantTitle={pendingGrantTitle}
+        onConfirm={() => handleApplyConfirmation(true)}
+        onCancel={() => handleApplyConfirmation(false)}
+      />
     </Layout>
   );
 }
