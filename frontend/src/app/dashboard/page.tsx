@@ -186,28 +186,96 @@ export default function Dashboard() {
         
         // We've already separated interactions by action type above
         
-        // Fetch recommended grants (active grants that the user hasn't interacted with)
+        // Fetch recommended grants based on user preferences
         let recommendedData = [];
         
         try {
-          // Only apply the "not in" filter if the user has interacted with grants
+          // First, fetch user preferences
+          const { data: userPreferences, error: preferencesError } = await supabase
+            .from('user_preferences')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (preferencesError && preferencesError.code !== 'PGRST116') {
+            console.log('Error fetching user preferences:', preferencesError);
+          }
+          
+          // Build query based on preferences
           let query = supabase
             .from('grants')
             .select('*')
-            .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
-            .limit(10);
+            .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
           
-          // Only add the "not in" filter if there are interacted grants
+          // Always exclude grants the user has already interacted with
           if (interactedGrantIds.length > 0) {
             query = query.not('id', 'in', `(${interactedGrantIds.join(',')})`);
           }
           
+          // Apply topic preferences if available
+          if (userPreferences?.topics && userPreferences.topics.length > 0) {
+            // Use overlap operator to find grants with matching topics
+            query = query.overlaps('activity_category', userPreferences.topics);
+          }
+          
+          // Apply funding range preferences if available
+          if (userPreferences?.funding_min !== undefined && userPreferences.funding_min > 0) {
+            query = query.gte('award_ceiling', userPreferences.funding_min);
+          }
+          
+          if (userPreferences?.funding_max !== undefined && userPreferences.funding_max < 1000000000) {
+            query = query.lte('award_ceiling', userPreferences.funding_max);
+          }
+          
+          // Apply agency preferences if available
+          if (userPreferences?.agencies && userPreferences.agencies.length > 0) {
+            query = query.in('agency_name', userPreferences.agencies);
+          }
+          
+          // Apply eligible applicant types if available
+          if (userPreferences?.eligible_applicant_types && userPreferences.eligible_applicant_types.length > 0) {
+            // This would require a more complex query depending on how eligible_applicant_types is stored
+            // For now, we'll assume it's a simple match
+            // query = query.overlaps('eligible_applicant_types', userPreferences.eligible_applicant_types);
+          }
+          
+          // Limit results
+          query = query.limit(10);
+          
           const { data, error } = await query;
           
           if (error) {
-            console.log('Note: Could not fetch recommended grants, using empty array');
+            console.log('Note: Could not fetch recommended grants, using empty array', error);
           } else {
             recommendedData = data || [];
+            
+            // If we don't have enough grants based on preferences, fetch more without preference filters
+            if (recommendedData.length < 5) {
+              console.log('Not enough grants based on preferences, fetching more');
+              
+              let backupQuery = supabase
+                .from('grants')
+                .select('*')
+                .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
+              
+              if (interactedGrantIds.length > 0) {
+                backupQuery = backupQuery.not('id', 'in', `(${interactedGrantIds.join(',')})`);
+              }
+              
+              // Exclude grants we already have
+              if (recommendedData.length > 0) {
+                const existingIds = recommendedData.map(g => g.id);
+                backupQuery = backupQuery.not('id', 'in', `(${existingIds.join(',')})`);
+              }
+              
+              backupQuery = backupQuery.limit(10 - recommendedData.length);
+              
+              const { data: backupData, error: backupError } = await backupQuery;
+              
+              if (!backupError && backupData) {
+                recommendedData = [...recommendedData, ...backupData];
+              }
+            }
           }
         } catch (e) {
           console.log('Exception fetching recommended grants, using empty array', e);
