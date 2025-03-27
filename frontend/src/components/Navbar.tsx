@@ -76,8 +76,15 @@ const Navbar: React.FC = () => {
                     <div className="px-4 py-2 text-sm text-gray-600 border-b border-gray-100 truncate">
                       {user.email}
                     </div>
-                    <Link 
+                    <Link
                       href="/preferences"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      Preferences
+                    </Link>
+                    <Link
+                      href="/settings"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
                       onClick={() => setDropdownOpen(false)}
                     >

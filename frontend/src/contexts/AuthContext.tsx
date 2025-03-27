@@ -14,6 +14,8 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
+  updatePassword: (newPassword: string, currentPassword: string) => Promise<{ error: any }>;
+  updateEmail: (newEmail: string, currentPassword: string) => Promise<{ error: any }>;
 };
 
 // Create the context with a default value
@@ -97,6 +99,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Update password function with current password verification
+  const updatePassword = async (newPassword: string, currentPassword: string) => {
+    try {
+      // First verify the current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword
+      });
+      
+      if (signInError) {
+        return { error: { message: 'Current password is incorrect' } };
+      }
+      
+      // If verification succeeds, update the password
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
+  };
+
+  // Update email function with current password verification
+  const updateEmail = async (newEmail: string, currentPassword: string) => {
+    try {
+      // First verify the current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword
+      });
+      
+      if (signInError) {
+        return { error: { message: 'Current password is incorrect' } };
+      }
+      
+      // If verification succeeds, update the email
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      return { error };
+    } catch (error) {
+      return { error };
+    }
+  };
+
   // Create the value object
   const value = {
     user,
@@ -106,6 +150,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signIn,
     signOut,
     resetPassword,
+    updatePassword,
+    updateEmail,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
