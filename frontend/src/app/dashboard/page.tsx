@@ -84,42 +84,43 @@ export default function Dashboard() {
         // Get current date for filtering expired grants
         const today = new Date().toISOString();
         
-        // Fetch saved grants
-        const { data: savedInteractions, error: savedError } = await supabase
+        // Fetch all user interactions to get the most recent one for each grant
+        const { data: allInteractions, error: interactionsError } = await supabase
           .from('user_interactions')
           .select('*, grants(*)')
           .eq('user_id', user.id)
-          .eq('action', 'saved');
+          .order('timestamp', { ascending: false });
         
-        if (savedError) throw savedError;
+        if (interactionsError) throw interactionsError;
         
-        // Fetch applied grants
-        const { data: appliedInteractions, error: appliedError } = await supabase
-          .from('user_interactions')
-          .select('*, grants(*)')
-          .eq('user_id', user.id)
-          .eq('action', 'applied');
+        // Create a map to track the most recent interaction for each grant
+        const grantInteractionMap = new Map();
         
-        if (appliedError) throw appliedError;
+        // Process all interactions, keeping only the most recent one for each grant
+        allInteractions?.forEach(interaction => {
+          if (!grantInteractionMap.has(interaction.grant_id)) {
+            grantInteractionMap.set(interaction.grant_id, interaction);
+          }
+        });
         
-        // Fetch ignored grants
-        const { data: ignoredInteractions, error: ignoredError } = await supabase
-          .from('user_interactions')
-          .select('*, grants(*)')
-          .eq('user_id', user.id)
-          .eq('action', 'ignored');
+        // Separate interactions by action type
+        const savedInteractions = Array.from(grantInteractionMap.values())
+          .filter(interaction => interaction.action === 'saved');
         
-        if (ignoredError) throw ignoredError;
+        const appliedInteractions = Array.from(grantInteractionMap.values())
+          .filter(interaction => interaction.action === 'applied');
+        
+        const ignoredInteractions = Array.from(grantInteractionMap.values())
+          .filter(interaction => interaction.action === 'ignored');
+        
+        // Get all grant IDs that the user has interacted with
+        const interactedGrantIds = Array.from(grantInteractionMap.keys());
         
         // Fetch recommended grants (active grants that the user hasn't interacted with)
         const { data: recommendedData, error: recommendedError } = await supabase
           .from('grants')
-          .select(`
-            *,
-            interactions:user_interactions!left(action, timestamp)
-          `)
-          .eq('interactions.user_id', user.id)
-          .is('interactions', null)
+          .select('*')
+          .not('id', 'in', interactedGrantIds.length > 0 ? `(${interactedGrantIds.join(',')})` : '(0)')
           .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
           .limit(10);
         
