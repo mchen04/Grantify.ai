@@ -95,11 +95,12 @@ export default function Dashboard() {
           .eq('user_id', user.id)
           .eq('action', 'saved');
         
-        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        // Only log real errors, not empty objects which often occur when no grants are found
         if (savedError) {
           if (Object.keys(savedError).length > 0) {
             console.error('Error fetching saved grants:', savedError);
-            throw savedError;
+            // Don't throw the error, just log it
+            console.log('Continuing despite saved grants error');
           } else {
             // Just log a debug message for empty error objects
             console.log('No saved grants found or empty error object');
@@ -113,11 +114,12 @@ export default function Dashboard() {
           .eq('user_id', user.id)
           .eq('action', 'applied');
         
-        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        // Only log real errors, not empty objects which often occur when no grants are found
         if (appliedError) {
           if (Object.keys(appliedError).length > 0) {
             console.error('Error fetching applied grants:', appliedError);
-            throw appliedError;
+            // Don't throw the error, just log it
+            console.log('Continuing despite applied grants error');
           } else {
             // Just log a debug message for empty error objects
             console.log('No applied grants found or empty error object');
@@ -131,11 +133,12 @@ export default function Dashboard() {
           .eq('user_id', user.id)
           .eq('action', 'ignored');
         
-        // Only log and throw real errors, not empty objects which often occur when no grants are found
+        // Only log real errors, not empty objects which often occur when no grants are found
         if (ignoredError) {
           if (Object.keys(ignoredError).length > 0) {
             console.error('Error fetching ignored grants:', ignoredError);
-            throw ignoredError;
+            // Don't throw the error, just log it
+            console.log('Continuing despite ignored grants error');
           } else {
             // Just log a debug message for empty error objects
             console.log('No ignored grants found or empty error object');
@@ -184,22 +187,30 @@ export default function Dashboard() {
         // We've already separated interactions by action type above
         
         // Fetch recommended grants (active grants that the user hasn't interacted with)
-        const { data: recommendedData, error: recommendedError } = await supabase
-          .from('grants')
-          .select('*')
-          .not('id', 'in', interactedGrantIds.length > 0 ? `(${interactedGrantIds.join(',')})` : '(0)')
-          .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
-          .limit(10);
+        let recommendedData = [];
         
-        // Only log and throw real errors, not empty objects which often occur when no grants are found
-        if (recommendedError) {
-          if (Object.keys(recommendedError).length > 0) {
-            console.error('Error fetching recommended grants:', recommendedError);
-            throw recommendedError;
-          } else {
-            // Just log a debug message for empty error objects
-            console.log('No recommended grants found or empty error object');
+        try {
+          // Only apply the "not in" filter if the user has interacted with grants
+          let query = supabase
+            .from('grants')
+            .select('*')
+            .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
+            .limit(10);
+          
+          // Only add the "not in" filter if there are interacted grants
+          if (interactedGrantIds.length > 0) {
+            query = query.not('id', 'in', `(${interactedGrantIds.join(',')})`);
           }
+          
+          const { data, error } = await query;
+          
+          if (error) {
+            console.log('Note: Could not fetch recommended grants, using empty array');
+          } else {
+            recommendedData = data || [];
+          }
+        } catch (e) {
+          console.log('Exception fetching recommended grants, using empty array', e);
         }
         
         // Filter out expired grants from interactions
@@ -218,14 +229,18 @@ export default function Dashboard() {
         setSavedGrants(activeSavedInteractions.map(interaction => interaction.grants));
         setAppliedGrants(filteredAppliedInteractions.map(interaction => interaction.grants));
         setIgnoredGrants(activeIgnoredInteractions.map(interaction => interaction.grants));
-        setRecommendedGrants(recommendedData || []);
+        setRecommendedGrants(recommendedData);
       } catch (error: any) {
-        // Check if this is a real error or just no grants found
-        if (error && Object.keys(error).length > 0) {
+        // Check if this is a real error that should be displayed to the user
+        // For new users with no grants, we don't want to show an error
+        if (error &&
+            Object.keys(error).length > 0 &&
+            error.code !== 'PGRST116' && // This is the Postgrest error for "no rows returned"
+            error.message !== 'No grants found') {
           console.error('Error fetching user grants:', error);
           setError('Failed to load your grants. Please try again later.');
         } else {
-          // If it's an empty error object, it's likely just that the user has no grants
+          // If it's an empty error object or a "no data" error, it's likely just that the user has no grants
           // Don't show an error message in this case
           console.log('No grants found or empty error object');
           setError(null);
