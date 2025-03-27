@@ -188,7 +188,7 @@ export default function Home() {
           <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
             Why Choose Grantify?
           </h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="bg-white rounded-xl p-6 shadow-soft">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
                 <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -206,6 +206,15 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Powered Matching</h3>
               <p className="text-gray-600">Smart recommendations that learn from your preferences and choices.</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-soft">
+              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Agentic AI Processing</h3>
+              <p className="text-gray-600">Advanced AI that extracts key information like contact details and eligibility requirements from complex grant documents.</p>
             </div>
             <div className="bg-white rounded-xl p-6 shadow-soft">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
@@ -254,6 +263,10 @@ export default function Home() {
             <div className="bg-white rounded-xl p-6 shadow-soft">
               <h3 className="text-xl font-semibold text-gray-900 mb-3">What makes the AI match me with better results?</h3>
               <p className="text-gray-600">Our AI analyzes multiple factors including your field of research, funding requirements, and past interactions. It learns from your preferences to provide increasingly accurate matches over time.</p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-soft">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">How does the agentic AI help with grant applications?</h3>
+              <p className="text-gray-600">Our agentic AI automatically processes grant documentation to extract critical information like contact details, eligibility requirements, and submission guidelines. This saves you hours of reading through complex documents and helps you quickly determine if a grant is right for you.</p>
             </div>
           </div>
         </div>
