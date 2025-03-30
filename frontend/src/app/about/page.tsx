@@ -16,12 +16,13 @@ export default function AboutUs() {
             <h2 className="text-2xl font-semibold mb-4">The Mission</h2>
             <div className="bg-white rounded-lg shadow-md p-6">
               <p className="text-gray-700 mb-4">
-                Grantify.ai was born from a simple observation: finding and applying for grants is unnecessarily
-                complicated, especially for students and early-career researchers. As a student at UC Riverside,
-                I experienced this challenge firsthand and decided to create a solution.
+                Grantify.ai was born from a conversation with my dad. He had an innovative idea but was struggling to find
+                appropriate grants to fund it. Hearing about his frustrations with navigating complex grant websites and
+                understanding eligibility requirements, I realized this was a common problem that needed solving.
               </p>
               <p className="text-gray-700 mb-4">
-                My mission is to democratize access to grant opportunities for researchers, students,
+                As a student at UC Riverside, I've experienced firsthand how difficult it can be to find and secure funding
+                for projects and research. My mission is to democratize access to grant opportunities for researchers, students,
                 non-profits, educational institutions, and businesses. I believe that finding and
                 securing funding should be accessible to everyone with innovative ideas and impactful projects.
               </p>
@@ -155,7 +156,8 @@ export default function AboutUs() {
                 </div>
                 <div>
                   <h3 className="text-xl font-medium mb-1">Michael Chen</h3>
-                  <p className="text-gray-600 mb-2">Computer Science Student at UC Riverside</p>
+                  <p className="text-gray-600 mb-2">Third-year Computer Science Major, Entrepreneurship & Strategy Minor</p>
+                  <p className="text-gray-600 mb-2">UC Riverside • Graduating Spring 2026</p>
                   <div className="flex items-center mb-2">
                     <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full mr-2">
                       AMD Pervasive AI Contest Winner
@@ -168,29 +170,33 @@ export default function AboutUs() {
               </div>
               
               <p className="text-gray-700 mb-4">
-                Grantify.ai was created by Michael Chen, a Computer Science student at the University of California,
-                Riverside. After experiencing firsthand the challenges of finding and applying for grants,
-                Michael developed Grantify.ai to simplify the process for students and researchers.
+                Hi there! I created Grantify.ai after seeing how challenging it was for my dad and fellow students to navigate
+                the complex world of grants. With my background in AI and web development, I wanted to build something that
+                would make this process easier for everyone.
               </p>
               
-              <p className="text-gray-700 mb-4">
-                With expertise in artificial intelligence, machine learning, and full-stack development,
-                Michael combined his technical skills with his entrepreneurial mindset to build a platform
-                that addresses the real needs of grant seekers.
-              </p>
-              
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <h4 className="font-medium text-gray-900 mb-2">Technical Background</h4>
-                <p className="text-gray-700 mb-4">
-                  My experience with AI technologies, including supervised and unsupervised learning,
-                  reinforcement learning, and recommendation systems, has been instrumental in developing
-                  Grantify.ai's intelligent matching algorithms.
+              <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                <h4 className="font-medium text-blue-800 mb-2">Looking for Opportunities!</h4>
+                <p className="text-gray-700 mb-2">
+                  I'm currently seeking paid internships and entry-level positions in software engineering, AI/ML,
+                  and web development. If you're looking for a passionate developer with experience in these areas,
+                  I'd love to connect!
                 </p>
                 <p className="text-gray-700">
+                  Feel free to reach out via email or LinkedIn (contact details below) to discuss potential opportunities.
+                </p>
+              </div>
+              
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <h4 className="font-medium text-gray-900 mb-2">Personal Interests & Achievements</h4>
+                <p className="text-gray-700 mb-4">
+                  When I'm not coding, you can find me reading light novels, gaming, watching sports, exploring algorithmic
+                  sports betting, working on automation projects, or diving into web development.
+                </p>
+                <p className="text-gray-700 mb-4">
                   I was awarded the University Program Award at the AMD Pervasive AI Developer Contest for my project
                   PHiLIP (Personalized Human in Loop Image Production). This project was showcased at the AMD Advancing
-                  AI Event in San Francisco and demonstrated my ability to create practical AI applications that solve
-                  real-world problems.
+                  AI Event in San Francisco, demonstrating practical AI applications that solve real-world problems.
                 </p>
               </div>
             </div>
@@ -200,8 +206,26 @@ export default function AboutUs() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">Get in Touch</h2>
             <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100 mb-6">
+                <h3 className="text-xl font-bold text-blue-800 mb-2">Looking for New Opportunities!</h3>
+                <p className="text-gray-700 mb-3">
+                  I'm actively seeking paid internships and entry-level positions in:
+                </p>
+                <ul className="list-disc pl-5 mb-3 text-gray-700">
+                  <li>Software Engineering</li>
+                  <li>AI/ML Development</li>
+                  <li>Web Development (Frontend/Backend/Full-Stack)</li>
+                  <li>Data Science</li>
+                </ul>
+                <p className="text-gray-700 font-medium">
+                  If your company is hiring or you know of any opportunities, please reach out! I'm passionate about
+                  building impactful solutions and would love to bring my skills to your team.
+                </p>
+              </div>
+              
               <p className="text-gray-700 mb-4">
-                Have questions, feedback, or suggestions about Grantify.ai? I'd love to hear from you!
+                Have questions, feedback, or suggestions about Grantify.ai? Or want to discuss potential job opportunities?
+                I'd love to hear from you!
               </p>
               <div className="flex items-center mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600 mr-2" viewBox="0 0 20 20" fill="currentColor">

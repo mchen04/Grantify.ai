@@ -90,10 +90,10 @@ const Footer: React.FC = () => {
                 &copy; {currentYear} Grantify.ai. All rights reserved.
               </p>
               <div className="mt-4 md:mt-0 flex space-x-6">
-                <Link href="/privacy" className="text-sm text-gray-600 hover:text-primary-600 transition-colors">
+                <Link href="/privacy-policy" className="text-sm text-gray-600 hover:text-primary-600 transition-colors">
                   Privacy Policy
                 </Link>
-                <Link href="/terms" className="text-sm text-gray-600 hover:text-primary-600 transition-colors">
+                <Link href="/terms-of-service" className="text-sm text-gray-600 hover:text-primary-600 transition-colors">
                   Terms of Service
                 </Link>
               </div>
