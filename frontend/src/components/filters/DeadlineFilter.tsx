@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS } from '@/utils/constants';
 
 interface DeadlineFilterProps {
@@ -12,7 +12,7 @@ interface DeadlineFilterProps {
 }
 
 /**
- * Deadline filter component with dual sliders and checkboxes
+ * Deadline filter component with a dual-handle slider and checkboxes
  */
 const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
   deadlineMinDays,
@@ -23,6 +23,9 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
   setDeadlineMaxDays,
   handleDeadlineOptionChange
 }) => {
+  const rangeRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
+
   // Format the deadline display text
   const formatDeadlineText = (days: number) => {
     if (days === MAX_DEADLINE_DAYS) {
@@ -36,54 +39,105 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
     }
   };
 
+  // Calculate percentage for positioning handles
+  const minPercentage = ((deadlineMinDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
+  const maxPercentage = ((deadlineMaxDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
+
+  // Handle mouse/touch events for slider interaction
+  useEffect(() => {
+    if (!isDragging || !rangeRef.current) return;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!rangeRef.current) return;
+      
+      const rect = rangeRef.current.getBoundingClientRect();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const offsetX = clientX - rect.left;
+      const percentage = Math.min(Math.max(0, offsetX / rect.width), 1);
+      const value = Math.round(MIN_DEADLINE_DAYS + percentage * (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS));
+      
+      if (isDragging === 'min') {
+        if (value <= deadlineMaxDays) {
+          setDeadlineMinDays(value);
+        }
+      } else if (isDragging === 'max') {
+        if (value >= deadlineMinDays) {
+          setDeadlineMaxDays(value);
+        }
+      }
+    };
+
+    const handleEnd = () => {
+      setIsDragging(null);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('touchmove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchend', handleEnd);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDragging, deadlineMinDays, deadlineMaxDays, setDeadlineMinDays, setDeadlineMaxDays]);
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
         Deadline Range: {formatDeadlineText(deadlineMinDays)} - {formatDeadlineText(deadlineMaxDays)}
       </label>
       
-      {/* Minimum days slider */}
+      {/* Dual-handle slider */}
       <div className="mt-4 px-2">
-        <label className="block text-xs text-gray-600 mb-1">Minimum days:</label>
-        <input
-          type="range"
-          min={MIN_DEADLINE_DAYS}
-          max={MAX_DEADLINE_DAYS}
-          step="1"
-          value={deadlineMinDays}
-          onChange={(e) => {
-            const value = parseInt(e.target.value);
-            if (value <= deadlineMaxDays) {
-              setDeadlineMinDays(value);
-            }
-          }}
-          disabled={onlyNoDeadline}
-          className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${onlyNoDeadline ? 'opacity-50' : ''}`}
-        />
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
+        <div
+          ref={rangeRef}
+          className={`relative w-full h-2 bg-gray-200 rounded-lg ${onlyNoDeadline ? 'opacity-50' : ''}`}
+        >
+          {/* Selected range highlight */}
+          <div
+            className="absolute h-full bg-blue-500 rounded-lg"
+            style={{
+              left: `${minPercentage}%`,
+              width: `${maxPercentage - minPercentage}%`
+            }}
+          />
+          
+          {/* Minimum handle */}
+          <div
+            className={`absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
+            style={{ left: `${minPercentage}%` }}
+            onMouseDown={() => !onlyNoDeadline && setIsDragging('min')}
+            onTouchStart={() => !onlyNoDeadline && setIsDragging('min')}
+            role="slider"
+            aria-valuemin={MIN_DEADLINE_DAYS}
+            aria-valuemax={MAX_DEADLINE_DAYS}
+            aria-valuenow={deadlineMinDays}
+            aria-label="Minimum deadline days"
+            tabIndex={0}
+          />
+          
+          {/* Maximum handle */}
+          <div
+            className={`absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
+            style={{ left: `${maxPercentage}%` }}
+            onMouseDown={() => !onlyNoDeadline && setIsDragging('max')}
+            onTouchStart={() => !onlyNoDeadline && setIsDragging('max')}
+            role="slider"
+            aria-valuemin={MIN_DEADLINE_DAYS}
+            aria-valuemax={MAX_DEADLINE_DAYS}
+            aria-valuenow={deadlineMaxDays}
+            aria-label="Maximum deadline days"
+            tabIndex={0}
+          />
+        </div>
+        
+        <div className="flex justify-between text-xs text-gray-500 mt-3">
           <span>Today</span>
           <span>1 year+</span>
         </div>
-      </div>
-      
-      {/* Maximum days slider */}
-      <div className="mt-4 px-2">
-        <label className="block text-xs text-gray-600 mb-1">Maximum days:</label>
-        <input
-          type="range"
-          min={MIN_DEADLINE_DAYS}
-          max={MAX_DEADLINE_DAYS}
-          step="1"
-          value={deadlineMaxDays}
-          onChange={(e) => {
-            const value = parseInt(e.target.value);
-            if (value >= deadlineMinDays) {
-              setDeadlineMaxDays(value);
-            }
-          }}
-          disabled={onlyNoDeadline}
-          className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${onlyNoDeadline ? 'opacity-50' : ''}`}
-        />
       </div>
       
       <div className="mt-3 space-y-2">
