@@ -12,7 +12,7 @@ interface DeadlineFilterProps {
 }
 
 /**
- * Deadline filter component with a dual-handle slider and checkboxes
+ * Simplified deadline filter component
  */
 const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
   deadlineMinDays,
@@ -34,6 +34,14 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
       return "Today";
     } else if (days === 1) {
       return "1 day";
+    } else if (days === 7) {
+      return "1 week";
+    } else if (days === 30) {
+      return "1 month";
+    } else if (days === 90) {
+      return "3 months";
+    } else if (days === 180) {
+      return "6 months";
     } else {
       return `${days} days`;
     }
@@ -84,21 +92,56 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
     };
   }, [isDragging, deadlineMinDays, deadlineMaxDays, setDeadlineMinDays, setDeadlineMaxDays]);
 
+  // Predefined deadline ranges for quick selection
+  const deadlinePresets = [
+    { label: "Any", min: MIN_DEADLINE_DAYS, max: MAX_DEADLINE_DAYS },
+    { label: "Next 7 days", min: MIN_DEADLINE_DAYS, max: 7 },
+    { label: "Next 30 days", min: MIN_DEADLINE_DAYS, max: 30 },
+    { label: "Next 90 days", min: MIN_DEADLINE_DAYS, max: 90 },
+    { label: "Next 6 months", min: MIN_DEADLINE_DAYS, max: 180 },
+  ];
+
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
         Deadline Range: {formatDeadlineText(deadlineMinDays)} - {formatDeadlineText(deadlineMaxDays)}
       </label>
       
-      {/* Dual-handle slider */}
-      <div className="mt-4 px-2">
+      {/* Quick deadline range selection */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {deadlinePresets.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            onClick={() => {
+              setDeadlineMinDays(preset.min);
+              setDeadlineMaxDays(preset.max);
+              if (preset.label === "Any") {
+                handleDeadlineOptionChange('include', true);
+                handleDeadlineOptionChange('only', false);
+              }
+            }}
+            className={`px-2 py-1 text-xs rounded-full transition-colors ${
+              deadlineMinDays === preset.min && deadlineMaxDays === preset.max
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            disabled={onlyNoDeadline}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+      
+      {/* Slider */}
+      <div className={`mt-2 px-2 ${onlyNoDeadline ? 'opacity-50' : ''}`}>
         <div
           ref={rangeRef}
-          className={`relative w-full h-2 bg-gray-200 rounded-lg ${onlyNoDeadline ? 'opacity-50' : ''}`}
+          className="relative w-full h-2 bg-gray-200 rounded-lg"
         >
           {/* Selected range highlight */}
           <div
-            className="absolute h-full bg-blue-500 rounded-lg"
+            className="absolute h-full bg-primary-500 rounded-lg"
             style={{
               left: `${minPercentage}%`,
               width: `${maxPercentage - minPercentage}%`
@@ -107,7 +150,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
           
           {/* Minimum handle */}
           <div
-            className={`absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
+            className={`absolute w-4 h-4 bg-white border-2 border-primary-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
             style={{ left: `${minPercentage}%` }}
             onMouseDown={() => !onlyNoDeadline && setIsDragging('min')}
             onTouchStart={() => !onlyNoDeadline && setIsDragging('min')}
@@ -121,7 +164,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
           
           {/* Maximum handle */}
           <div
-            className={`absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
+            className={`absolute w-4 h-4 bg-white border-2 border-primary-500 rounded-full -mt-1 -ml-2 cursor-pointer shadow-md ${onlyNoDeadline ? 'cursor-not-allowed' : ''}`}
             style={{ left: `${maxPercentage}%` }}
             onMouseDown={() => !onlyNoDeadline && setIsDragging('max')}
             onTouchStart={() => !onlyNoDeadline && setIsDragging('max')}
@@ -134,49 +177,25 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
           />
         </div>
         
-        <div className="flex justify-between text-xs text-gray-500 mt-3">
+        <div className="flex justify-between text-xs text-gray-500 mt-1">
           <span>Today</span>
           <span>1 year+</span>
         </div>
       </div>
       
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="include-no-deadline"
-            checked={includeNoDeadline}
-            onChange={(e) => handleDeadlineOptionChange('include', e.target.checked)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-          />
-          <label htmlFor="include-no-deadline" className="ml-2 block text-sm text-gray-700">
-            Include grants with no deadline specified
-          </label>
-        </div>
+      {/* Checkbox */}
+      <div className="mt-3">
         <div className="flex items-center">
           <input
             type="checkbox"
             id="only-no-deadline"
             checked={onlyNoDeadline}
             onChange={(e) => handleDeadlineOptionChange('only', e.target.checked)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
           />
           <label htmlFor="only-no-deadline" className="ml-2 block text-sm text-gray-700">
             Only show grants with no deadline specified
           </label>
-        </div>
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={() => {
-              setDeadlineMinDays(MIN_DEADLINE_DAYS);
-              setDeadlineMaxDays(MAX_DEADLINE_DAYS);
-            }}
-            disabled={onlyNoDeadline}
-            className={`text-xs text-blue-600 hover:text-blue-800 ${onlyNoDeadline ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            Reset Range
-          </button>
         </div>
       </div>
     </div>

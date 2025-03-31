@@ -318,58 +318,143 @@ export default function Search() {
         {/* Main content */}
         <div className="flex-1 min-w-0 px-4">
           {/* Search and Filter Section */}
-          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+          <div className="bg-white rounded-lg shadow-md mb-8">
             <div>
-              <SearchBar 
+              <SearchBar
                 searchTerm={filter.searchTerm}
                 setSearchTerm={(value) => updateFilter('searchTerm', value)}
                 onSubmit={handleSearch}
               />
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <MultiSelect
-                  options={agencyOptions}
-                  selectedValues={filter.agencies}
-                  onChange={(values) => updateFilter('agencies', values)}
-                  label="Agencies"
-                />
-                
-                <FundingRangeFilter
-                  fundingMin={filter.fundingMin}
-                  fundingMax={filter.fundingMax}
-                  includeFundingNull={filter.includeFundingNull}
-                  onlyNoFunding={filter.onlyNoFunding}
-                  setFundingMin={(value) => updateFilter('fundingMin', value)}
-                  setFundingMax={(value) => updateFilter('fundingMax', value)}
-                  handleFundingOptionChange={handleFundingOptionChange}
-                />
+              {/* Quick Filters */}
+              <div className="px-6 pb-4">
+                <div className="flex flex-wrap gap-3 mt-2">
+                  <button
+                    onClick={() => {
+                      resetFilters();
+                      updateFilter('sortBy', 'deadline');
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  >
+                    Closing Soon
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetFilters();
+                      updateFilter('sortBy', 'amount');
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  >
+                    Highest Funding
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetFilters();
+                      updateFilter('sortBy', 'recent');
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  >
+                    Recently Added
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetFilters();
+                      updateFilter('agencies', ['National Science Foundation']);
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  >
+                    NSF Grants
+                  </button>
+                  <button
+                    onClick={() => {
+                      resetFilters();
+                      updateFilter('agencies', ['Department of Health and Human Services']);
+                    }}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
+                  >
+                    HHS Grants
+                  </button>
+                </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <DeadlineFilter
-                  deadlineMinDays={filter.deadlineMinDays}
-                  deadlineMaxDays={filter.deadlineMaxDays}
-                  includeNoDeadline={filter.includeNoDeadline}
-                  onlyNoDeadline={filter.onlyNoDeadline}
-                  setDeadlineMinDays={(value) => updateFilter('deadlineMinDays', value)}
-                  setDeadlineMaxDays={(value) => updateFilter('deadlineMaxDays', value)}
-                  handleDeadlineOptionChange={handleDeadlineOptionChange}
-                />
+              {/* Collapsible Advanced Filters */}
+              <details className="group border-t">
+                <summary className="flex cursor-pointer items-center justify-between px-6 py-4">
+                  <h2 className="text-lg font-medium text-gray-900">Advanced Filters</h2>
+                  <span className="shrink-0 transition duration-300 group-open:-rotate-180">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                </summary>
                 
-                <CostSharingFilter
-                  costSharing={filter.costSharing}
-                  setCostSharing={(value) => updateFilter('costSharing', value)}
-                />
-              </div>
-              
-              <SortAndFilterControls
-                sortBy={filter.sortBy}
-                setSortBy={(value) => updateFilter('sortBy', value)}
-                sortOptions={sortOptions}
-                resetFilters={resetFilters}
-              />
-              
-              <ActiveFilters filter={filter} />
+                <div className="px-6 pb-6 pt-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <MultiSelect
+                      options={agencyOptions}
+                      selectedValues={filter.agencies}
+                      onChange={(values) => updateFilter('agencies', values)}
+                      label="Agencies"
+                    />
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-800 mb-1">Sort by</label>
+                      <select
+                        className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800"
+                        value={filter.sortBy}
+                        onChange={(e) => updateFilter('sortBy', e.target.value)}
+                      >
+                        {sortOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <FundingRangeFilter
+                      fundingMin={filter.fundingMin}
+                      fundingMax={filter.fundingMax}
+                      includeFundingNull={filter.includeFundingNull}
+                      onlyNoFunding={filter.onlyNoFunding}
+                      setFundingMin={(value) => updateFilter('fundingMin', value)}
+                      setFundingMax={(value) => updateFilter('fundingMax', value)}
+                      handleFundingOptionChange={handleFundingOptionChange}
+                    />
+                    
+                    <DeadlineFilter
+                      deadlineMinDays={filter.deadlineMinDays}
+                      deadlineMaxDays={filter.deadlineMaxDays}
+                      includeNoDeadline={filter.includeNoDeadline}
+                      onlyNoDeadline={filter.onlyNoDeadline}
+                      setDeadlineMinDays={(value) => updateFilter('deadlineMinDays', value)}
+                      setDeadlineMaxDays={(value) => updateFilter('deadlineMaxDays', value)}
+                      handleDeadlineOptionChange={handleDeadlineOptionChange}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <CostSharingFilter
+                      costSharing={filter.costSharing}
+                      setCostSharing={(value) => updateFilter('costSharing', value)}
+                    />
+                    
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={resetFilters}
+                        className="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 transition-colors"
+                      >
+                        Reset All Filters
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <ActiveFilters filter={filter} />
+                </div>
+              </details>
             </div>
           </div>
           
