@@ -58,10 +58,10 @@ export default function Home() {
   };
 
   return (
-    <Layout>
-      {/* Hero Section - Instant Clarity & No Risk */}
-      <section className="py-20 bg-gradient-to-br from-primary-600 to-primary-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <Layout fullWidth>
+      {/* Hero Section - Full-width and full-height */}
+      <section className="min-h-screen flex items-center bg-gradient-to-br from-primary-600 to-primary-700">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="flex flex-col lg:flex-row items-center gap-12">
             <div className="flex-1 text-center lg:text-left">
               <h1 className="text-4xl lg:text-5xl xl:text-6xl font-bold text-white mb-6 leading-tight">
@@ -73,7 +73,7 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
                   href="/search"
-                  className="btn-primary bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5"
+                  className="btn-primary bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all"
                 >
                   Get Started Free
                 </Link>
@@ -150,146 +150,149 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section id="how-it-works" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            How Grantify Works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-12">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-primary-600">1</span>
+      {/* Content container for the rest of the sections */}
+      <div className="max-w-8xl mx-auto">
+        {/* How It Works Section - with added spacing */}
+        <section id="how-it-works" className="py-24 bg-white mt-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+              How Grantify Works
+            </h2>
+            <div className="grid md:grid-cols-3 gap-12">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-primary-600">1</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Tell us what you're looking for</h3>
+                <p className="text-gray-600">Enter your research interests or browse categories to start</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Tell us what you're looking for</h3>
-              <p className="text-gray-600">Enter your research interests or browse categories to start</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-primary-600">2</span>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-primary-600">2</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Get AI-powered matches daily</h3>
+                <p className="text-gray-600">Our AI finds grants that align with your interests</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Get AI-powered matches daily</h3>
-              <p className="text-gray-600">Our AI finds grants that align with your interests</p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-primary-600">3</span>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-bold text-primary-600">3</span>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Save, ignore, or apply</h3>
+                <p className="text-gray-600">We learn from your choices to improve matches</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Save, ignore, or apply</h3>
-              <p className="text-gray-600">We learn from your choices to improve matches</p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Why It's Better Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            Why Choose Grantify?
-          </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+        {/* Why It's Better Section */}
+        <section className="py-24 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+              Why Choose Grantify?
+            </h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Completely Free</h3>
+                <p className="text-gray-600">No hidden fees, no credit card required. Access all features at no cost.</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Completely Free</h3>
-              <p className="text-gray-600">No hidden fees, no credit card required. Access all features at no cost.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              <div className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Powered Matching</h3>
+                <p className="text-gray-600">Smart recommendations that learn from your preferences and choices.</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Powered Matching</h3>
-              <p className="text-gray-600">Smart recommendations that learn from your preferences and choices.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
+              <div className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Agentic AI Processing</h3>
+                <p className="text-gray-600">Advanced AI that extracts key information like contact details and eligibility requirements from complex grant documents.</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Agentic AI Processing</h3>
-              <p className="text-gray-600">Advanced AI that extracts key information like contact details and eligibility requirements from complex grant documents.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Always Up-to-Date</h3>
+                <p className="text-gray-600">Daily updates from Grants.gov ensure you never miss an opportunity.</p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Always Up-to-Date</h3>
-              <p className="text-gray-600">Daily updates from Grants.gov ensure you never miss an opportunity.</p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Who It's For Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            Who Uses Grantify?
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {['Researchers', 'Grad Students', 'Nonprofits', 'Artists', 'Small Businesses', 'Educators'].map((role) => (
-              <div key={role} className="bg-gray-50 rounded-xl p-4 text-center">
-                <p className="font-medium text-gray-900">{role}</p>
+        {/* Who It's For Section */}
+        <section className="py-24 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+              Who Uses Grantify?
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+              {['Researchers', 'Grad Students', 'Nonprofits', 'Artists', 'Small Businesses', 'Educators'].map((role) => (
+                <div key={role} className="bg-gray-50 rounded-xl p-6 text-center shadow-sm hover:shadow-md transition-shadow duration-300 hover:bg-gray-100">
+                  <p className="font-medium text-gray-900">{role}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="py-24 bg-gray-50">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+              Common Questions
+            </h2>
+            <div className="space-y-8">
+              <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">How is this different from Grants.gov?</h3>
+                <p className="text-gray-600">While Grants.gov is a database, Grantify uses AI to actively match grants to your interests and needs. We filter out expired grants and provide personalized recommendations, saving you hours of manual searching.</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            Common Questions
-          </h2>
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">How is this different from Grants.gov?</h3>
-              <p className="text-gray-600">While Grants.gov is a database, Grantify uses AI to actively match grants to your interests and needs. We filter out expired grants and provide personalized recommendations, saving you hours of manual searching.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Is it really free? What's the catch?</h3>
-              <p className="text-gray-600">Yes, Grantify is completely free. Our mission is to make grant discovery accessible to everyone. We believe in removing barriers between researchers and funding opportunities.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">What makes the AI match me with better results?</h3>
-              <p className="text-gray-600">Our AI analyzes multiple factors including your field of research, funding requirements, and past interactions. It learns from your preferences to provide increasingly accurate matches over time.</p>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-soft">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">How does the agentic AI help with grant applications?</h3>
-              <p className="text-gray-600">Our agentic AI automatically processes grant documentation to extract critical information like contact details, eligibility requirements, and submission guidelines. This saves you hours of reading through complex documents and helps you quickly determine if a grant is right for you.</p>
+              <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">Is it really free? What's the catch?</h3>
+                <p className="text-gray-600">Yes, Grantify is completely free. Our mission is to make grant discovery accessible to everyone. We believe in removing barriers between researchers and funding opportunities.</p>
+              </div>
+              <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">What makes the AI match me with better results?</h3>
+                <p className="text-gray-600">Our AI analyzes multiple factors including your field of research, funding requirements, and past interactions. It learns from your preferences to provide increasingly accurate matches over time.</p>
+              </div>
+              <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">How does the agentic AI help with grant applications?</h3>
+                <p className="text-gray-600">Our agentic AI automatically processes grant documentation to extract critical information like contact details, eligibility requirements, and submission guidelines. This saves you hours of reading through complex documents and helps you quickly determine if a grant is right for you.</p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Final CTA Section */}
-      <section className="py-20 bg-primary-600">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-white mb-6">
-            Your Next Grant Could Be Waiting
-          </h2>
-          <p className="text-xl text-primary-50 mb-8">
-            Join thousands of researchers finding funding opportunities daily
-          </p>
-          <Link
-            href="/search"
-            className="inline-block bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all"
-          >
-            Find Grants Now
-          </Link>
-          <p className="mt-4 text-primary-100 text-sm">100% free • No login required • Updated daily</p>
-        </div>
-      </section>
+        {/* Final CTA Section - Full width blue background */}
+        <section className="py-24 bg-primary-600">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl font-bold text-white mb-6">
+              Your Next Grant Could Be Waiting
+            </h2>
+            <p className="text-xl text-primary-50 mb-8">
+              Join thousands of researchers finding funding opportunities daily
+            </p>
+            <Link
+              href="/search"
+              className="inline-block bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all"
+            >
+              Find Grants Now
+            </Link>
+            <p className="mt-4 text-primary-100 text-sm">100% free • No login required • Updated daily</p>
+          </div>
+        </section>
+      </div>
     </Layout>
   );
 }
