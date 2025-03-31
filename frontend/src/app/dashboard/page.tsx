@@ -617,48 +617,90 @@ return (
         </div>
       )}
       
-      {/* Dashboard Navigation */}
-      <div className="mb-8 border-b">
-        <nav className="flex flex-wrap -mb-px">
+      {/* Dashboard Navigation - Enhanced with counts and icons */}
+      <div className="mb-8">
+        <nav className="flex flex-wrap gap-2 sm:gap-0 bg-white rounded-xl shadow-sm overflow-hidden">
           <button
             onClick={() => setActiveTab('recommended')}
-            className={`inline-block p-4 font-medium ${
+            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
               activeTab === 'recommended'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Recommended
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Recommended</span>
+            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {recommendedGrants.length}
+            </span>
+            {activeTab === 'recommended' && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
+            )}
           </button>
+          
           <button
             onClick={() => setActiveTab('saved')}
-            className={`inline-block p-4 font-medium ${
+            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
               activeTab === 'saved'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Saved Grants
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 21L12 16L5 21V5C5 4.46957 5.21071 3.96086 5.58579 3.58579C5.96086 3.21071 6.46957 3 7 3H17C17.5304 3 18.0391 3.21071 18.4142 3.58579C18.7893 3.96086 19 4.46957 19 5V21Z"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Saved</span>
+            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {savedGrants.length}
+            </span>
+            {activeTab === 'saved' && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
+            )}
           </button>
+          
           <button
             onClick={() => setActiveTab('applied')}
-            className={`inline-block p-4 font-medium ${
+            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
               activeTab === 'applied'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Applied Grants
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Applied</span>
+            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {appliedGrants.length}
+            </span>
+            {activeTab === 'applied' && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
+            )}
           </button>
+          
           <button
             onClick={() => setActiveTab('ignored')}
-            className={`inline-block p-4 font-medium ${
+            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
               activeTab === 'ignored'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300'
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
-            Ignored Grants
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span>Ignored</span>
+            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {ignoredGrants.length}
+            </span>
+            {activeTab === 'ignored' && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
+            )}
           </button>
         </nav>
       </div>
@@ -667,16 +709,23 @@ return (
       {activeTab === 'recommended' && (
         <section className="mb-12">
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Recommended for You</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Recommended for You</h2>
+                <p className="text-gray-600 mt-1">Personalized grant recommendations based on your preferences</p>
+              </div>
               <Link
                 href="/search"
-                className="text-blue-600 hover:text-blue-800 font-medium"
+                className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium transition-colors"
               >
-                View All
+                <span>Browse All Grants</span>
+                <svg className="ml-1 w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
               </Link>
             </div>
-            <div className="space-y-4">
+            
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
               <DashboardSearchBar
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
@@ -714,12 +763,30 @@ return (
                 />
               ))}
             </div>
+          ) : searchTerm ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching grants found</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+              <button
+                onClick={() => setSearchTerm('')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Clear Search
+              </button>
+            </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">No recommended grants yet. Update your preferences to get personalized recommendations.</p>
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No recommended grants yet</h3>
+              <p className="text-gray-600 mb-4">Update your preferences to get personalized recommendations</p>
               <Link
                 href="/preferences"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 Update Preferences
               </Link>
@@ -732,10 +799,14 @@ return (
       {activeTab === 'saved' && (
         <section className="mb-12">
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Saved Grants</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Saved Grants</h2>
+                <p className="text-gray-600 mt-1">Grants you've saved for later review</p>
+              </div>
             </div>
-            <div className="space-y-4">
+            
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
               <DashboardSearchBar
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
@@ -771,14 +842,32 @@ return (
                 />
               ))}
             </div>
+          ) : searchTerm ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching saved grants</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+              <button
+                onClick={() => setSearchTerm('')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Clear Search
+              </button>
+            </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">You haven't saved any grants yet.</p>
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No saved grants yet</h3>
+              <p className="text-gray-600 mb-4">Save grants you're interested in to review later</p>
               <Link
                 href="/search"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                Search Grants
+                Browse Grants
               </Link>
             </div>
           )}
@@ -789,10 +878,14 @@ return (
       {activeTab === 'applied' && (
         <section className="mb-12">
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Applied Grants</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Applied Grants</h2>
+                <p className="text-gray-600 mt-1">Grants you've applied for</p>
+              </div>
             </div>
-            <div className="space-y-4">
+            
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
               <DashboardSearchBar
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
@@ -828,14 +921,32 @@ return (
                 />
               ))}
             </div>
+          ) : searchTerm ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching applied grants</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+              <button
+                onClick={() => setSearchTerm('')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Clear Search
+              </button>
+            </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">You haven't marked any grants as applied yet.</p>
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No applied grants yet</h3>
+              <p className="text-gray-600 mb-4">When you apply for grants, they'll appear here</p>
               <Link
                 href="/search"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                Search Grants
+                Find Grants to Apply For
               </Link>
             </div>
           )}
@@ -846,10 +957,14 @@ return (
       {activeTab === 'ignored' && (
         <section className="mb-12">
           <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Ignored Grants</h2>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Ignored Grants</h2>
+                <p className="text-gray-600 mt-1">Grants you've chosen to ignore</p>
+              </div>
             </div>
-            <div className="space-y-4">
+            
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
               <DashboardSearchBar
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
@@ -885,14 +1000,32 @@ return (
                 />
               ))}
             </div>
+          ) : searchTerm ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching ignored grants</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+              <button
+                onClick={() => setSearchTerm('')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                Clear Search
+              </button>
+            </div>
           ) : (
-            <div className="bg-gray-50 rounded-lg p-8 text-center">
-              <p className="text-gray-600">You haven't ignored any grants yet.</p>
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No ignored grants yet</h3>
+              <p className="text-gray-600 mb-4">Grants you choose to ignore will appear here</p>
               <Link
                 href="/search"
-                className="mt-4 inline-block text-blue-600 hover:text-blue-800 font-medium"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                Search Grants
+                Browse Grants
               </Link>
             </div>
           )}
