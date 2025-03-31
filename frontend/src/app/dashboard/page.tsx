@@ -10,6 +10,8 @@ import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
 import DashboardSearchBar from '@/components/dashboard/DashboardSearchBar';
+import DashboardSortAndFilterControls from '@/components/dashboard/DashboardSortAndFilterControls';
+import { SelectOption } from '@/types/grant';
 
 // Grant type definition
 interface Grant {
@@ -46,23 +48,77 @@ export default function Dashboard() {
   const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
   const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
   const [pendingGrantTitle, setPendingGrantTitle] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('deadline');
+  
+  // Sort options for the dashboard
+  const sortOptions: SelectOption[] = [
+    { value: 'deadline', label: 'Deadline (Soonest)' },
+    { value: 'deadline_latest', label: 'Deadline (Latest)' },
+    { value: 'amount', label: 'Funding Amount (Highest)' },
+    { value: 'amount_asc', label: 'Funding Amount (Lowest)' },
+    { value: 'title_asc', label: 'Title (A-Z)' },
+    { value: 'title_desc', label: 'Title (Z-A)' }
+  ];
 
-  // Filter grants based on search term
-  const filterGrants = (grants: Grant[]) => {
-    if (!searchTerm) return grants;
-    const term = searchTerm.toLowerCase();
-    return grants.filter(grant =>
-      grant.title.toLowerCase().includes(term) ||
-      grant.description.toLowerCase().includes(term) ||
-      grant.agency_name.toLowerCase().includes(term)
-    );
+  // Filter and sort grants based on search term and sort option
+  const filterAndSortGrants = (grants: Grant[]) => {
+    // First filter by search term
+    let filteredGrants = grants;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filteredGrants = grants.filter(grant =>
+        grant.title.toLowerCase().includes(term) ||
+        grant.description.toLowerCase().includes(term) ||
+        grant.agency_name.toLowerCase().includes(term)
+      );
+    }
+    
+    // Then sort based on sortBy option
+    return [...filteredGrants].sort((a, b) => {
+      switch (sortBy) {
+        case 'deadline':
+          // Sort by deadline (soonest first)
+          if (!a.close_date) return 1;
+          if (!b.close_date) return -1;
+          return new Date(a.close_date).getTime() - new Date(b.close_date).getTime();
+        
+        case 'deadline_latest':
+          // Sort by deadline (latest first)
+          if (!a.close_date) return 1;
+          if (!b.close_date) return -1;
+          return new Date(b.close_date).getTime() - new Date(a.close_date).getTime();
+        
+        case 'amount':
+          // Sort by funding amount (highest first)
+          if (a.award_ceiling === null) return 1;
+          if (b.award_ceiling === null) return -1;
+          return b.award_ceiling - a.award_ceiling;
+        
+        case 'amount_asc':
+          // Sort by funding amount (lowest first)
+          if (a.award_ceiling === null) return 1;
+          if (b.award_ceiling === null) return -1;
+          return a.award_ceiling - b.award_ceiling;
+        
+        case 'title_asc':
+          // Sort by title (A-Z)
+          return a.title.localeCompare(b.title);
+        
+        case 'title_desc':
+          // Sort by title (Z-A)
+          return b.title.localeCompare(a.title);
+        
+        default:
+          return 0;
+      }
+    });
   };
 
   const displayedGrants = {
-    recommended: filterGrants(recommendedGrants),
-    saved: filterGrants(savedGrants),
-    applied: filterGrants(appliedGrants),
-    ignored: filterGrants(ignoredGrants)
+    recommended: filterAndSortGrants(recommendedGrants),
+    saved: filterAndSortGrants(savedGrants),
+    applied: filterAndSortGrants(appliedGrants),
+    ignored: filterAndSortGrants(ignoredGrants)
   };
 
   // Redirect to login if not authenticated
@@ -620,11 +676,18 @@ return (
                 View All
               </Link>
             </div>
-            <DashboardSearchBar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              placeholder="Search recommended grants..."
-            />
+            <div className="space-y-4">
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search recommended grants..."
+              />
+              <DashboardSortAndFilterControls
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOptions={sortOptions}
+              />
+            </div>
           </div>
           
           {displayedGrants.recommended.length > 0 ? (
@@ -672,11 +735,18 @@ return (
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Saved Grants</h2>
             </div>
-            <DashboardSearchBar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              placeholder="Search saved grants..."
-            />
+            <div className="space-y-4">
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search saved grants..."
+              />
+              <DashboardSortAndFilterControls
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOptions={sortOptions}
+              />
+            </div>
           </div>
           
           {displayedGrants.saved.length > 0 ? (
@@ -722,11 +792,18 @@ return (
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Applied Grants</h2>
             </div>
-            <DashboardSearchBar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              placeholder="Search applied grants..."
-            />
+            <div className="space-y-4">
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search applied grants..."
+              />
+              <DashboardSortAndFilterControls
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOptions={sortOptions}
+              />
+            </div>
           </div>
           
           {displayedGrants.applied.length > 0 ? (
@@ -772,11 +849,18 @@ return (
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Ignored Grants</h2>
             </div>
-            <DashboardSearchBar
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              placeholder="Search ignored grants..."
-            />
+            <div className="space-y-4">
+              <DashboardSearchBar
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                placeholder="Search ignored grants..."
+              />
+              <DashboardSortAndFilterControls
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                sortOptions={sortOptions}
+              />
+            </div>
           </div>
           
           {displayedGrants.ignored.length > 0 ? (
