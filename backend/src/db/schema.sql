@@ -2,6 +2,8 @@
 
 -- Enable pgvector extension for embeddings
 CREATE EXTENSION IF NOT EXISTS vector;
+-- Enable uuid-ossp extension if not already enabled by Supabase
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Grants Table
 CREATE TABLE IF NOT EXISTS grants (
@@ -14,17 +16,18 @@ CREATE TABLE IF NOT EXISTS grants (
   activity_category TEXT[],
   eligible_applicants TEXT[],
   agency_name TEXT,
+  agency_code TEXT, -- Added from update-schema.sql
   post_date TIMESTAMP WITH TIME ZONE,
   close_date TIMESTAMP WITH TIME ZONE,
-  total_funding INTEGER,
-  award_ceiling INTEGER,
-  award_floor INTEGER,
+  total_funding BIGINT, -- Changed to bigint from update-schema.sql
+  award_ceiling BIGINT, -- Changed to bigint from update-schema.sql
+  award_floor BIGINT, -- Changed to bigint from update-schema.sql
   cost_sharing BOOLEAN DEFAULT FALSE,
   description TEXT,
   additional_info_url TEXT,
   grantor_contact_name TEXT,
   grantor_contact_email TEXT,
-  grantor_contact_phone TEXT,
+  grantor_contact_phone TEXT, -- Changed to TEXT in update-schema.sql
   embeddings VECTOR(1536),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -36,6 +39,7 @@ CREATE INDEX IF NOT EXISTS grants_agency_name_idx ON grants(agency_name);
 CREATE INDEX IF NOT EXISTS grants_category_idx ON grants(category);
 CREATE INDEX IF NOT EXISTS grants_activity_category_idx ON grants USING GIN(activity_category);
 CREATE INDEX IF NOT EXISTS grants_eligible_applicants_idx ON grants USING GIN(eligible_applicants);
+CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id); -- Added from update-schema.sql
 
 -- Create index for vector similarity search
 CREATE INDEX IF NOT EXISTS grants_embeddings_idx ON grants USING ivfflat (embeddings vector_cosine_ops) WITH (lists = 100);

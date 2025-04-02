@@ -110,6 +110,13 @@ const Navbar: React.FC = () => {
                       {user.email}
                     </div>
                     <Link
+                      href="/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <Link
                       href="/preferences"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
                       onClick={() => setDropdownOpen(false)}
@@ -122,13 +129,6 @@ const Navbar: React.FC = () => {
                       onClick={() => setDropdownOpen(false)}
                     >
                       Settings
-                    </Link>
-                    <Link
-                      href="/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-600 transition-colors"
-                      onClick={() => setDropdownOpen(false)}
-                    >
-                      Profile
                     </Link>
                     <button
                       onClick={() => {
