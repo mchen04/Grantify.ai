@@ -68,7 +68,7 @@ const Navbar: React.FC = () => {
   return (
     <nav className={navbarClasses}>
       <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 relative">
           <div className="flex items-center">
             <Link
               href="/"
@@ -80,8 +80,8 @@ const Navbar: React.FC = () => {
             </Link>
           </div>
 
-          {/* Desktop navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          {/* Centered navigation - positioned absolutely in the center */}
+          <div className="hidden md:flex items-center space-x-8 justify-center absolute left-1/2 transform -translate-x-1/2">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -92,6 +92,7 @@ const Navbar: React.FC = () => {
               </Link>
             ))}
           </div>
+          
 
           {/* Auth section */}
           <div className="flex items-center space-x-4">
