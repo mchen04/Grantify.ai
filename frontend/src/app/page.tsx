@@ -274,25 +274,26 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Final CTA Section - Full width blue background */}
-        <section className="py-24 bg-primary-600">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl font-bold text-white mb-6">
-              Your Next Grant Could Be Waiting
-            </h2>
-            <p className="text-xl text-primary-50 mb-8">
-              Join thousands of researchers finding funding opportunities daily
-            </p>
-            <Link
-              href="/search"
-              className="inline-block bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all"
-            >
-              Find Grants Now
-            </Link>
-            <p className="mt-4 text-primary-100 text-sm">100% free • No login required • Updated daily</p>
-          </div>
-        </section>
       </div>
+      
+      {/* Final CTA Section - Full width blue background */}
+      <section className="py-24 bg-primary-600 w-full">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl font-bold text-white mb-6">
+            Your Next Grant Could Be Waiting
+          </h2>
+          <p className="text-xl text-primary-50 mb-8">
+            Join thousands of researchers finding funding opportunities daily
+          </p>
+          <Link
+            href="/search"
+            className="inline-block bg-white text-primary-600 hover:bg-primary-50 px-8 py-4 rounded-xl font-semibold text-lg shadow-xl hover:shadow-2xl transform hover:-translate-y-0.5 transition-all"
+          >
+            Find Grants Now
+          </Link>
+          <p className="mt-4 text-primary-100 text-sm">100% free • No login required • Updated daily</p>
+        </div>
+      </section>
     </Layout>
   );
 }
