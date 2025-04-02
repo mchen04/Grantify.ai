@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { GRANT_CATEGORIES, GRANT_AGENCIES, DEFAULT_USER_PREFERENCES } from '@/lib/config';
 import supabase from '@/lib/supabaseClient';
+import SettingsLayout from '@/components/settings/SettingsLayout';
 
 export default function Preferences() {
   const { user, isLoading } = useAuth();
@@ -81,6 +81,7 @@ export default function Preferences() {
     
     try {
       setSaving(true);
+      setMessage(null);
       
       // Prepare preferences object
       const preferences = {
@@ -147,11 +148,9 @@ export default function Preferences() {
   // Show loading state while checking authentication
   if (isLoading || loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
     );
   }
 
@@ -161,30 +160,26 @@ export default function Preferences() {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Preferences</h1>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Back to Dashboard
-          </button>
+    <SettingsLayout
+      title="Preferences"
+      description="Customize your grant recommendations and search experience"
+    >
+      {message && (
+        <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message.text}
         </div>
-        
-        {message && (
-          <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {message.text}
+      )}
+      
+      <form onSubmit={handleSubmit}>
+        {/* Research Topics */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Research Topics</h2>
+            <span className="text-sm text-blue-600">{selectedTopics.length} selected</span>
           </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
-          {/* Research Topics */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Research Topics</h2>
-            <p className="text-gray-600 mb-4">Select topics that interest you to receive relevant grant recommendations.</p>
-            
+          <p className="text-sm text-gray-600 mb-4">Select topics that interest you to receive relevant grant recommendations.</p>
+          
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {GRANT_CATEGORIES.map((topic) => (
                 <div key={topic} className="flex items-center">
@@ -202,50 +197,55 @@ export default function Preferences() {
               ))}
             </div>
           </div>
+        </div>
+        
+        {/* Funding Range */}
+        <div className="mb-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Funding Range</h2>
+          <p className="text-sm text-gray-600 mb-4">Specify your preferred funding range.</p>
           
-          {/* Funding Range */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Funding Range</h2>
-            <p className="text-gray-600 mb-4">Specify your preferred funding range.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="fundingMin" className="block text-sm font-medium text-gray-700 mb-1">
+                Minimum Funding ($)
+              </label>
+              <input
+                type="number"
+                id="fundingMin"
+                value={fundingMin}
+                onChange={(e) => setFundingMin(parseInt(e.target.value) || 0)}
+                min="0"
+                step="1000"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="fundingMin" className="block text-sm font-medium text-gray-700 mb-1">
-                  Minimum Funding ($)
-                </label>
-                <input
-                  type="number"
-                  id="fundingMin"
-                  value={fundingMin}
-                  onChange={(e) => setFundingMin(parseInt(e.target.value) || 0)}
-                  min="0"
-                  step="1000"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="fundingMax" className="block text-sm font-medium text-gray-700 mb-1">
-                  Maximum Funding ($)
-                </label>
-                <input
-                  type="number"
-                  id="fundingMax"
-                  value={fundingMax}
-                  onChange={(e) => setFundingMax(parseInt(e.target.value) || 0)}
-                  min="0"
-                  step="10000"
-                  className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+            <div>
+              <label htmlFor="fundingMax" className="block text-sm font-medium text-gray-700 mb-1">
+                Maximum Funding ($)
+              </label>
+              <input
+                type="number"
+                id="fundingMax"
+                value={fundingMax}
+                onChange={(e) => setFundingMax(parseInt(e.target.value) || 0)}
+                min="0"
+                step="10000"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           </div>
+        </div>
+        
+        {/* Funding Agencies */}
+        <div className="mb-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Funding Agencies</h2>
+            <span className="text-sm text-blue-600">{selectedAgencies.length} selected</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">Select agencies you're interested in receiving grants from.</p>
           
-          {/* Funding Agencies */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Funding Agencies</h2>
-            <p className="text-gray-600 mb-4">Select agencies you're interested in receiving grants from.</p>
-            
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {GRANT_AGENCIES.map((agency) => (
                 <div key={agency} className="flex items-center">
@@ -263,12 +263,17 @@ export default function Preferences() {
               ))}
             </div>
           </div>
+        </div>
+        
+        {/* Eligible Applicant Types */}
+        <div className="mb-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Eligible Applicant Types</h2>
+            <span className="text-sm text-blue-600">{eligibleTypes.length} selected</span>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">Select the types of applicants you qualify as.</p>
           
-          {/* Eligible Applicant Types */}
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Eligible Applicant Types</h2>
-            <p className="text-gray-600 mb-4">Select the types of applicants you qualify as.</p>
-            
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
                 'Public and State controlled institutions of higher education',
@@ -298,22 +303,21 @@ export default function Preferences() {
               ))}
             </div>
           </div>
-          
-          
-          {/* Submit Button */}
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className={`bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors ${
-                saving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
-              }`}
-            >
-              {saving ? 'Saving...' : 'Save Preferences'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </Layout>
+        </div>
+        
+        {/* Submit Button */}
+        <div className="pt-6 border-t border-gray-200">
+          <button
+            type="submit"
+            disabled={saving}
+            className={`px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium transition-colors ${
+              saving ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
+            }`}
+          >
+            {saving ? 'Saving...' : 'Save Preferences'}
+          </button>
+        </div>
+      </form>
+    </SettingsLayout>
   );
 }

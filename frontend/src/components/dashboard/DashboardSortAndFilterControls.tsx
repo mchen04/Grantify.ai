@@ -8,6 +8,10 @@ interface DashboardSortAndFilterControlsProps {
   setSortBy: (value: string) => void;
   sortOptions: SelectOption[];
   resetFilters?: () => void;
+  filterOnlyNoDeadline?: boolean;
+  setFilterOnlyNoDeadline?: (value: boolean) => void;
+  filterOnlyNoFunding?: boolean;
+  setFilterOnlyNoFunding?: (value: boolean) => void;
 }
 
 /**
@@ -17,7 +21,11 @@ const DashboardSortAndFilterControls: React.FC<DashboardSortAndFilterControlsPro
   sortBy,
   setSortBy,
   sortOptions,
-  resetFilters
+  resetFilters,
+  filterOnlyNoDeadline = false,
+  setFilterOnlyNoDeadline,
+  filterOnlyNoFunding = false,
+  setFilterOnlyNoFunding
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -169,41 +177,68 @@ const DashboardSortAndFilterControls: React.FC<DashboardSortAndFilterControlsPro
         )}
       </div>
       
-      {/* Quick sort buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setSortBy('deadline')}
-          className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-            sortBy === 'deadline'
-              ? 'bg-primary-100 text-primary-800 font-medium'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Closing Soon
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortBy('amount')}
-          className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-            sortBy === 'amount'
-              ? 'bg-primary-100 text-primary-800 font-medium'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          Highest Funding
-        </button>
-        <button
-          type="button"
-          onClick={() => setSortBy('title_asc')}
-          className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-            sortBy === 'title_asc'
-              ? 'bg-primary-100 text-primary-800 font-medium'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-        >
-          A-Z
-        </button>
+      <div className="flex flex-col gap-3 w-full">
+        {/* Quick sort buttons */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSortBy('deadline')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              sortBy === 'deadline'
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Closing Soon
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortBy('amount')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              sortBy === 'amount'
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Highest Funding
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortBy('title_asc')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              sortBy === 'title_asc'
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            A-Z
+          </button>
+        </div>
+        
+        {/* Special filters for null values */}
+        {setFilterOnlyNoDeadline && setFilterOnlyNoFunding && (
+          <div className="flex flex-wrap gap-4 mt-1">
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterOnlyNoDeadline}
+                onChange={(e) => setFilterOnlyNoDeadline(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <span>Only show grants with no deadline or open-ended deadlines</span>
+            </label>
+            
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterOnlyNoFunding}
+                onChange={(e) => setFilterOnlyNoFunding(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <span>Only show grants with no funding specified</span>
+            </label>
+          </div>
+        )}
       </div>
       
       {resetFilters && (

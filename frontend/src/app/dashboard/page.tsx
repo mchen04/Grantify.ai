@@ -11,6 +11,7 @@ import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
 import DashboardSearchBar from '@/components/dashboard/DashboardSearchBar';
 import DashboardSortAndFilterControls from '@/components/dashboard/DashboardSortAndFilterControls';
+import Pagination from '@/components/dashboard/Pagination';
 import { SelectOption } from '@/types/grant';
 
 // Grant type definition
@@ -49,6 +50,19 @@ export default function Dashboard() {
   const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
   const [pendingGrantTitle, setPendingGrantTitle] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('deadline');
+  const [filterOnlyNoDeadline, setFilterOnlyNoDeadline] = useState(false);
+  const [filterOnlyNoFunding, setFilterOnlyNoFunding] = useState(false);
+  
+  // Pagination state for each tab
+  const [currentPage, setCurrentPage] = useState({
+    recommended: 1,
+    saved: 1,
+    applied: 1,
+    ignored: 1
+  });
+  
+  // Number of grants to display per page
+  const GRANTS_PER_PAGE = 10;
   
   // Sort options for the dashboard
   const sortOptions: SelectOption[] = [
@@ -60,20 +74,46 @@ export default function Dashboard() {
     { value: 'title_desc', label: 'Title (Z-A)' }
   ];
 
-  // Filter and sort grants based on search term and sort option
+  // Filter and sort grants based on search term, filter options, and sort option
   const filterAndSortGrants = (grants: Grant[]) => {
-    // First filter by search term
+    // Apply filters in sequence
     let filteredGrants = grants;
+    
+    // Apply no deadline filter if enabled
+    if (filterOnlyNoDeadline) {
+      filteredGrants = filteredGrants.filter(grant =>
+        grant.close_date === null ||
+        (typeof grant.close_date === 'string' &&
+          (grant.close_date.toLowerCase().includes('open') ||
+           grant.close_date.toLowerCase().includes('continuous') ||
+           grant.close_date.toLowerCase().includes('ongoing')))
+      );
+    } else {
+      // When the filter is off, exclude grants with open-ended deadlines
+      filteredGrants = filteredGrants.filter(grant =>
+        !(typeof grant.close_date === 'string' &&
+          (grant.close_date.toLowerCase().includes('open') ||
+           grant.close_date.toLowerCase().includes('continuous') ||
+           grant.close_date.toLowerCase().includes('ongoing')))
+      );
+    }
+    
+    // Apply no funding filter if enabled
+    if (filterOnlyNoFunding) {
+      filteredGrants = filteredGrants.filter(grant => grant.award_ceiling === null);
+    }
+    
+    // Apply search term filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filteredGrants = grants.filter(grant =>
+      filteredGrants = filteredGrants.filter(grant =>
         grant.title.toLowerCase().includes(term) ||
         grant.description.toLowerCase().includes(term) ||
         grant.agency_name.toLowerCase().includes(term)
       );
     }
     
-    // Then sort based on sortBy option
+    // Finally sort based on sortBy option
     return [...filteredGrants].sort((a, b) => {
       switch (sortBy) {
         case 'deadline':
@@ -114,11 +154,39 @@ export default function Dashboard() {
     });
   };
 
+  // Get paginated grants for the current tab
+  const getPaginatedGrants = (grants: Grant[], tabName: string) => {
+    const filteredAndSortedGrants = filterAndSortGrants(grants);
+    const startIndex = (currentPage[tabName as keyof typeof currentPage] - 1) * GRANTS_PER_PAGE;
+    const endIndex = startIndex + GRANTS_PER_PAGE;
+    return filteredAndSortedGrants.slice(startIndex, endIndex);
+  };
+  
+  // Get total number of pages for a tab
+  const getTotalPages = (grants: Grant[]) => {
+    return Math.ceil(filterAndSortGrants(grants).length / GRANTS_PER_PAGE);
+  };
+  
+  // Handle page change
+  const handlePageChange = (tabName: string, newPage: number) => {
+    setCurrentPage(prev => ({
+      ...prev,
+      [tabName]: newPage
+    }));
+  };
+  
   const displayedGrants = {
-    recommended: filterAndSortGrants(recommendedGrants),
-    saved: filterAndSortGrants(savedGrants),
-    applied: filterAndSortGrants(appliedGrants),
-    ignored: filterAndSortGrants(ignoredGrants)
+    recommended: getPaginatedGrants(recommendedGrants, 'recommended'),
+    saved: getPaginatedGrants(savedGrants, 'saved'),
+    applied: getPaginatedGrants(appliedGrants, 'applied'),
+    ignored: getPaginatedGrants(ignoredGrants, 'ignored')
+  };
+  
+  const totalPages = {
+    recommended: getTotalPages(recommendedGrants),
+    saved: getTotalPages(savedGrants),
+    applied: getTotalPages(appliedGrants),
+    ignored: getTotalPages(ignoredGrants)
   };
 
   // Redirect to login if not authenticated
@@ -735,34 +803,47 @@ return (
                 sortBy={sortBy}
                 setSortBy={setSortBy}
                 sortOptions={sortOptions}
+                filterOnlyNoDeadline={filterOnlyNoDeadline}
+                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
+                filterOnlyNoFunding={filterOnlyNoFunding}
+                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
               />
             </div>
           </div>
           
-          {displayedGrants.recommended.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-              {displayedGrants.recommended.map((grant) => (
-                <DashboardGrantCard
-                  ref={grant.id === pendingGrantId ? cardRef : undefined}
-                  key={grant.id}
-                  id={grant.id}
-                  title={grant.title}
-                  agency={grant.agency_name}
-                  closeDate={grant.close_date}
-                  fundingAmount={grant.award_ceiling}
-                  description={grant.description}
-                  categories={grant.activity_category || []}
-                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleApplyClick(grant.id)}
-                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                  onShare={() => handleShare(grant.id)}
-                  isSaved={false}
-                  isApplied={false}
-                  isIgnored={false}
-                  onConfirmApply={() => handleConfirmApply(grant.id)}
-                />
-              ))}
-            </div>
+          {filterAndSortGrants(recommendedGrants).length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                {displayedGrants.recommended.map((grant) => (
+                  <DashboardGrantCard
+                    ref={grant.id === pendingGrantId ? cardRef : undefined}
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
+                    description={grant.description}
+                    categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleApplyClick(grant.id)}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
+                    isSaved={false}
+                    isApplied={false}
+                    isIgnored={false}
+                    onConfirmApply={() => handleConfirmApply(grant.id)}
+                  />
+                ))}
+              </div>
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={currentPage.recommended}
+                totalPages={totalPages.recommended}
+                onPageChange={(page) => handlePageChange('recommended', page)}
+              />
+            </>
           ) : searchTerm ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -816,32 +897,45 @@ return (
                 sortBy={sortBy}
                 setSortBy={setSortBy}
                 sortOptions={sortOptions}
+                filterOnlyNoDeadline={filterOnlyNoDeadline}
+                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
+                filterOnlyNoFunding={filterOnlyNoFunding}
+                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
               />
             </div>
           </div>
           
-          {displayedGrants.saved.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-              {displayedGrants.saved.map((grant) => (
-                <DashboardGrantCard
-                  ref={grant.id === pendingGrantId ? cardRef : undefined}
-                  key={grant.id}
-                  id={grant.id}
-                  title={grant.title}
-                  agency={grant.agency_name}
-                  closeDate={grant.close_date}
-                  fundingAmount={grant.award_ceiling}
-                  description={grant.description}
-                  categories={grant.activity_category || []}
-                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleApplyClick(grant.id)}
-                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                  onShare={() => handleShare(grant.id)}
-                  isSaved={true}
-                  onConfirmApply={() => handleConfirmApply(grant.id)}
-                />
-              ))}
-            </div>
+          {filterAndSortGrants(savedGrants).length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                {displayedGrants.saved.map((grant) => (
+                  <DashboardGrantCard
+                    ref={grant.id === pendingGrantId ? cardRef : undefined}
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
+                    description={grant.description}
+                    categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleApplyClick(grant.id)}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
+                    isSaved={true}
+                    onConfirmApply={() => handleConfirmApply(grant.id)}
+                  />
+                ))}
+              </div>
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={currentPage.saved}
+                totalPages={totalPages.saved}
+                onPageChange={(page) => handlePageChange('saved', page)}
+              />
+            </>
           ) : searchTerm ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -895,32 +989,45 @@ return (
                 sortBy={sortBy}
                 setSortBy={setSortBy}
                 sortOptions={sortOptions}
+                filterOnlyNoDeadline={filterOnlyNoDeadline}
+                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
+                filterOnlyNoFunding={filterOnlyNoFunding}
+                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
               />
             </div>
           </div>
           
-          {displayedGrants.applied.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-              {displayedGrants.applied.map((grant) => (
-                <DashboardGrantCard
-                  ref={grant.id === pendingGrantId ? cardRef : undefined}
-                  key={grant.id}
-                  id={grant.id}
-                  title={grant.title}
-                  agency={grant.agency_name}
-                  closeDate={grant.close_date}
-                  fundingAmount={grant.award_ceiling}
-                  description={grant.description}
-                  categories={grant.activity_category || []}
-                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleApplyClick(grant.id)}
-                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                  onShare={() => handleShare(grant.id)}
-                  isApplied={true}
-                  onConfirmApply={() => handleConfirmApply(grant.id)}
-                />
-              ))}
-            </div>
+          {filterAndSortGrants(appliedGrants).length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                {displayedGrants.applied.map((grant) => (
+                  <DashboardGrantCard
+                    ref={grant.id === pendingGrantId ? cardRef : undefined}
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
+                    description={grant.description}
+                    categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleApplyClick(grant.id)}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
+                    isApplied={true}
+                    onConfirmApply={() => handleConfirmApply(grant.id)}
+                  />
+                ))}
+              </div>
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={currentPage.applied}
+                totalPages={totalPages.applied}
+                onPageChange={(page) => handlePageChange('applied', page)}
+              />
+            </>
           ) : searchTerm ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -974,32 +1081,45 @@ return (
                 sortBy={sortBy}
                 setSortBy={setSortBy}
                 sortOptions={sortOptions}
+                filterOnlyNoDeadline={filterOnlyNoDeadline}
+                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
+                filterOnlyNoFunding={filterOnlyNoFunding}
+                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
               />
             </div>
           </div>
           
-          {displayedGrants.ignored.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-              {displayedGrants.ignored.map((grant) => (
-                <DashboardGrantCard
-                  ref={grant.id === pendingGrantId ? cardRef : undefined}
-                  key={grant.id}
-                  id={grant.id}
-                  title={grant.title}
-                  agency={grant.agency_name}
-                  closeDate={grant.close_date}
-                  fundingAmount={grant.award_ceiling}
-                  description={grant.description}
-                  categories={grant.activity_category || []}
-                  onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                  onApply={() => handleApplyClick(grant.id)}
-                  onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                  onShare={() => handleShare(grant.id)}
-                  isIgnored={true}
-                  onConfirmApply={() => handleConfirmApply(grant.id)}
-                />
-              ))}
-            </div>
+          {filterAndSortGrants(ignoredGrants).length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                {displayedGrants.ignored.map((grant) => (
+                  <DashboardGrantCard
+                    ref={grant.id === pendingGrantId ? cardRef : undefined}
+                    key={grant.id}
+                    id={grant.id}
+                    title={grant.title}
+                    agency={grant.agency_name}
+                    closeDate={grant.close_date}
+                    fundingAmount={grant.award_ceiling}
+                    description={grant.description}
+                    categories={grant.activity_category || []}
+                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                    onApply={() => handleApplyClick(grant.id)}
+                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                    onShare={() => handleShare(grant.id)}
+                    isIgnored={true}
+                    onConfirmApply={() => handleConfirmApply(grant.id)}
+                  />
+                ))}
+              </div>
+              
+              {/* Pagination */}
+              <Pagination
+                currentPage={currentPage.ignored}
+                totalPages={totalPages.ignored}
+                onPageChange={(page) => handlePageChange('ignored', page)}
+              />
+            </>
           ) : searchTerm ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

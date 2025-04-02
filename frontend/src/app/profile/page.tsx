@@ -3,14 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
-import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { UserProfile } from '@/models/userProfile';
+import SettingsLayout from '@/components/settings/SettingsLayout';
 
 export default function Profile() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [profile, setProfile] = useState<UserProfile>({
     user_id: '',
     first_name: '',
@@ -73,7 +75,8 @@ export default function Profile() {
     if (!user) return;
     
     try {
-      setLoading(true);
+      setSaving(true);
+      setMessage(null);
       
       const { error } = await supabase
         .from('user_profiles')
@@ -86,22 +89,25 @@ export default function Profile() {
         throw error;
       }
       
-      alert('Profile updated successfully!');
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setMessage(null);
+      }, 3000);
     } catch (error: any) {
-      alert(`Error updating profile: ${error.message}`);
+      setMessage({ type: 'error', text: `Error updating profile: ${error.message}` });
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   // If still checking authentication status, show loading
   if (isLoading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
     );
   }
 
@@ -111,39 +117,59 @@ export default function Profile() {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Profile</h1>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <form onSubmit={handleSubmit}>
+    <SettingsLayout
+      title="Profile"
+      description="Manage your personal information and contact details"
+    >
+      {message && (
+        <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message.text}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit}>
+        <div className="space-y-6">
+          <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
+            <h3 className="text-sm font-medium text-blue-800 mb-1">Personal Information</h3>
+            <p className="text-sm text-blue-700">
+              This information will be displayed on your profile and may be visible to other users.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                First Name
+              </label>
+              <input
+                type="text"
+                name="first_name"
+                value={profile.first_name || ''}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter your first name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Last Name
+              </label>
+              <input
+                type="text"
+                name="last_name"
+                value={profile.last_name || ''}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter your last name"
+              />
+            </div>
+          </div>
+          
+          <div className="pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-medium text-gray-800 mb-4">Professional Information</h3>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  name="first_name"
-                  value={profile.first_name || ''}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  name="last_name"
-                  value={profile.last_name || ''}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Organization
@@ -153,7 +179,8 @@ export default function Profile() {
                   name="organization"
                   value={profile.organization || ''}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your organization"
                 />
               </div>
               
@@ -166,10 +193,17 @@ export default function Profile() {
                   name="job_title"
                   value={profile.job_title || ''}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your job title"
                 />
               </div>
-              
+            </div>
+          </div>
+          
+          <div className="pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-medium text-gray-800 mb-4">Contact Information</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone
@@ -179,7 +213,8 @@ export default function Profile() {
                   name="phone"
                   value={profile.phone || ''}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter your phone number"
                 />
               </div>
               
@@ -191,24 +226,24 @@ export default function Profile() {
                   type="text"
                   value={user?.email || ''}
                   disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
               </div>
             </div>
-            
-            <div className="mt-6">
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {loading ? 'Saving...' : 'Save Profile'}
-              </button>
-            </div>
-          </form>
+          </div>
+          
+          <div className="pt-6 border-t border-gray-200">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </div>
         </div>
-      </div>
-    </Layout>
+      </form>
+    </SettingsLayout>
   );
 }

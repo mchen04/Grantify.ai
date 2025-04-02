@@ -38,11 +38,11 @@ export default function Search() {
     agencies: [],
     fundingMin: 0,
     fundingMax: MAX_FUNDING,
-    includeFundingNull: true,
+    includeFundingNull: false, // Changed to false - hide grants with no funding by default
     onlyNoFunding: false,
     deadlineMinDays: MIN_DEADLINE_DAYS,
     deadlineMaxDays: MAX_DEADLINE_DAYS,
-    includeNoDeadline: true,
+    includeNoDeadline: false, // Changed to false - hide grants with no deadline by default
     onlyNoDeadline: false,
     costSharing: '',
     sortBy: 'relevance',

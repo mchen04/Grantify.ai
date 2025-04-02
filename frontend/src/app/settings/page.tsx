@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import SettingsLayout from '@/components/settings/SettingsLayout';
 
 export default function Settings() {
   const { user, isLoading, updatePassword } = useAuth();
@@ -73,9 +73,9 @@ export default function Settings() {
       
     } catch (error: any) {
       console.error('Error updating password:', error);
-      setMessage({ 
-        type: 'error', 
-        text: error.message || 'Failed to update password. Please try again.' 
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to update password. Please try again.'
       });
     } finally {
       setLoading(false);
@@ -85,11 +85,9 @@ export default function Settings() {
   // Show loading state while checking authentication
   if (isLoading || loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
     );
   }
 
@@ -99,114 +97,133 @@ export default function Settings() {
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Account Settings</h1>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-          >
-            Back to Dashboard
-          </button>
+    <SettingsLayout
+      title="Account Settings"
+      description="Manage your account security and information"
+    >
+      {message && (
+        <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          {message.text}
+        </div>
+      )}
+      
+      <div className="space-y-8">
+        {/* Account Information */}
+        <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">Account Information</h2>
+          </div>
+          <div className="p-4">
+            <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Email</dt>
+                <dd className="mt-1 text-sm text-gray-900 font-medium">{user.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">User ID</dt>
+                <dd className="mt-1 text-sm text-gray-900 font-medium truncate max-w-xs">{user.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Last Sign In</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-gray-500">Account Created</dt>
+                <dd className="mt-1 text-sm text-gray-900">
+                  {user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
         
-        {message && (
-          <div className={`p-3 mb-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {message.text}
+        {/* Password Update Form */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">Update Password</h2>
           </div>
-        )}
-        
-        <div className="bg-white rounded-lg shadow-md p-6 max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Account Information */}
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Account Information</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Email</p>
-                  <p className="text-base text-gray-900">{user.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">User ID</p>
-                  <p className="text-base text-gray-900 truncate">{user.id}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Last Sign In</p>
-                  <p className="text-base text-gray-900">
-                    {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Account Created</p>
-                  <p className="text-base text-gray-900">
-                    {user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}
-                  </p>
-                </div>
+          <div className="p-4">
+            <form onSubmit={handlePasswordUpdate} className="space-y-4">
+              <div>
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  id="currentPassword"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
               </div>
-            </div>
-            
-            {/* Password Update Form */}
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Update Password</h2>
-              <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                <div>
-                  <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    id="currentPassword"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
-                    id="newPassword"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    minLength={6}
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    id="confirmPassword"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
-                
+              
+              <div className="pt-4 border-t border-gray-100">
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  id="newPassword"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                  minLength={6}
+                />
+                <p className="mt-1 text-xs text-gray-500">Password must be at least 6 characters long</p>
+              </div>
+              
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  id="confirmPassword"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              
+              <div className="pt-4">
                 <button
                   type="submit"
                   disabled={loading}
-                  className={`w-full bg-blue-600 text-white px-6 py-2 rounded-lg font-medium transition-colors ${
+                  className={`px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium transition-colors ${
                     loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
                   }`}
                 >
                   {loading ? 'Updating...' : 'Update Password'}
                 </button>
-              </form>
-            </div>
+              </div>
+            </form>
+          </div>
+        </div>
+        
+        {/* Account Danger Zone */}
+        <div className="bg-red-50 rounded-lg border border-red-200 overflow-hidden">
+          <div className="px-4 py-3 bg-red-100 border-b border-red-200">
+            <h2 className="text-lg font-semibold text-red-800">Danger Zone</h2>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-red-700 mb-4">
+              Actions in this section can permanently affect your account. Please proceed with caution.
+            </p>
+            <button
+              type="button"
+              className="px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg font-medium hover:bg-red-50 transition-colors"
+              onClick={() => alert('This feature is not yet implemented')}
+            >
+              Delete Account
+            </button>
           </div>
         </div>
       </div>
-    </Layout>
+    </SettingsLayout>
   );
 }
