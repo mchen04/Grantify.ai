@@ -4,14 +4,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Layout from '@/components/Layout/Layout';
+import Layout from '../../components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
-import DashboardSearchBar from '@/components/dashboard/DashboardSearchBar';
-import DashboardSortAndFilterControls from '@/components/dashboard/DashboardSortAndFilterControls';
 import Pagination from '@/components/dashboard/Pagination';
+import CollapsibleFilterPanel from '@/components/dashboard/CollapsibleFilterPanel';
 import { SelectOption } from '@/types/grant';
 
 // Grant type definition
@@ -579,23 +578,28 @@ export default function Dashboard() {
           setRecommendedGrants(prev => [...prev, grant]);
         }
       } else {
-        // First delete any existing interactions
+        // First, delete any *other* interactions for this grant to ensure only one state exists
         await supabase
           .from('user_interactions')
           .delete()
           .eq('user_id', user.id)
-          .eq('grant_id', grantId);
+          .eq('grant_id', grantId)
+          .not('action', 'eq', action); // Delete rows where action is NOT the target action
 
-        // Then insert the new interaction
+        // Then, upsert the target interaction.
+        // This inserts if new, or updates timestamp if the exact (user, grant, action) already exists.
+        // It prevents the duplicate key error if this specific action row exists.
         const { error } = await supabase
           .from('user_interactions')
-          .insert({
+          .upsert({
             user_id: user.id,
             grant_id: grantId,
-            action,
+            action: action,
             timestamp: new Date().toISOString()
+          }, {
+            onConflict: 'user_id, grant_id, action' // Specify the constraint columns
           });
-        
+
         if (error) throw error;
 
         // First, remove from all lists to avoid duplicates
@@ -669,496 +673,366 @@ export default function Dashboard() {
   if (!user) {
     return null;
   }
-return (
-  <Layout>
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Your Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome, {user.email}</p>
+
+  return (
+    <Layout>
+      <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col md:flex-row">
+        {/* Sidebar */}
+        <div className="md:w-64 md:pr-8 mb-6 md:mb-0">
+          <h1 className="text-2xl font-bold mb-4">Your Dashboard</h1>
+          <p className="text-gray-600 mb-6">Welcome, {user.email}</p>
+          
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
+          
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+            <div className="space-y-1 p-2">
+              <button
+                onClick={() => setActiveTab('recommended')}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'recommended'
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span>Recommended ({recommendedGrants.length})</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('saved')}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'saved'
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span>Saved ({savedGrants.length})</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('applied')}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'applied'
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span>Applied ({appliedGrants.length})</span>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('ignored')}
+                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'ignored'
+                    ? 'bg-primary-50 text-primary-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span>Ignored ({ignoredGrants.length})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Main content area */}
+        <div className="flex-1">
+          {/* Consolidated Filter Panel */}
+          <CollapsibleFilterPanel
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            sortOptions={sortOptions}
+            filterOnlyNoDeadline={filterOnlyNoDeadline}
+            setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
+            filterOnlyNoFunding={filterOnlyNoFunding}
+            setFilterOnlyNoFunding={setFilterOnlyNoFunding}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+          />
+          
+          {/* Tab Content */}
+          {activeTab === 'recommended' && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <h2 className="text-xl font-bold mb-4">Recommended Grants</h2>
+              {filterAndSortGrants(recommendedGrants).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                    {displayedGrants.recommended.map((grant) => (
+                      <DashboardGrantCard
+                        ref={grant.id === pendingGrantId ? cardRef : undefined}
+                        key={grant.id}
+                        id={grant.id}
+                        title={grant.title}
+                        agency={grant.agency_name}
+                        closeDate={grant.close_date}
+                        fundingAmount={grant.award_ceiling}
+                        description={grant.description}
+                        categories={grant.activity_category || []}
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onApply={() => handleApplyClick(grant.id)}
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                        onShare={() => handleShare(grant.id)}
+                        onConfirmApply={() => handleConfirmApply(grant.id)}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Pagination */}
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage.recommended}
+                      totalPages={totalPages.recommended}
+                      onPageChange={(page) => handlePageChange('recommended', page)}
+                    />
+                  </div>
+                </>
+              ) : searchTerm ? (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No matching grants</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No recommended grants yet</h3>
+                  <p className="text-gray-600 mb-4">Check back later for personalized recommendations</p>
+                  <Link
+                    href="/search"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Browse Grants
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {activeTab === 'saved' && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <h2 className="text-xl font-bold mb-4">Saved Grants</h2>
+              {filterAndSortGrants(savedGrants).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                    {displayedGrants.saved.map((grant) => (
+                      <DashboardGrantCard
+                        ref={grant.id === pendingGrantId ? cardRef : undefined}
+                        key={grant.id}
+                        id={grant.id}
+                        title={grant.title}
+                        agency={grant.agency_name}
+                        closeDate={grant.close_date}
+                        fundingAmount={grant.award_ceiling}
+                        description={grant.description}
+                        categories={grant.activity_category || []}
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onApply={() => handleApplyClick(grant.id)}
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                        onShare={() => handleShare(grant.id)}
+                        isSaved={true}
+                        onConfirmApply={() => handleConfirmApply(grant.id)}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Pagination */}
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage.saved}
+                      totalPages={totalPages.saved}
+                      onPageChange={(page) => handlePageChange('saved', page)}
+                    />
+                  </div>
+                </>
+              ) : searchTerm ? (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No matching saved grants</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No saved grants yet</h3>
+                  <p className="text-gray-600 mb-4">Grants you save will appear here</p>
+                  <Link
+                    href="/search"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Browse Grants
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {activeTab === 'applied' && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <h2 className="text-xl font-bold mb-4">Applied Grants</h2>
+              {filterAndSortGrants(appliedGrants).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                    {displayedGrants.applied.map((grant) => (
+                      <DashboardGrantCard
+                        key={grant.id}
+                        id={grant.id}
+                        title={grant.title}
+                        agency={grant.agency_name}
+                        closeDate={grant.close_date}
+                        fundingAmount={grant.award_ceiling}
+                        description={grant.description}
+                        categories={grant.activity_category || []}
+                        onApply={() => {}} // Empty function since not needed for applied grants
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onShare={() => handleShare(grant.id)}
+                        isApplied={true}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Pagination */}
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage.applied}
+                      totalPages={totalPages.applied}
+                      onPageChange={(page) => handlePageChange('applied', page)}
+                    />
+                  </div>
+                </>
+              ) : searchTerm ? (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No matching applied grants</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No applied grants yet</h3>
+                  <p className="text-gray-600 mb-4">Grants you've applied for will appear here</p>
+                  <Link
+                    href="/search"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Browse Grants
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {activeTab === 'ignored' && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <h2 className="text-xl font-bold mb-4">Ignored Grants</h2>
+              {filterAndSortGrants(ignoredGrants).length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
+                    {displayedGrants.ignored.map((grant) => (
+                      <DashboardGrantCard
+                        ref={grant.id === pendingGrantId ? cardRef : undefined}
+                        key={grant.id}
+                        id={grant.id}
+                        title={grant.title}
+                        agency={grant.agency_name}
+                        closeDate={grant.close_date}
+                        fundingAmount={grant.award_ceiling}
+                        description={grant.description}
+                        categories={grant.activity_category || []}
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onApply={() => handleApplyClick(grant.id)}
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                        onShare={() => handleShare(grant.id)}
+                        isIgnored={true}
+                        onConfirmApply={() => handleConfirmApply(grant.id)}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Pagination */}
+                  <div className="mt-6">
+                    <Pagination
+                      currentPage={currentPage.ignored}
+                      totalPages={totalPages.ignored}
+                      onPageChange={(page) => handlePageChange('ignored', page)}
+                    />
+                  </div>
+                </>
+              ) : searchTerm ? (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No matching ignored grants</h3>
+                  <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Clear Search
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+                  <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No ignored grants yet</h3>
+                  <p className="text-gray-600 mb-4">Grants you choose to ignore will appear here</p>
+                  <Link
+                    href="/search"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Browse Grants
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       
-      {error && (
-        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
-          {error}
-        </div>
-      )}
-      
-      {/* Dashboard Navigation - Enhanced with counts and icons */}
-      <div className="mb-8">
-        <nav className="flex flex-wrap gap-2 sm:gap-0 bg-white rounded-xl shadow-sm overflow-hidden">
-          <button
-            onClick={() => setActiveTab('recommended')}
-            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
-              activeTab === 'recommended'
-                ? 'text-primary-600 bg-primary-50'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span>Recommended</span>
-            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {recommendedGrants.length}
-            </span>
-            {activeTab === 'recommended' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
-            )}
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('saved')}
-            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
-              activeTab === 'saved'
-                ? 'text-primary-600 bg-primary-50'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19 21L12 16L5 21V5C5 4.46957 5.21071 3.96086 5.58579 3.58579C5.96086 3.21071 6.46957 3 7 3H17C17.5304 3 18.0391 3.21071 18.4142 3.58579C18.7893 3.96086 19 4.46957 19 5V21Z"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span>Saved</span>
-            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {savedGrants.length}
-            </span>
-            {activeTab === 'saved' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
-            )}
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('applied')}
-            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
-              activeTab === 'applied'
-                ? 'text-primary-600 bg-primary-50'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span>Applied</span>
-            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {appliedGrants.length}
-            </span>
-            {activeTab === 'applied' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
-            )}
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('ignored')}
-            className={`flex items-center px-4 py-3 font-medium transition-colors relative ${
-              activeTab === 'ignored'
-                ? 'text-primary-600 bg-primary-50'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span>Ignored</span>
-            <span className="ml-2 bg-primary-100 text-primary-800 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {ignoredGrants.length}
-            </span>
-            {activeTab === 'ignored' && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary-600"></div>
-            )}
-          </button>
-        </nav>
-      </div>
-      
-      {/* Recommended Grants Section */}
-      {activeTab === 'recommended' && (
-        <section className="mb-12">
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Recommended for You</h2>
-                <p className="text-gray-600 mt-1">Personalized grant recommendations based on your preferences</p>
-              </div>
-              <Link
-                href="/search"
-                className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium transition-colors"
-              >
-                <span>Browse All Grants</span>
-                <svg className="ml-1 w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </Link>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search recommended grants..."
-              />
-              <DashboardSortAndFilterControls
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                sortOptions={sortOptions}
-                filterOnlyNoDeadline={filterOnlyNoDeadline}
-                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
-                filterOnlyNoFunding={filterOnlyNoFunding}
-                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
-              />
-            </div>
-          </div>
-          
-          {filterAndSortGrants(recommendedGrants).length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-                {displayedGrants.recommended.map((grant) => (
-                  <DashboardGrantCard
-                    ref={grant.id === pendingGrantId ? cardRef : undefined}
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleApplyClick(grant.id)}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isSaved={false}
-                    isApplied={false}
-                    isIgnored={false}
-                    onConfirmApply={() => handleConfirmApply(grant.id)}
-                  />
-                ))}
-              </div>
-              
-              {/* Pagination */}
-              <Pagination
-                currentPage={currentPage.recommended}
-                totalPages={totalPages.recommended}
-                onPageChange={(page) => handlePageChange('recommended', page)}
-              />
-            </>
-          ) : searchTerm ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching grants found</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
-              <button
-                onClick={() => setSearchTerm('')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Clear Search
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No recommended grants yet</h3>
-              <p className="text-gray-600 mb-4">Update your preferences to get personalized recommendations</p>
-              <Link
-                href="/preferences"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Update Preferences
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
-      
-      {/* Saved Grants Section */}
-      {activeTab === 'saved' && (
-        <section className="mb-12">
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Saved Grants</h2>
-                <p className="text-gray-600 mt-1">Grants you've saved for later review</p>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search saved grants..."
-              />
-              <DashboardSortAndFilterControls
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                sortOptions={sortOptions}
-                filterOnlyNoDeadline={filterOnlyNoDeadline}
-                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
-                filterOnlyNoFunding={filterOnlyNoFunding}
-                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
-              />
-            </div>
-          </div>
-          
-          {filterAndSortGrants(savedGrants).length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-                {displayedGrants.saved.map((grant) => (
-                  <DashboardGrantCard
-                    ref={grant.id === pendingGrantId ? cardRef : undefined}
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleApplyClick(grant.id)}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isSaved={true}
-                    onConfirmApply={() => handleConfirmApply(grant.id)}
-                  />
-                ))}
-              </div>
-              
-              {/* Pagination */}
-              <Pagination
-                currentPage={currentPage.saved}
-                totalPages={totalPages.saved}
-                onPageChange={(page) => handlePageChange('saved', page)}
-              />
-            </>
-          ) : searchTerm ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching saved grants</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
-              <button
-                onClick={() => setSearchTerm('')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Clear Search
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No saved grants yet</h3>
-              <p className="text-gray-600 mb-4">Save grants you're interested in to review later</p>
-              <Link
-                href="/search"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Browse Grants
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
-      
-      {/* Applied Grants Section */}
-      {activeTab === 'applied' && (
-        <section className="mb-12">
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Applied Grants</h2>
-                <p className="text-gray-600 mt-1">Grants you've applied for</p>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search applied grants..."
-              />
-              <DashboardSortAndFilterControls
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                sortOptions={sortOptions}
-                filterOnlyNoDeadline={filterOnlyNoDeadline}
-                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
-                filterOnlyNoFunding={filterOnlyNoFunding}
-                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
-              />
-            </div>
-          </div>
-          
-          {filterAndSortGrants(appliedGrants).length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-                {displayedGrants.applied.map((grant) => (
-                  <DashboardGrantCard
-                    ref={grant.id === pendingGrantId ? cardRef : undefined}
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleApplyClick(grant.id)}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isApplied={true}
-                    onConfirmApply={() => handleConfirmApply(grant.id)}
-                  />
-                ))}
-              </div>
-              
-              {/* Pagination */}
-              <Pagination
-                currentPage={currentPage.applied}
-                totalPages={totalPages.applied}
-                onPageChange={(page) => handlePageChange('applied', page)}
-              />
-            </>
-          ) : searchTerm ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching applied grants</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
-              <button
-                onClick={() => setSearchTerm('')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Clear Search
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No applied grants yet</h3>
-              <p className="text-gray-600 mb-4">When you apply for grants, they'll appear here</p>
-              <Link
-                href="/search"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Find Grants to Apply For
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
-      
-      {/* Ignored Grants Section */}
-      {activeTab === 'ignored' && (
-        <section className="mb-12">
-          <div className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Ignored Grants</h2>
-                <p className="text-gray-600 mt-1">Grants you've chosen to ignore</p>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <DashboardSearchBar
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                placeholder="Search ignored grants..."
-              />
-              <DashboardSortAndFilterControls
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                sortOptions={sortOptions}
-                filterOnlyNoDeadline={filterOnlyNoDeadline}
-                setFilterOnlyNoDeadline={setFilterOnlyNoDeadline}
-                filterOnlyNoFunding={filterOnlyNoFunding}
-                setFilterOnlyNoFunding={setFilterOnlyNoFunding}
-              />
-            </div>
-          </div>
-          
-          {filterAndSortGrants(ignoredGrants).length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-                {displayedGrants.ignored.map((grant) => (
-                  <DashboardGrantCard
-                    ref={grant.id === pendingGrantId ? cardRef : undefined}
-                    key={grant.id}
-                    id={grant.id}
-                    title={grant.title}
-                    agency={grant.agency_name}
-                    closeDate={grant.close_date}
-                    fundingAmount={grant.award_ceiling}
-                    description={grant.description}
-                    categories={grant.activity_category || []}
-                    onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                    onApply={() => handleApplyClick(grant.id)}
-                    onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                    onShare={() => handleShare(grant.id)}
-                    isIgnored={true}
-                    onConfirmApply={() => handleConfirmApply(grant.id)}
-                  />
-                ))}
-              </div>
-              
-              {/* Pagination */}
-              <Pagination
-                currentPage={currentPage.ignored}
-                totalPages={totalPages.ignored}
-                onPageChange={(page) => handlePageChange('ignored', page)}
-              />
-            </>
-          ) : searchTerm ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No matching ignored grants</h3>
-              <p className="text-gray-600 mb-4">Try adjusting your search terms or filters</p>
-              <button
-                onClick={() => setSearchTerm('')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Clear Search
-              </button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <svg className="w-16 h-16 text-primary-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No ignored grants yet</h3>
-              <p className="text-gray-600 mb-4">Grants you choose to ignore will appear here</p>
-              <Link
-                href="/search"
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                Browse Grants
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
+      {/* Apply Confirmation Popup */}
+      <ApplyConfirmationPopup
+        isOpen={showApplyConfirmation}
+        grantTitle={pendingGrantTitle}
+        onConfirm={() => handleApplyConfirmation(true)}
+        onCancel={() => handleApplyConfirmation(false)}
+      />
     </div>
-    {/* Apply Confirmation Popup */}
-    <ApplyConfirmationPopup
-      isOpen={showApplyConfirmation}
-      grantTitle={pendingGrantTitle}
-      onConfirm={() => handleApplyConfirmation(true)}
-      onCancel={() => handleApplyConfirmation(false)}
-    />
   </Layout>
-);
+  );
 }
