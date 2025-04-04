@@ -31,7 +31,6 @@ export const DEFAULT_USER_PREFERENCES = {
   topics: [],
   funding_min: 0,
   funding_max: 1000000,
-  eligible_applicant_types: [],
   agencies: [],
   locations: [],
   notification_settings: {
@@ -39,45 +38,32 @@ export const DEFAULT_USER_PREFERENCES = {
     notify_new_matches: true,
     notify_deadlines: true,
   },
+  deadline_range: '0',
 };
 
 // Grant categories
 export const GRANT_CATEGORIES = [
-  'Health',
-  'Education',
-  'Energy',
-  'Technology',
   'Research',
+  'Education',
+  'Health',
+  'Arts & Culture',
   'Environment',
-  'Agriculture',
-  'Arts',
   'Community Development',
   'Economic Development',
-  'Housing',
   'Infrastructure',
   'Social Services',
-  'Transportation',
+  'Technology',
+  'International Aid',
+  'Youth Programs',
+  'Animal Welfare',
+  'Human Rights',
+  'Operating Support',
+  'Miscellaneous'
 ];
 
 // Grant agencies
 export const GRANT_AGENCIES = [
-  'Department of Agriculture',
-  'Department of Commerce',
-  'Department of Defense',
-  'Department of Education',
-  'Department of Energy',
-  'Department of Health and Human Services',
-  'Department of Homeland Security',
-  'Department of Housing and Urban Development',
-  'Department of Justice',
-  'Department of Labor',
-  'Department of State',
-  'Department of Transportation',
-  'Department of the Treasury',
-  'Department of Veterans Affairs',
-  'Environmental Protection Agency',
-  'National Science Foundation',
-  'Small Business Administration',
+  'Grants.gov'
 ];
 
 // Funding ranges

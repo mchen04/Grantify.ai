@@ -17,7 +17,7 @@ const DashboardSearchBar: React.FC<DashboardSearchBarProps> = ({
   
   // Common search terms for quick filtering
   const quickSearchTerms = [
-    'Research', 'Education', 'Healthcare', 'Technology', 'Environment'
+    'Research', 'Education', 'Health', 'Arts & Culture', 'Environment', 'Community Development', 'Economic Development', 'Infrastructure', 'Social Services', 'Technology', 'International Aid', 'Youth Programs', 'Animal Welfare', 'Human Rights', 'Operating Support', 'Miscellaneous'
   ];
 
   // Clear search term

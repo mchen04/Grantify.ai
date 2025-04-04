@@ -63,7 +63,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
         {/* Popular searches */}
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-sm text-gray-500">
           <span>Popular:</span>
-          {["Research", "Technology", "Education", "Healthcare", "Environment"].map((term) => (
+          {["Research", "Education", "Health", "Arts & Culture", "Environment", "Community Development", "Economic Development", "Infrastructure", "Social Services", "Technology", "International Aid", "Youth Programs", "Animal Welfare", "Human Rights", "Operating Support", "Miscellaneous"].map((term) => (
             <button
               key={term}
               type="button"

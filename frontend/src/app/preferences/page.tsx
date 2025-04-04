@@ -13,13 +13,13 @@ export default function Preferences() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
+
   // Preferences state
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [fundingMin, setFundingMin] = useState<number>(0);
   const [fundingMax, setFundingMax] = useState<number>(1000000);
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
-  const [eligibleTypes, setEligibleTypes] = useState<string[]>([]);
+  const [deadlineRange, setDeadlineRange] = useState<string>('0');
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -32,35 +32,35 @@ export default function Preferences() {
   useEffect(() => {
     const loadPreferences = async () => {
       if (!user) return;
-      
+
       try {
         setLoading(true);
-        
+
         // Fetch user preferences from Supabase
         const { data, error } = await supabase
           .from('user_preferences')
           .select('*')
           .eq('user_id', user.id)
           .single();
-        
+
         if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
           throw error;
         }
-        
+
         if (data) {
           // Set state from preferences
           setSelectedTopics(data.topics || []);
           setFundingMin(data.funding_min || 0);
           setFundingMax(data.funding_max || 1000000);
           setSelectedAgencies(data.agencies || []);
-          setEligibleTypes(data.eligible_applicant_types || []);
+          setDeadlineRange(data.deadline_range || '0');
         } else {
           // If no preferences exist yet, use defaults
           setSelectedTopics(DEFAULT_USER_PREFERENCES.topics || []);
           setFundingMin(DEFAULT_USER_PREFERENCES.funding_min || 0);
           setFundingMax(DEFAULT_USER_PREFERENCES.funding_max || 1000000);
           setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
-          setEligibleTypes(DEFAULT_USER_PREFERENCES.eligible_applicant_types || []);
+          setDeadlineRange(DEFAULT_USER_PREFERENCES.deadline_range || '0');
         }
       } catch (error) {
         console.error('Error loading preferences:', error);
@@ -69,20 +69,20 @@ export default function Preferences() {
         setLoading(false);
       }
     };
-    
+
     loadPreferences();
   }, [user]);
 
   // Handle form submission - Save to Supabase
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) return;
-    
+
     try {
       setSaving(true);
       setMessage(null);
-      
+
       // Prepare preferences object
       const preferences = {
         user_id: user.id,
@@ -90,21 +90,21 @@ export default function Preferences() {
         funding_min: fundingMin,
         funding_max: fundingMax,
         agencies: selectedAgencies,
-        eligible_applicant_types: eligibleTypes,
+        deadline_range: deadlineRange,
         updated_at: new Date().toISOString(),
       };
-      
+
       // Save preferences to Supabase using upsert
       const { error } = await supabase
         .from('user_preferences')
         .upsert(preferences, { onConflict: 'user_id' });
-      
+
       if (error) {
         throw error;
       }
-      
+
       setMessage({ type: 'success', text: 'Preferences saved successfully' });
-      
+
       // Clear message after 3 seconds
       setTimeout(() => {
         setMessage(null);
@@ -135,15 +135,9 @@ export default function Preferences() {
     }
   };
 
-  // Toggle eligible applicant type
-  const toggleEligibleType = (type: string) => {
-    if (eligibleTypes.includes(type)) {
-      setEligibleTypes(eligibleTypes.filter(t => t !== type));
-    } else {
-      setEligibleTypes([...eligibleTypes, type]);
-    }
+  const handleDeadlineRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setDeadlineRange(e.target.value);
   };
-
 
   // Show loading state while checking authentication
   if (isLoading || loading) {
@@ -169,7 +163,7 @@ export default function Preferences() {
           {message.text}
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         {/* Research Topics */}
         <div className="mb-8">
@@ -178,7 +172,7 @@ export default function Preferences() {
             <span className="text-sm text-blue-600">{selectedTopics.length} selected</span>
           </div>
           <p className="text-sm text-gray-600 mb-4">Select topics that interest you to receive relevant grant recommendations.</p>
-          
+
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {GRANT_CATEGORIES.map((topic) => (
@@ -198,12 +192,12 @@ export default function Preferences() {
             </div>
           </div>
         </div>
-        
+
         {/* Funding Range */}
         <div className="mb-8 pt-6 border-t border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Funding Range</h2>
           <p className="text-sm text-gray-600 mb-4">Specify your preferred funding range.</p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="fundingMin" className="block text-sm font-medium text-gray-700 mb-1">
@@ -219,7 +213,7 @@ export default function Preferences() {
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            
+
             <div>
               <label htmlFor="fundingMax" className="block text-sm font-medium text-gray-700 mb-1">
                 Maximum Funding ($)
@@ -236,7 +230,45 @@ export default function Preferences() {
             </div>
           </div>
         </div>
-        
+
+        {/* Deadline Range */}
+        <div className="mb-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Deadline Range</h2>
+          <p className="text-sm text-gray-600 mb-4">Specify your preferred deadline range.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="deadlineMin" className="block text-sm font-medium text-gray-700 mb-1">
+                Minimum Days
+              </label>
+              <input
+                type="number"
+                id="deadlineMin"
+                value={deadlineRange}
+                onChange={(e) => setDeadlineRange(e.target.value)}
+                min="0"
+                step="1"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="deadlineMax" className="block text-sm font-medium text-gray-700 mb-1">
+                Maximum Days
+              </label>
+              <input
+                type="number"
+                id="deadlineMax"
+                value={deadlineRange}
+                onChange={(e) => setDeadlineRange(e.target.value)}
+                min="0"
+                step="1"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Funding Agencies */}
         <div className="mb-8 pt-6 border-t border-gray-200">
           <div className="flex items-center justify-between mb-4">
@@ -244,7 +276,7 @@ export default function Preferences() {
             <span className="text-sm text-blue-600">{selectedAgencies.length} selected</span>
           </div>
           <p className="text-sm text-gray-600 mb-4">Select agencies you're interested in receiving grants from.</p>
-          
+
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {GRANT_AGENCIES.map((agency) => (
@@ -258,46 +290,6 @@ export default function Preferences() {
                   />
                   <label htmlFor={`agency-${agency}`} className="ml-2 text-sm text-gray-700">
                     {agency}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* Eligible Applicant Types */}
-        <div className="mb-8 pt-6 border-t border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Eligible Applicant Types</h2>
-            <span className="text-sm text-blue-600">{eligibleTypes.length} selected</span>
-          </div>
-          <p className="text-sm text-gray-600 mb-4">Select the types of applicants you qualify as.</p>
-          
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[
-                'Public and State controlled institutions of higher education',
-                'Private institutions of higher education',
-                'Nonprofit organizations with 501(c)(3) status',
-                'Small businesses',
-                'For profit organizations other than small businesses',
-                'State governments',
-                'County governments',
-                'City or township governments',
-                'Special district governments',
-                'Native American tribal governments',
-                'Individuals',
-              ].map((type) => (
-                <div key={type} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id={`type-${type}`}
-                    checked={eligibleTypes.includes(type)}
-                    onChange={() => toggleEligibleType(type)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor={`type-${type}`} className="ml-2 text-sm text-gray-700">
-                    {type}
                   </label>
                 </div>
               ))}
