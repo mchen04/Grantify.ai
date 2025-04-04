@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -34,6 +34,8 @@ interface UserInteraction {
   grants: Grant;
 }
 
+const TARGET_RECOMMENDED_COUNT = 10; // Target number of recommended grants
+
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
@@ -51,7 +53,8 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState<string>('deadline');
   const [filterOnlyNoDeadline, setFilterOnlyNoDeadline] = useState(false);
   const [filterOnlyNoFunding, setFilterOnlyNoFunding] = useState(false);
-  
+  const [isFetchingReplacements, setIsFetchingReplacements] = useState(false); // Prevent concurrent fetches
+
   // Pagination state for each tab
   const [currentPage, setCurrentPage] = useState({
     recommended: 1,
@@ -59,10 +62,10 @@ export default function Dashboard() {
     applied: 1,
     ignored: 1
   });
-  
+
   // Number of grants to display per page
   const GRANTS_PER_PAGE = 10;
-  
+
   // Sort options for the dashboard
   const sortOptions: SelectOption[] = [
     { value: 'deadline', label: 'Deadline (Soonest)' },
@@ -77,7 +80,7 @@ export default function Dashboard() {
   const filterAndSortGrants = (grants: Grant[]) => {
     // Apply filters in sequence
     let filteredGrants = grants;
-    
+
     // Apply no deadline filter if enabled
     if (filterOnlyNoDeadline) {
       filteredGrants = filteredGrants.filter(grant =>
@@ -96,12 +99,12 @@ export default function Dashboard() {
            grant.close_date.toLowerCase().includes('ongoing')))
       );
     }
-    
+
     // Apply no funding filter if enabled
     if (filterOnlyNoFunding) {
       filteredGrants = filteredGrants.filter(grant => grant.award_ceiling === null);
     }
-    
+
     // Apply search term filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -111,7 +114,7 @@ export default function Dashboard() {
         grant.agency_name.toLowerCase().includes(term)
       );
     }
-    
+
     // Finally sort based on sortBy option
     return [...filteredGrants].sort((a, b) => {
       switch (sortBy) {
@@ -120,33 +123,33 @@ export default function Dashboard() {
           if (!a.close_date) return 1;
           if (!b.close_date) return -1;
           return new Date(a.close_date).getTime() - new Date(b.close_date).getTime();
-        
+
         case 'deadline_latest':
           // Sort by deadline (latest first)
           if (!a.close_date) return 1;
           if (!b.close_date) return -1;
           return new Date(b.close_date).getTime() - new Date(a.close_date).getTime();
-        
+
         case 'amount':
           // Sort by funding amount (highest first)
           if (a.award_ceiling === null) return 1;
           if (b.award_ceiling === null) return -1;
           return b.award_ceiling - a.award_ceiling;
-        
+
         case 'amount_asc':
           // Sort by funding amount (lowest first)
           if (a.award_ceiling === null) return 1;
           if (b.award_ceiling === null) return -1;
           return a.award_ceiling - b.award_ceiling;
-        
+
         case 'title_asc':
           // Sort by title (A-Z)
           return a.title.localeCompare(b.title);
-        
+
         case 'title_desc':
           // Sort by title (Z-A)
           return b.title.localeCompare(a.title);
-        
+
         default:
           return 0;
       }
@@ -160,12 +163,12 @@ export default function Dashboard() {
     const endIndex = startIndex + GRANTS_PER_PAGE;
     return filteredAndSortedGrants.slice(startIndex, endIndex);
   };
-  
+
   // Get total number of pages for a tab
   const getTotalPages = (grants: Grant[]) => {
     return Math.ceil(filterAndSortGrants(grants).length / GRANTS_PER_PAGE);
   };
-  
+
   // Handle page change
   const handlePageChange = (tabName: string, newPage: number) => {
     setCurrentPage(prev => ({
@@ -173,14 +176,14 @@ export default function Dashboard() {
       [tabName]: newPage
     }));
   };
-  
+
   const displayedGrants = {
     recommended: getPaginatedGrants(recommendedGrants, 'recommended'),
     saved: getPaginatedGrants(savedGrants, 'saved'),
     applied: getPaginatedGrants(appliedGrants, 'applied'),
     ignored: getPaginatedGrants(ignoredGrants, 'ignored')
   };
-  
+
   const totalPages = {
     recommended: getTotalPages(recommendedGrants),
     saved: getTotalPages(savedGrants),
@@ -195,259 +198,180 @@ export default function Dashboard() {
     }
   }, [user, isLoading, router]);
 
-  // Fetch user's grants based on interactions
+  // Fetch initial user grants and recommended grants
   useEffect(() => {
-    const fetchUserGrants = async () => {
+    const fetchInitialData = async () => {
       if (!user) return;
-      
+
       try {
         setLoading(true);
         setError(null);
-        
+
         // Get current date for filtering expired grants
         const today = new Date().toISOString();
-        
-        // Fetch all user interactions with grants
-        // We'll use separate queries for each action type to ensure we get the correct data
-        // This is more reliable than trying to process everything in memory
-        
-        // Fetch saved grants
-        const { data: savedInteractions, error: savedError } = await supabase
+
+        // Fetch all user interactions
+        const { data: allInteractionsData, error: interactionsError } = await supabase
           .from('user_interactions')
           .select('*, grants(*)')
-          .eq('user_id', user.id)
-          .eq('action', 'saved');
-        
-        // Only log real errors, not empty objects which often occur when no grants are found
-        if (savedError) {
-          if (Object.keys(savedError).length > 0) {
-            console.error('Error fetching saved grants:', savedError);
-            // Don't throw the error, just log it
-            console.log('Continuing despite saved grants error');
-          } else {
-            // Just log a debug message for empty error objects
-            console.log('No saved grants found or empty error object');
-          }
+          .eq('user_id', user.id);
+
+        if (interactionsError && Object.keys(interactionsError).length > 0) {
+          console.error('Error fetching user interactions:', interactionsError);
+          // Don't throw, try to continue
         }
-        
-        // Fetch applied grants
-        const { data: appliedInteractions, error: appliedError } = await supabase
-          .from('user_interactions')
-          .select('*, grants(*)')
-          .eq('user_id', user.id)
-          .eq('action', 'applied');
-        
-        // Only log real errors, not empty objects which often occur when no grants are found
-        if (appliedError) {
-          if (Object.keys(appliedError).length > 0) {
-            console.error('Error fetching applied grants:', appliedError);
-            // Don't throw the error, just log it
-            console.log('Continuing despite applied grants error');
-          } else {
-            // Just log a debug message for empty error objects
-            console.log('No applied grants found or empty error object');
+
+        const allInteractions = allInteractionsData || [];
+
+        // Process interactions to find the latest action for each grant
+        const latestInteractionsMap = new Map<string, UserInteraction>();
+        allInteractions.forEach(interaction => {
+          const existing = latestInteractionsMap.get(interaction.grant_id);
+          if (!existing || new Date(interaction.timestamp) > new Date(existing.timestamp)) {
+            latestInteractionsMap.set(interaction.grant_id, interaction);
           }
-        }
-        
-        // Fetch ignored grants
-        const { data: ignoredInteractions, error: ignoredError } = await supabase
-          .from('user_interactions')
-          .select('*, grants(*)')
-          .eq('user_id', user.id)
-          .eq('action', 'ignored');
-        
-        // Only log real errors, not empty objects which often occur when no grants are found
-        if (ignoredError) {
-          if (Object.keys(ignoredError).length > 0) {
-            console.error('Error fetching ignored grants:', ignoredError);
-            // Don't throw the error, just log it
-            console.log('Continuing despite ignored grants error');
-          } else {
-            // Just log a debug message for empty error objects
-            console.log('No ignored grants found or empty error object');
-          }
-        }
-        
-        // Get all unique grant IDs that the user has interacted with
-        const interactedGrantIds: string[] = [];
-        const processedGrantIds = new Set<string>();
-        
-        // Process interactions to ensure each grant only appears in its most recent category
-        // We'll use a timestamp-based approach to determine the most recent action
-        
-        // First, get all interactions and sort them by timestamp (newest first)
-        const allInteractions = [
-          ...(savedInteractions || []),
-          ...(appliedInteractions || []),
-          ...(ignoredInteractions || [])
-        ].sort((a, b) => {
-          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
-        
-        // Then filter to keep only the most recent interaction for each grant
-        const uniqueInteractions = allInteractions.filter(interaction => {
-          if (!processedGrantIds.has(interaction.grant_id)) {
-            processedGrantIds.add(interaction.grant_id);
-            interactedGrantIds.push(interaction.grant_id);
-            return true;
-          }
-          return false;
-        });
-        
-        // Now separate by action type
-        const filteredSavedInteractions: UserInteraction[] = uniqueInteractions.filter(
-          interaction => interaction.action === 'saved'
-        );
-        
-        const filteredAppliedInteractions: UserInteraction[] = uniqueInteractions.filter(
-          interaction => interaction.action === 'applied'
-        );
-        
-        const filteredIgnoredInteractions: UserInteraction[] = uniqueInteractions.filter(
-          interaction => interaction.action === 'ignored'
-        );
-        
-        // We've already separated interactions by action type above
-        
-        // Fetch recommended grants based on user preferences
-        let recommendedData = [];
-        
-        try {
-          // First, fetch user preferences
-          const { data: userPreferences, error: preferencesError } = await supabase
-            .from('user_preferences')
-            .select('*')
-            .eq('user_id', user.id)
-            .single();
-          
-          if (preferencesError && preferencesError.code !== 'PGRST116') {
-            console.log('Error fetching user preferences:', preferencesError);
-          }
-          
-          // Build query based on preferences
-          let query = supabase
-            .from('grants')
-            .select('*')
-            .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
-          
-          // Always exclude grants the user has already interacted with
-          if (interactedGrantIds.length > 0) {
-            query = query.not('id', 'in', `(${interactedGrantIds.join(',')})`);
-          }
-          
-          // Apply topic preferences if available
-          if (userPreferences?.topics && userPreferences.topics.length > 0) {
-            // Use overlap operator to find grants with matching topics
-            query = query.overlaps('activity_category', userPreferences.topics);
-          }
-          
-          // Apply funding range preferences if available
-          if (userPreferences?.funding_min !== undefined && userPreferences.funding_min > 0) {
-            query = query.gte('award_ceiling', userPreferences.funding_min);
-          }
-          
-          if (userPreferences?.funding_max !== undefined && userPreferences.funding_max < 1000000000) {
-            query = query.lte('award_ceiling', userPreferences.funding_max);
-          }
-          
-          // Apply agency preferences if available
-          if (userPreferences?.agencies && userPreferences.agencies.length > 0) {
-            query = query.in('agency_name', userPreferences.agencies);
-          }
-          
-          // Apply eligible applicant types if available
-          if (userPreferences?.eligible_applicant_types && userPreferences.eligible_applicant_types.length > 0) {
-            // This would require a more complex query depending on how eligible_applicant_types is stored
-            // For now, we'll assume it's a simple match
-            // query = query.overlaps('eligible_applicant_types', userPreferences.eligible_applicant_types);
-          }
-          
-          // Limit results
-          query = query.limit(10);
-          
-          const { data, error } = await query;
-          
-          if (error) {
-            console.log('Note: Could not fetch recommended grants, using empty array', error);
-          } else {
-            recommendedData = data || [];
-            
-            // If we don't have enough grants based on preferences, fetch more without preference filters
-            if (recommendedData.length < 5) {
-              console.log('Not enough grants based on preferences, fetching more');
-              
-              let backupQuery = supabase
-                .from('grants')
-                .select('*')
-                .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
-              
-              if (interactedGrantIds.length > 0) {
-                backupQuery = backupQuery.not('id', 'in', `(${interactedGrantIds.join(',')})`);
-              }
-              
-              // Exclude grants we already have
-              if (recommendedData.length > 0) {
-                const existingIds = recommendedData.map(g => g.id);
-                backupQuery = backupQuery.not('id', 'in', `(${existingIds.join(',')})`);
-              }
-              
-              backupQuery = backupQuery.limit(10 - recommendedData.length);
-              
-              const { data: backupData, error: backupError } = await backupQuery;
-              
-              if (!backupError && backupData) {
-                recommendedData = [...recommendedData, ...backupData];
-              }
-            }
-          }
-        } catch (e) {
-          console.log('Exception fetching recommended grants, using empty array', e);
-        }
-        
-        // Filter out expired grants from interactions
+
+        const latestInteractions = Array.from(latestInteractionsMap.values());
+        const interactedGrantIds = Array.from(latestInteractionsMap.keys());
+
+        // Separate grants into lists based on the latest action
+        const initialSaved: Grant[] = [];
+        const initialApplied: Grant[] = [];
+        const initialIgnored: Grant[] = [];
+
         const filterActiveGrants = (interaction: UserInteraction) => {
           const grant = interaction.grants;
-          if (!grant.close_date) return true;
-          return new Date(grant.close_date) >= new Date();
+          if (!grant) return false; // Skip if grant data is missing
+          if (!grant.close_date) return true; // Keep if no close date
+          return new Date(grant.close_date) >= new Date(); // Keep if not expired
         };
-        
-        // Apply active grants filter to saved and ignored interactions
-        // We don't filter applied grants (keep all regardless of expiry)
-        const activeSavedInteractions = filteredSavedInteractions.filter(filterActiveGrants);
-        const activeIgnoredInteractions = filteredIgnoredInteractions.filter(filterActiveGrants);
-        
-        // Set the grants in state
-        setSavedGrants(activeSavedInteractions.map(interaction => interaction.grants));
-        setAppliedGrants(filteredAppliedInteractions.map(interaction => interaction.grants));
-        setIgnoredGrants(activeIgnoredInteractions.map(interaction => interaction.grants));
-        setRecommendedGrants(recommendedData);
-      } catch (error: any) {
-        // Check if this is a real error that should be displayed to the user
-        // For new users with no grants, we don't want to show an error
-        if (error &&
-            Object.keys(error).length > 0 &&
-            error.code !== 'PGRST116' && // This is the Postgrest error for "no rows returned"
-            error.message !== 'No grants found') {
-          console.error('Error fetching user grants:', error);
-          setError('Failed to load your grants. Please try again later.');
-        } else {
-          // If it's an empty error object or a "no data" error, it's likely just that the user has no grants
-          // Don't show an error message in this case
-          console.log('No grants found or empty error object');
-          setError(null);
+
+        latestInteractions.forEach(interaction => {
+          if (!interaction.grants) return; // Skip if grant data is missing
+
+          if (interaction.action === 'saved' && filterActiveGrants(interaction)) {
+            initialSaved.push(interaction.grants);
+          } else if (interaction.action === 'applied') { // Keep applied regardless of expiry
+            initialApplied.push(interaction.grants);
+          } else if (interaction.action === 'ignored' && filterActiveGrants(interaction)) {
+            initialIgnored.push(interaction.grants);
+          }
+        });
+
+        setSavedGrants(initialSaved);
+        setAppliedGrants(initialApplied);
+        setIgnoredGrants(initialIgnored);
+
+        // Fetch initial recommended grants
+        let recommendedQuery = supabase
+          .from('grants')
+          .select('*')
+          .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
+
+        if (interactedGrantIds.length > 0) {
+          recommendedQuery = recommendedQuery.not('id', 'in', `(${interactedGrantIds.join(',')})`);
         }
+
+        // --- Add preference filtering here if needed ---
+        // Example:
+        // const { data: userPreferences } = await supabase...
+        // if (userPreferences?.topics) { recommendedQuery = recommendedQuery.overlaps(...) }
+        // ---
+
+        recommendedQuery = recommendedQuery.limit(TARGET_RECOMMENDED_COUNT); // Fetch up to the target count
+
+        const { data: initialRecommended, error: recommendedError } = await recommendedQuery;
+
+        if (recommendedError) {
+          console.error('Error fetching initial recommended grants:', recommendedError);
+          setRecommendedGrants([]);
+        } else {
+          setRecommendedGrants(initialRecommended || []);
+        }
+
+      } catch (error: any) {
+         if (error && Object.keys(error).length > 0 && error.code !== 'PGRST116' && error.message !== 'No grants found') {
+           console.error('Error fetching initial data:', error);
+           setError('Failed to load your grants. Please try again later.');
+         } else {
+           console.log('No grants found or expected empty result.');
+           setError(null);
+         }
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchUserGrants();
-  }, [user]);
+
+    fetchInitialData();
+  }, [user]); // Only run on user change
+
+  // Effect to fetch replacement recommended grants when needed
+  useEffect(() => {
+    const fetchReplacementGrantsIfNeeded = async () => {
+      if (!user || isFetchingReplacements) return; // Exit if no user or already fetching
+
+      const currentRecommendedCount = recommendedGrants.length;
+      const neededCount = TARGET_RECOMMENDED_COUNT - currentRecommendedCount;
+
+      if (neededCount <= 0) {
+        return; // Already have enough or too many
+      }
+
+      setIsFetchingReplacements(true); // Set flag to prevent concurrent fetches
+
+      try {
+        // Get IDs of ALL grants currently displayed in any list
+        const allCurrentGrantIds = [
+          ...recommendedGrants.map(g => g.id),
+          ...savedGrants.map(g => g.id),
+          ...appliedGrants.map(g => g.id),
+          ...ignoredGrants.map(g => g.id)
+        ];
+
+        const today = new Date().toISOString();
+
+        let query = supabase
+          .from('grants')
+          .select('*')
+          .or(`close_date.gt.${today},close_date.is.null`); // Active grants only
+
+        if (allCurrentGrantIds.length > 0) {
+          query = query.not('id', 'in', `(${allCurrentGrantIds.join(',')})`); // Exclude current grants
+        }
+
+        // --- Add preference filtering here if needed ---
+
+        query = query.limit(neededCount); // Fetch exactly the number needed
+
+        const { data: newGrants, error } = await query;
+
+        if (error) {
+          console.error('Error fetching replacement grants:', error);
+        } else if (newGrants && newGrants.length > 0) {
+          setRecommendedGrants(prev => [...prev, ...newGrants]); // Add new grants
+        }
+      } catch (e) {
+        console.error('Exception fetching replacement grants:', e);
+      } finally {
+         setIsFetchingReplacements(false); // Reset flag
+      }
+    };
+
+    // Debounce or delay the fetch slightly to avoid rapid firing during initial load or quick actions
+    const timerId = setTimeout(() => {
+        fetchReplacementGrantsIfNeeded();
+    }, 500); // Adjust delay as needed
+
+    return () => clearTimeout(timerId); // Cleanup timer on unmount or dependency change
+
+  }, [user, recommendedGrants, savedGrants, appliedGrants, ignoredGrants, isFetchingReplacements]); // Dependencies
+
 
   // Handle grant sharing
   const handleShare = async (grantId: string) => {
     const shareUrl = `${window.location.origin}/grants/${grantId}`;
-    
+
     try {
       if (navigator.share) {
         await navigator.share({
@@ -480,27 +404,27 @@ export default function Dashboard() {
                    savedGrants.find(g => g.id === grantId) ||
                    appliedGrants.find(g => g.id === grantId) ||
                    ignoredGrants.find(g => g.id === grantId);
-      
+
       if (!grant) {
         resolve();
         return;
       }
-      
+
       // Set the pending grant ID and title
       setPendingGrantId(grantId);
       setPendingGrantTitle(grant.title);
-      
+
       // Show the confirmation popup
       setShowApplyConfirmation(true);
       resolve();
     });
   };
-  
+
   // Function to handle confirmation response
   const handleApplyConfirmation = async (didApply: boolean) => {
     // Hide the confirmation popup
     setShowApplyConfirmation(false);
-    
+
     // If the user clicked "Yes" and we have a pending grant ID
     if (didApply && pendingGrantId) {
       // First fade out the card if we have a reference to it
@@ -511,73 +435,76 @@ export default function Dashboard() {
           console.error('Error fading card:', error);
         }
       }
-      
-      // Then update the database
-      await handleGrantInteraction(pendingGrantId, 'applied', true); // true = remove from recommended
+
+      // Then update the database and local state
+      await handleGrantInteraction(pendingGrantId, 'applied');
     }
     // If the user clicked "No", we don't need to do anything - the card stays in place
-    
+
     // Reset the pending grant ID and title
     setPendingGrantId(null);
     setPendingGrantTitle('');
   };
-  
-  // Function to be called after the card has faded out
+
+  // Function to be called after the card has faded out (now redundant as update happens in handleApplyConfirmation)
   const handleConfirmApply = async (grantId: string): Promise<void> => {
-    // This function will be called after the card has faded out
-    // The database update is already handled in handleApplyConfirmation
+      // This function is no longer strictly necessary as the state update
+      // is handled immediately in handleApplyConfirmation after the fade attempt.
   };
 
-  // Handle grant interaction (save, apply, ignore)
-  const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored', removeFromRecommended: boolean = true) => {
+
+  // Handle grant interaction (save, apply, ignore) - Refactored
+  const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
     if (!user) return;
-    
+
     try {
-      // Find the grant in any of the lists
-      const grant = recommendedGrants.find(g => g.id === grantId) ||
-                   savedGrants.find(g => g.id === grantId) ||
-                   appliedGrants.find(g => g.id === grantId) ||
-                   ignoredGrants.find(g => g.id === grantId);
+      // Find the grant in any of the lists to get its data
+      // Use useCallback or memoization if performance becomes an issue here
+      const findGrant = () =>
+          recommendedGrants.find(g => g.id === grantId) ||
+          savedGrants.find(g => g.id === grantId) ||
+          appliedGrants.find(g => g.id === grantId) ||
+          ignoredGrants.find(g => g.id === grantId);
 
-      if (!grant) return;
+      const grant = findGrant();
+      if (!grant) {
+          console.warn(`Grant ${grantId} not found in local state for interaction.`);
+          return; // Grant not found locally, maybe already processed?
+      }
 
-      // Check if the grant already has this status
-      const isCurrentStatus = (
+      // Determine if the grant was in the recommended list *before* this interaction
+      const wasRecommended = recommendedGrants.some(g => g.id === grantId);
+
+      // Check if the user is trying to set the *same* status the grant already has
+      // (e.g., clicking 'Save' on an already saved grant)
+      const isCurrentStatus =
         (action === 'saved' && savedGrants.some(g => g.id === grantId)) ||
         (action === 'applied' && appliedGrants.some(g => g.id === grantId)) ||
-        (action === 'ignored' && ignoredGrants.some(g => g.id === grantId))
-      );
+        (action === 'ignored' && ignoredGrants.some(g => g.id === grantId));
 
       if (isCurrentStatus) {
-        // Remove the interaction if clicking the same status
+        // --- Undoing an action ---
+        // Delete the interaction from the database
         await supabase
           .from('user_interactions')
           .delete()
           .eq('user_id', user.id)
           .eq('grant_id', grantId)
-          .eq('action', action);
+          .eq('action', action); // Delete the specific action row
 
-        // Update local state to remove the grant from its current list
+        // Update local state: Remove the grant from its current list
         if (action === 'saved') {
-          setSavedGrants(savedGrants.filter(g => g.id !== grantId));
+          setSavedGrants(prev => prev.filter(g => g.id !== grantId));
         } else if (action === 'applied') {
-          setAppliedGrants(appliedGrants.filter(g => g.id !== grantId));
+          setAppliedGrants(prev => prev.filter(g => g.id !== grantId));
         } else if (action === 'ignored') {
-          setIgnoredGrants(ignoredGrants.filter(g => g.id !== grantId));
+          setIgnoredGrants(prev => prev.filter(g => g.id !== grantId));
         }
+        // NOTE: We DO NOT add it back to recommended here.
+        // The useEffect hook will handle fetching replacements if needed.
 
-        // Add the grant back to recommended if it was removed
-        // First check if it's already in any other list to avoid duplicates
-        const isInAnyList =
-          savedGrants.some(g => g.id === grantId) ||
-          appliedGrants.some(g => g.id === grantId) ||
-          ignoredGrants.some(g => g.id === grantId) ||
-          recommendedGrants.some(g => g.id === grantId);
-          
-        if (!isInAnyList) {
-          setRecommendedGrants(prev => [...prev, grant]);
-        }
       } else {
+        // --- Setting a new action or changing an action ---
         // First, delete any *other* interactions for this grant to ensure only one state exists
         await supabase
           .from('user_interactions')
@@ -587,9 +514,7 @@ export default function Dashboard() {
           .not('action', 'eq', action); // Delete rows where action is NOT the target action
 
         // Then, upsert the target interaction.
-        // This inserts if new, or updates timestamp if the exact (user, grant, action) already exists.
-        // It prevents the duplicate key error if this specific action row exists.
-        const { error } = await supabase
+        const { error: upsertError } = await supabase
           .from('user_interactions')
           .upsert({
             user_id: user.id,
@@ -600,15 +525,16 @@ export default function Dashboard() {
             onConflict: 'user_id, grant_id, action' // Specify the constraint columns
           });
 
-        if (error) throw error;
+        if (upsertError) throw upsertError;
 
-        // First, remove from all lists to avoid duplicates
+        // Update local state:
+        // 1. Remove from *all* lists first to handle changes and ensure no duplicates
         setRecommendedGrants(prev => prev.filter(g => g.id !== grantId));
         setSavedGrants(prev => prev.filter(g => g.id !== grantId));
         setAppliedGrants(prev => prev.filter(g => g.id !== grantId));
         setIgnoredGrants(prev => prev.filter(g => g.id !== grantId));
 
-        // Then add to the appropriate list
+        // 2. Add to the *new* appropriate list
         if (action === 'saved') {
           setSavedGrants(prev => [...prev, grant]);
         } else if (action === 'applied') {
@@ -616,47 +542,15 @@ export default function Dashboard() {
         } else if (action === 'ignored') {
           setIgnoredGrants(prev => [...prev, grant]);
         }
-
-        // If we removed from recommended, try to fetch a new one
-        if (removeFromRecommended) {
-          // Fetch one more grant to replace the one that was removed from recommended
-          try {
-            // Get current date for filtering expired grants
-            const today = new Date().toISOString();
-            
-            // Get all current grant IDs to exclude
-            const allCurrentGrantIds = [
-              ...recommendedGrants.map(g => g.id),
-              ...savedGrants.map(g => g.id),
-              ...appliedGrants.map(g => g.id),
-              ...ignoredGrants.map(g => g.id)
-            ];
-            
-            // Only fetch if we have grants to exclude
-            if (allCurrentGrantIds.length > 0) {
-              // Fetch a new grant that isn't in any current list
-              const { data: newGrants } = await supabase
-                .from('grants')
-                .select('*')
-                .not('id', 'in', `(${allCurrentGrantIds.join(',')})`)
-                .or(`close_date.gt.${today},close_date.is.null`) // Only active grants
-                .limit(1);
-              
-              if (newGrants && newGrants.length > 0) {
-                // Add the new grant to the recommended list
-                setRecommendedGrants(prev => [...prev, ...newGrants]);
-              }
-            }
-          } catch (e) {
-            console.log('Error fetching replacement grant:', e);
-          }
-        }
+        // NOTE: The useEffect hook will handle fetching replacements if the grant was removed from recommended.
       }
+
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error.message || error);
       setError(`Failed to ${action.replace('ed', '')} grant: ${error.message || 'Please try again.'}`);
     }
   };
+
 
   // Show loading state while checking authentication or loading data
   if (isLoading || loading) {
@@ -682,13 +576,13 @@ export default function Dashboard() {
         <div className="md:w-64 md:pr-8 mb-6 md:mb-0">
           <h1 className="text-2xl font-bold mb-4">Your Dashboard</h1>
           <p className="text-gray-600 mb-6">Welcome, {user.email}</p>
-          
+
           {error && (
             <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6">
               {error}
             </div>
           )}
-          
+
           <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
             <div className="space-y-1 p-2">
               <button
@@ -699,9 +593,10 @@ export default function Dashboard() {
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
+                {/* Display target count or actual count? Using actual for now */}
                 <span>Recommended ({recommendedGrants.length})</span>
               </button>
-              
+
               <button
                 onClick={() => setActiveTab('saved')}
                 className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -712,7 +607,7 @@ export default function Dashboard() {
               >
                 <span>Saved ({savedGrants.length})</span>
               </button>
-              
+
               <button
                 onClick={() => setActiveTab('applied')}
                 className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -723,7 +618,7 @@ export default function Dashboard() {
               >
                 <span>Applied ({appliedGrants.length})</span>
               </button>
-              
+
               <button
                 onClick={() => setActiveTab('ignored')}
                 className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -737,7 +632,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        
+
         {/* Main content area */}
         <div className="flex-1">
           {/* Consolidated Filter Panel */}
@@ -752,7 +647,7 @@ export default function Dashboard() {
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
           />
-          
+
           {/* Tab Content */}
           {activeTab === 'recommended' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
@@ -772,14 +667,14 @@ export default function Dashboard() {
                         description={grant.description}
                         categories={grant.activity_category || []}
                         onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                        onApply={() => handleApplyClick(grant.id)}
+                        onApply={() => handleApplyClick(grant.id)} // Shows confirmation first
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShare(grant.id)}
-                        onConfirmApply={() => handleConfirmApply(grant.id)}
+                        onConfirmApply={() => handleConfirmApply(grant.id)} // Likely redundant now
                       />
                     ))}
                   </div>
-                  
+
                   {/* Pagination */}
                   <div className="mt-6">
                     <Pagination
@@ -820,7 +715,7 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          
+
           {activeTab === 'saved' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Saved Grants</h2>
@@ -838,7 +733,7 @@ export default function Dashboard() {
                         fundingAmount={grant.award_ceiling}
                         description={grant.description}
                         categories={grant.activity_category || []}
-                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows unsaving
                         onApply={() => handleApplyClick(grant.id)}
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShare(grant.id)}
@@ -847,7 +742,7 @@ export default function Dashboard() {
                       />
                     ))}
                   </div>
-                  
+
                   {/* Pagination */}
                   <div className="mt-6">
                     <Pagination
@@ -888,7 +783,7 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          
+
           {activeTab === 'applied' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Applied Grants</h2>
@@ -905,15 +800,15 @@ export default function Dashboard() {
                         fundingAmount={grant.award_ceiling}
                         description={grant.description}
                         categories={grant.activity_category || []}
-                        onApply={() => {}} // Empty function since not needed for applied grants
-                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
+                        onApply={() => handleGrantInteraction(grant.id, 'applied')} // Allows un-applying
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows ignoring
+                        onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows saving
                         onShare={() => handleShare(grant.id)}
                         isApplied={true}
                       />
                     ))}
                   </div>
-                  
+
                   {/* Pagination */}
                   <div className="mt-6">
                     <Pagination
@@ -954,7 +849,7 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          
+
           {activeTab === 'ignored' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Ignored Grants</h2>
@@ -974,14 +869,14 @@ export default function Dashboard() {
                         categories={grant.activity_category || []}
                         onSave={() => handleGrantInteraction(grant.id, 'saved')}
                         onApply={() => handleApplyClick(grant.id)}
-                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
+                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows un-ignoring
                         onShare={() => handleShare(grant.id)}
                         isIgnored={true}
                         onConfirmApply={() => handleConfirmApply(grant.id)}
                       />
                     ))}
                   </div>
-                  
+
                   {/* Pagination */}
                   <div className="mt-6">
                     <Pagination
@@ -1024,7 +919,7 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-      
+
       {/* Apply Confirmation Popup */}
       <ApplyConfirmationPopup
         isOpen={showApplyConfirmation}
