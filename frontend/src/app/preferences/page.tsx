@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { GRANT_CATEGORIES, GRANT_AGENCIES, DEFAULT_USER_PREFERENCES } from '@/lib/config';
+import { GRANT_CATEGORIES, GRANT_AGENCIES, DEFAULT_USER_PREFERENCES, DEADLINE_RANGES } from '@/lib/config';
 import supabase from '@/lib/supabaseClient';
 import SettingsLayout from '@/components/settings/SettingsLayout';
 
@@ -234,38 +234,24 @@ export default function Preferences() {
         {/* Deadline Range */}
         <div className="mb-8 pt-6 border-t border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Deadline Range</h2>
-          <p className="text-sm text-gray-600 mb-4">Specify your preferred deadline range.</p>
+          <p className="text-sm text-gray-600 mb-4">Select your preferred deadline timeframe for grants.</p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label htmlFor="deadlineMin" className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Days
-              </label>
-              <input
-                type="number"
-                id="deadlineMin"
-                value={deadlineRange}
-                onChange={(e) => setDeadlineRange(e.target.value)}
-                min="0"
-                step="1"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="deadlineMax" className="block text-sm font-medium text-gray-700 mb-1">
-                Maximum Days
-              </label>
-              <input
-                type="number"
-                id="deadlineMax"
-                value={deadlineRange}
-                onChange={(e) => setDeadlineRange(e.target.value)}
-                min="0"
-                step="1"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+          <div>
+            <label htmlFor="deadlineRange" className="block text-sm font-medium text-gray-700 mb-1">
+              Show grants with deadlines within:
+            </label>
+            <select
+              id="deadlineRange"
+              value={deadlineRange}
+              onChange={handleDeadlineRangeChange}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {DEADLINE_RANGES.map((range) => (
+                <option key={range.value} value={range.value}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

@@ -58,14 +58,18 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   topics TEXT[],
   funding_min INTEGER,
   funding_max INTEGER,
-  eligible_applicant_types TEXT[],
+  deadline_range TEXT DEFAULT '0', -- Added based on update-preferences-schema.sql
+  eligible_applicant_types TEXT[], -- Nullable implicitly
   agencies TEXT[],
-  locations TEXT[],
-  preference_vector VECTOR(1536),
+  locations TEXT[], -- Nullable implicitly
+  preference_vector VECTOR(1536), -- Nullable implicitly
   notification_settings JSONB DEFAULT '{"email_frequency": "weekly", "notify_new_matches": true, "notify_deadlines": true}'::JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Add comment to explain the schema changes (from update-preferences-schema.sql)
+COMMENT ON TABLE user_preferences IS 'Stores user preferences for grant recommendations. Fields match the UI in preferences page.';
 
 -- User Interactions Table
 CREATE TABLE IF NOT EXISTS user_interactions (
