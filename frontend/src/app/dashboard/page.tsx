@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '../../components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,7 +59,14 @@ interface ScoredGrant extends Grant {
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('recommended');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    // Initialize activeTab from URL query parameter if available
+    const tabParam = searchParams.get('tab');
+    return tabParam && ['recommended', 'saved', 'applied', 'ignored'].includes(tabParam)
+      ? tabParam
+      : 'recommended';
+  });
   const [loading, setLoading] = useState(false);
   const [recommendedGrants, setRecommendedGrants] = useState<ScoredGrant[]>([]);
   const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
@@ -231,6 +238,16 @@ export default function Dashboard() {
       router.push('/login');
     }
   }, [user, isLoading, router]);
+  
+  // Update URL when active tab changes
+  useEffect(() => {
+    // Only update URL if user is authenticated to avoid unnecessary navigation
+    if (user) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', activeTab);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [activeTab, user]);
 
   // Fetch initial user grants and recommended grants
   useEffect(() => {
@@ -693,6 +710,7 @@ export default function Dashboard() {
                           onShare={() => handleShare(scoredGrant.id)}
                           matchScore={scoredGrant.matchScore}
                           showMatchScore={true}
+                          linkParams={`?from=dashboard&tab=recommended`}
                         />
                       );
                     }
@@ -762,6 +780,7 @@ export default function Dashboard() {
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShare(grant.id)}
                         isSaved={true}
+                        linkParams={`?from=dashboard&tab=saved`}
                       />
                     ))}
                   </div>
@@ -828,6 +847,7 @@ export default function Dashboard() {
                         onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows saving
                         onShare={() => handleShare(grant.id)}
                         isApplied={true}
+                        linkParams={`?from=dashboard&tab=applied`}
                       />
                     ))}
                   </div>
@@ -895,6 +915,7 @@ export default function Dashboard() {
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows un-ignoring
                         onShare={() => handleShare(grant.id)}
                         isIgnored={true}
+                        linkParams={`?from=dashboard&tab=ignored`}
                       />
                     ))}
                   </div>

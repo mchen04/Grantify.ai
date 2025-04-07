@@ -22,6 +22,7 @@ interface GrantCardProps {
   isApplied?: boolean;
   isIgnored?: boolean;
   isSaved?: boolean;
+  linkParams?: string; // Query parameters for the grant detail link
 }
 
 /**
@@ -41,7 +42,8 @@ const GrantCard: React.FC<GrantCardProps> = ({
   onIgnore,
   isApplied = false,
   isIgnored = false,
-  isSaved = false
+  isSaved = false,
+  linkParams
 }) => {
   const formattedAmount = formatCurrency(fundingAmount);
   const truncatedDescription = truncateText(description, 150);
@@ -67,7 +69,7 @@ const GrantCard: React.FC<GrantCardProps> = ({
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
             <Link
-              href={`/grants/${id}`}
+              href={`/grants/${id.split('?')[0]}${linkParams || '?from=search'}`}
               className="grant-card-title text-lg mb-1 block hover:text-primary-600 transition-colors line-clamp-2 h-[3.5rem]"
               title={title}
             >

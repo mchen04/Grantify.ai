@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,6 +72,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   const unwrappedParams = use(params as Promise<PageParams>);
   const grantId = unwrappedParams.grantId;
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   const [similarGrants, setSimilarGrants] = useState<SimilarGrant[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
+  const [fromSource, setFromSource] = useState<string | null>(null);
+  const [tabSource, setTabSource] = useState<string | null>(null);
   const [interactionLoading, setInteractionLoading] = useState(false);
   
   // Fetch the grant data
@@ -135,9 +139,14 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         setLoading(false);
       }
     };
+    // Get referral parameters from URL
+    const from = searchParams.get('from');
+    const tab = searchParams.get('tab');
+    setFromSource(from);
+    setTabSource(tab);
     
     fetchGrant();
-  }, [grantId, user]);
+  }, [grantId, user, searchParams]);
   
   // Handle user interactions (save, apply, ignore)
   const handleInteraction = async (action: 'saved' | 'applied' | 'ignored') => {
@@ -333,6 +342,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         {/* Breadcrumbs */}
         <nav className="text-sm mb-6">
           <ol className="list-none p-0 inline-flex items-center">
+            {/* Home link - always first */}
             <li className="flex items-center">
               <Link href="/" className="text-gray-500 hover:text-primary-600 transition-colors">
                 Home
@@ -341,14 +351,53 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
               </svg>
             </li>
-            <li className="flex items-center">
-              <Link href="/search" className="text-gray-500 hover:text-primary-600 transition-colors">
-                Grants
-              </Link>
-              <svg className="fill-current w-3 h-3 mx-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
-                <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
-              </svg>
-            </li>
+            
+            {/* Conditional breadcrumb items based on source */}
+            {fromSource === 'search' ? (
+              <li className="flex items-center">
+                <Link href="/search" className="text-gray-500 hover:text-primary-600 transition-colors">
+                  Search
+                </Link>
+                <svg className="fill-current w-3 h-3 mx-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                  <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
+                </svg>
+              </li>
+            ) : fromSource === 'dashboard' ? (
+              <>
+                <li className="flex items-center">
+                  <Link href="/dashboard" className="text-gray-500 hover:text-primary-600 transition-colors">
+                    Dashboard
+                  </Link>
+                  <svg className="fill-current w-3 h-3 mx-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                    <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
+                  </svg>
+                </li>
+                {tabSource && (
+                  <li className="flex items-center">
+                    <Link
+                      href={`/dashboard?tab=${tabSource}`}
+                      className="text-gray-500 hover:text-primary-600 transition-colors capitalize"
+                    >
+                      {tabSource}
+                    </Link>
+                    <svg className="fill-current w-3 h-3 mx-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                      <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
+                    </svg>
+                  </li>
+                )}
+              </>
+            ) : (
+              <li className="flex items-center">
+                <Link href="/search" className="text-gray-500 hover:text-primary-600 transition-colors">
+                  Grants
+                </Link>
+                <svg className="fill-current w-3 h-3 mx-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512">
+                  <path d="M285.476 272.971L91.132 467.314c-9.373 9.373-24.569 9.373-33.941 0l-22.667-22.667c-9.357-9.357-9.375-24.522-.04-33.901L188.505 256 34.484 101.255c-9.335-9.379-9.317-24.544.04-33.901l22.667-22.667c9.373-9.373 24.569-9.373 33.941 0L285.475 239.03c9.373 9.372 9.373 24.568.001 33.941z" />
+                </svg>
+              </li>
+            )}
+            
+            {/* Grant title - always last */}
             <li>
               <span className="text-gray-700 font-medium">{grant.title}</span>
             </li>

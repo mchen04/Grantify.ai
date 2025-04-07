@@ -20,6 +20,7 @@ interface DashboardGrantCardProps {
   isSaved?: boolean;
   matchScore?: number; // Added match score property
   showMatchScore?: boolean; // Flag to determine if match score should be displayed
+  linkParams?: string; // Query parameters for the grant detail link
 }
 
 // Define the ref type
@@ -54,7 +55,7 @@ const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardP
 
   return (
     <div className={`transition-opacity duration-300 h-full relative ${fading ? 'opacity-0' : 'opacity-100'}`}>
-      <GrantCard {...props} />
+      <GrantCard {...props} linkParams={props.linkParams} />
       {props.showMatchScore && typeof props.matchScore === 'number' && (
         <div className="absolute bottom-2 right-2 bg-primary-100 text-primary-800 text-xs font-medium px-2 py-1 rounded-full shadow-sm z-10">
           {Math.round(props.matchScore)}% match
