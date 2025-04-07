@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
+import { DASHBOARD_GRANTS_PER_PAGE } from '@/utils/constants';
 import Pagination from '@/components/dashboard/Pagination';
 import CollapsibleFilterPanel from '@/components/dashboard/CollapsibleFilterPanel';
 import { SelectOption } from '@/types/grant';
@@ -64,7 +65,7 @@ export default function Dashboard() {
   });
 
   // Number of grants to display per page
-  const GRANTS_PER_PAGE = 10;
+  const GRANTS_PER_PAGE = DASHBOARD_GRANTS_PER_PAGE;
 
   // Sort options for the dashboard
   const sortOptions: SelectOption[] = [
@@ -92,6 +93,10 @@ export default function Dashboard() {
       );
     } else {
       // When the filter is off, exclude grants with open-ended deadlines
+      // NOTE: This behavior is different from the search page, where turning off the filter
+      // simply means "don't apply this filter". In the dashboard context, we actively filter out
+      // open-ended deadlines when the filter is off to provide a cleaner view of grants with
+      // specific deadlines by default.
       filteredGrants = filteredGrants.filter(grant =>
         !(typeof grant.close_date === 'string' &&
           (grant.close_date.toLowerCase().includes('open') ||
@@ -158,15 +163,16 @@ export default function Dashboard() {
 
   // Get paginated grants for the current tab
   const getPaginatedGrants = (grants: Grant[], tabName: string) => {
-    const filteredAndSortedGrants = filterAndSortGrants(grants);
+    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
     const startIndex = (currentPage[tabName as keyof typeof currentPage] - 1) * GRANTS_PER_PAGE;
     const endIndex = startIndex + GRANTS_PER_PAGE;
-    return filteredAndSortedGrants.slice(startIndex, endIndex);
+    return filtered.slice(startIndex, endIndex);
   };
 
   // Get total number of pages for a tab
-  const getTotalPages = (grants: Grant[]) => {
-    return Math.ceil(filterAndSortGrants(grants).length / GRANTS_PER_PAGE);
+  const getTotalPages = (grants: Grant[], tabName: string) => {
+    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
+    return Math.ceil(filtered.length / GRANTS_PER_PAGE);
   };
 
   // Handle page change
@@ -177,6 +183,17 @@ export default function Dashboard() {
     }));
   };
 
+  // Memoize filtered and sorted grants to prevent unnecessary recalculations
+  const filteredAndSortedGrants = useMemo(() => {
+    return {
+      recommended: filterAndSortGrants(recommendedGrants),
+      saved: filterAndSortGrants(savedGrants),
+      applied: filterAndSortGrants(appliedGrants),
+      ignored: filterAndSortGrants(ignoredGrants)
+    };
+  }, [recommendedGrants, savedGrants, appliedGrants, ignoredGrants,
+      sortBy, filterOnlyNoDeadline, filterOnlyNoFunding, searchTerm]);
+
   const displayedGrants = {
     recommended: getPaginatedGrants(recommendedGrants, 'recommended'),
     saved: getPaginatedGrants(savedGrants, 'saved'),
@@ -185,10 +202,10 @@ export default function Dashboard() {
   };
 
   const totalPages = {
-    recommended: getTotalPages(recommendedGrants),
-    saved: getTotalPages(savedGrants),
-    applied: getTotalPages(appliedGrants),
-    ignored: getTotalPages(ignoredGrants)
+    recommended: getTotalPages(recommendedGrants, 'recommended'),
+    saved: getTotalPages(savedGrants, 'saved'),
+    applied: getTotalPages(appliedGrants, 'applied'),
+    ignored: getTotalPages(ignoredGrants, 'ignored')
   };
 
   // Redirect to login if not authenticated

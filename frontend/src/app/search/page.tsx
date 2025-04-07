@@ -7,11 +7,11 @@ import supabase from '@/lib/supabaseClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
 import { buildGrantQuery } from '@/utils/grantQueryBuilder';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  MAX_FUNDING, 
-  MIN_DEADLINE_DAYS, 
+import {
+  MAX_FUNDING,
+  MIN_DEADLINE_DAYS,
   MAX_DEADLINE_DAYS,
-  GRANTS_PER_PAGE 
+  SEARCH_GRANTS_PER_PAGE
 } from '@/utils/constants';
 
 // Components
@@ -115,13 +115,13 @@ export default function Search() {
       try {
         setLoading(true);
         setError(null);
-        const query = await buildGrantQuery(filter, GRANTS_PER_PAGE);
+        const query = await buildGrantQuery(filter, SEARCH_GRANTS_PER_PAGE);
         const { data, error: queryError, count } = await query;
         
         if (queryError) throw queryError;
         
         setGrants(data || []);
-        setTotalPages(count ? Math.ceil(count / GRANTS_PER_PAGE) : 1);
+        setTotalPages(count ? Math.ceil(count / SEARCH_GRANTS_PER_PAGE) : 1);
       } catch (error: any) {
         console.error('Error fetching grants:', error);
         setError('Failed to load grants. Please try again later.');
@@ -466,7 +466,7 @@ export default function Search() {
             error={error}
             page={filter.page}
             totalPages={totalPages}
-            grantsPerPage={GRANTS_PER_PAGE}
+            grantsPerPage={SEARCH_GRANTS_PER_PAGE}
             goToPage={goToPage}
             onApply={handleApplyClick}
             onSave={handleSave}

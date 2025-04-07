@@ -10,4 +10,8 @@ export const MIN_DEADLINE_DAYS = 0; // Today
 export const MAX_DEADLINE_DAYS = 365; // 1 year
 
 // Number of grants to show per page
-export const GRANTS_PER_PAGE = 6;
+export const SEARCH_GRANTS_PER_PAGE = 6;
+export const DASHBOARD_GRANTS_PER_PAGE = 10;
+
+// Legacy constant for backward compatibility
+export const GRANTS_PER_PAGE = SEARCH_GRANTS_PER_PAGE;
