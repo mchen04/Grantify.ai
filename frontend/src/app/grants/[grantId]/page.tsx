@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, use } from 'react';
+import React, { useEffect, useState, use, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
@@ -30,10 +31,13 @@ interface Grant {
   grantor_contact_phone: string | null;
   funding_type: string | null;
 }
-
 // Interaction type
 interface Interaction {
-  action: string;
+  id: string;
+  user_id: string;
+  grant_id: string;
+  action: 'saved' | 'applied' | 'ignored';
+  timestamp: string;
 }
 
 // Similar grant type
@@ -44,17 +48,37 @@ interface SimilarGrant {
   deadline: string;
 }
 
-export default function GrantDetail({ params }: { params: { grantId: string } }) {
-  const { grantId } = use(params);
+// Page params type for Next.js 15.1.7+
+type PageParams = {
+  grantId: string;
+};
+
+// Dynamically import ApplyConfirmationPopup component
+const DynamicApplyConfirmationPopup = dynamic(
+  () => import('@/components/ApplyConfirmationPopup'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+      </div>
+    )
+  }
+);
+
+export default function GrantDetail({ params }: { params: Promise<PageParams> | PageParams }) {
+  // Properly unwrap the params Promise using React.use()
+  const unwrappedParams = use(params as Promise<PageParams>);
+  const grantId = unwrappedParams.grantId;
   const { user } = useAuth();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
-  const [isApplied, setIsApplied] = useState(false);
-  const [isIgnored, setIsIgnored] = useState(false);
+  const [interactionState, setInteractionState] = useState<'saved' | 'applied' | 'ignored' | null>(null);
   const [similarGrants, setSimilarGrants] = useState<SimilarGrant[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
+  const [interactionLoading, setInteractionLoading] = useState(false);
   
   // Fetch the grant data
   useEffect(() => {
@@ -83,16 +107,19 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
         if (user) {
           const { data: interactions, error: interactionsError } = await supabase
             .from('user_interactions')
-            .select('action')
+            .select('*')
             .eq('user_id', user.id)
-            .eq('grant_id', grantId);
+            .eq('grant_id', grantId)
+            .order('timestamp', { ascending: false });
           
           if (interactionsError) throw interactionsError;
           
           if (interactions && interactions.length > 0) {
-            setIsSaved(interactions.some((i: Interaction) => i.action === 'saved'));
-            setIsApplied(interactions.some((i: Interaction) => i.action === 'applied'));
-            setIsIgnored(interactions.some((i: Interaction) => i.action === 'ignored'));
+            // Get the most recent interaction
+            const latestInteraction = interactions[0] as Interaction;
+            setInteractionState(latestInteraction.action);
+          } else {
+            setInteractionState(null);
           }
         }
         
@@ -119,25 +146,120 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
       return;
     }
     
+    // Set loading state and update UI immediately
+    setInteractionLoading(true);
+    
+    // Immediately update UI state for better responsiveness
+    // Store previous state in case we need to revert due to error
+    const previousState = interactionState;
+    const isCurrentStatus = interactionState === action;
+    
+    // Update local state first (before DB operation completes)
+    if (isCurrentStatus) {
+      setInteractionState(null);
+    } else {
+      setInteractionState(action);
+    }
+    
     try {
-      // Record the interaction
-      const { error } = await supabase
-        .from('user_interactions')
-        .upsert({
-          user_id: user.id,
-          grant_id: grantId,
-          action,
-          timestamp: new Date().toISOString(),
-        }, { onConflict: 'user_id,grant_id,action' });
-      
-      if (error) throw error;
-      
-      // Update the UI
-      if (action === 'saved') setIsSaved(true);
-      if (action === 'applied') setIsApplied(true);
-      if (action === 'ignored') setIsIgnored(true);
+      if (isCurrentStatus) {
+        // --- Undoing an action ---
+        // Delete the interaction from the database
+        const { error } = await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId)
+          .eq('action', action);
+        
+        if (error) throw error;
+      } else {
+        // --- Setting a new action or changing an action ---
+        // First, delete any other interactions for this grant that are NOT the target action
+        await supabase
+          .from('user_interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('grant_id', grantId)
+          .not('action', 'eq', action);
+        
+        // Then, upsert the new interaction (matches dashboard implementation)
+        const { error } = await supabase
+          .from('user_interactions')
+          .upsert({
+            user_id: user.id,
+            grant_id: grantId,
+            action: action,
+            timestamp: new Date().toISOString()
+          }, {
+            onConflict: 'user_id, grant_id, action' // Specify the constraint columns
+          });
+        
+        if (error) throw error;
+      }
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error);
+      // Revert UI state if database operation failed
+      setInteractionState(previousState);
+    } finally {
+      setInteractionLoading(false);
+    }
+  };
+  
+  // Handle share button click
+  const handleShare = async () => {
+    if (!grant) return;
+    
+    const shareUrl = `${window.location.origin}/grants/${grantId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: grant.title,
+          text: 'Check out this grant opportunity',
+          url: shareUrl
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        // Could add a toast notification here
+      }
+    } catch (error: any) {
+      // Silently handle AbortError when user cancels share dialog
+      if (error.name !== 'AbortError') {
+        // Only copy to clipboard if it's not a cancel action
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+        } catch (clipboardError) {
+          console.error('Failed to copy URL to clipboard', clipboardError);
+        }
+      }
+    }
+  };
+  
+  // Handle apply button click
+  const handleApplyClick = () => {
+    if (!user) {
+      // Redirect to login
+      // You could add this functionality here
+      return;
+    }
+    
+    // Show confirmation popup
+    setShowApplyConfirmation(true);
+  };
+  
+  // Handle apply confirmation response
+  const handleApplyConfirmation = (didApply: boolean) => {
+    // Hide the popup
+    setShowApplyConfirmation(false);
+    
+    // If user confirmed, mark as applied
+    if (didApply) {
+      // Update UI state immediately before database interaction
+      const previousState = interactionState;
+      setInteractionState('applied');
+      
+      // Then handle the database update
+      handleInteraction('applied');
     }
   };
   
@@ -235,35 +357,8 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
         
         {/* Grant Header */}
         <div className="card p-6 mb-8 border-t-4 border-t-primary-600 transition-all duration-300 hover:shadow-lg">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 md:mb-0 max-w-3xl">{grant.title}</h1>
-            <div className="flex flex-wrap gap-2">
-              {!isSaved && !isApplied && !isIgnored && (
-                <button
-                  onClick={() => handleInteraction('saved')}
-                  className="btn-secondary flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
-                  </svg>
-                  Save
-                </button>
-              )}
-              {!isApplied && (
-                <a
-                  href={`https://www.grants.gov/web/grants/view-opportunity.html?oppId=${grant.opportunity_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary flex items-center gap-2"
-                  onClick={() => handleInteraction('applied')}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                  </svg>
-                  Apply Now
-                </a>
-              )}
-            </div>
+          <div className="mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">{grant.title}</h1>
           </div>
           
           <div className="grant-card-tags mb-6">
@@ -479,65 +574,46 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                 Actions
               </h2>
               <div className="space-y-3">
-                <a
-                  href={`https://www.grants.gov/web/grants/view-opportunity.html?oppId=${grant.opportunity_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary w-full flex justify-center items-center gap-2"
-                  onClick={() => !isApplied && handleInteraction('applied')}
+                {/* Apply Button */}
+                <button
+                  onClick={() => {
+                    window.open(`https://www.grants.gov/web/grants/view-opportunity.html?oppId=${grant.opportunity_id}`, '_blank');
+                    handleApplyClick();
+                  }}
+                  disabled={interactionLoading}
+                  className={`${
+                    interactionState === 'applied'
+                      ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100'
+                      : 'btn-primary'
+                  } w-full flex justify-center items-center gap-2 ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
                   </svg>
-                  Apply on Grants.gov
-                </a>
+                  {interactionState === 'applied' ? 'Applied' : 'Apply on Grants.gov'}
+                </button>
                 
-                {!isSaved && !isApplied && !isIgnored ? (
-                  <button
-                    onClick={() => handleInteraction('saved')}
-                    className="btn-secondary w-full flex justify-center items-center gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
-                    </svg>
-                    Save Grant
-                  </button>
-                ) : isSaved ? (
-                  <div className="inline-flex w-full justify-center items-center gap-2 px-4 py-2 rounded-lg bg-primary-50 text-primary-700 border border-primary-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
-                    </svg>
-                    Saved to Your List
-                  </div>
-                ) : null}
-                
+                {/* Save Button */}
                 <button
-                  onClick={async () => {
-                    const shareUrl = `${window.location.origin}/grants/${grantId}`;
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({
-                          title: grant.title,
-                          text: 'Check out this grant opportunity',
-                          url: shareUrl
-                        });
-                      } else {
-                        await navigator.clipboard.writeText(shareUrl);
-                        // Could add a toast notification here
-                      }
-                    } catch (error: any) {
-                      // Silently handle AbortError when user cancels share dialog
-                      if (error.name !== 'AbortError') {
-                        // Only copy to clipboard if it's not a cancel action
-                        try {
-                          await navigator.clipboard.writeText(shareUrl);
-                        } catch (clipboardError) {
-                          console.error('Failed to copy URL to clipboard', clipboardError);
-                        }
-                      }
-                    }
-                  }}
-                  className="btn-secondary w-full flex justify-center items-center gap-2"
+                  onClick={() => handleInteraction('saved')}
+                  disabled={interactionLoading}
+                  className={`w-full flex justify-center items-center gap-2 ${
+                    interactionState === 'saved'
+                      ? 'px-4 py-2 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100'
+                      : 'btn-secondary'
+                  } ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+                  </svg>
+                  {interactionState === 'saved' ? 'Saved' : 'Save Grant'}
+                </button>
+                
+                {/* Share Button */}
+                <button
+                  onClick={handleShare}
+                  disabled={interactionLoading}
+                  className={`btn-secondary w-full flex justify-center items-center gap-2 ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
@@ -545,24 +621,21 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                   Share Grant
                 </button>
                 
-                {!isIgnored && !isApplied ? (
-                  <button
-                    onClick={() => handleInteraction('ignored')}
-                    className="w-full flex justify-center items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    Ignore Grant
-                  </button>
-                ) : isIgnored ? (
-                  <div className="inline-flex w-full justify-center items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 border border-gray-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    Ignored
-                  </div>
-                ) : null}
+                {/* Ignore Button */}
+                <button
+                  onClick={() => handleInteraction('ignored')}
+                  disabled={interactionLoading}
+                  className={`w-full flex justify-center items-center gap-2 ${
+                    interactionState === 'ignored'
+                      ? 'px-4 py-2 rounded-lg bg-gray-100 text-gray-700 border border-gray-200'
+                      : 'px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors'
+                  } ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  {interactionState === 'ignored' ? 'Ignored' : 'Ignore Grant'}
+                </button>
               </div>
             </div>
           </div>
@@ -608,6 +681,21 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
             </div>
           )}
         </div>
+        {/* Apply Confirmation Popup */}
+        {showApplyConfirmation && (
+          <Suspense fallback={
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+            </div>
+          }>
+            <DynamicApplyConfirmationPopup
+              isOpen={showApplyConfirmation}
+              grantTitle={grant?.title || ''}
+              onConfirm={() => handleApplyConfirmation(true)}
+              onCancel={() => handleApplyConfirmation(false)}
+            />
+          </Suspense>
+        )}
       </div>
     </Layout>
   );
