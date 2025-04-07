@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import supabase from '@/lib/supabaseClient';
+import { fetchRecommendedGrants, calculateMatchScore, fetchUserPreferences, UserPreferences } from '@/lib/grantRecommendations';
 import { DASHBOARD_GRANTS_PER_PAGE } from '@/utils/constants';
 import Pagination from '@/components/dashboard/Pagination';
 import CollapsibleFilterPanel from '@/components/dashboard/CollapsibleFilterPanel';
@@ -50,16 +51,22 @@ interface UserInteraction {
 
 const TARGET_RECOMMENDED_COUNT = 10; // Target number of recommended grants
 
+// Interface for grant with match score
+interface ScoredGrant extends Grant {
+  matchScore?: number;
+}
+
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('recommended');
   const [loading, setLoading] = useState(false);
-  const [recommendedGrants, setRecommendedGrants] = useState<Grant[]>([]);
+  const [recommendedGrants, setRecommendedGrants] = useState<ScoredGrant[]>([]);
   const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
   const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
   const [ignoredGrants, setIgnoredGrants] = useState<Grant[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
   const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
@@ -173,7 +180,7 @@ export default function Dashboard() {
   // Memoize filtered and sorted grants to prevent unnecessary recalculations
   const filteredAndSortedGrants = useMemo(() => {
     return {
-      recommended: filterAndSortGrants(recommendedGrants),
+      recommended: filterAndSortGrants(recommendedGrants) as ScoredGrant[],
       saved: filterAndSortGrants(savedGrants),
       applied: filterAndSortGrants(appliedGrants),
       ignored: filterAndSortGrants(ignoredGrants)
@@ -204,7 +211,7 @@ export default function Dashboard() {
 
   // Memoize displayed grants to prevent unnecessary recalculations
   const displayedGrants = useMemo(() => ({
-    recommended: getPaginatedGrants(recommendedGrants, 'recommended'),
+    recommended: getPaginatedGrants(recommendedGrants, 'recommended') as ScoredGrant[],
     saved: getPaginatedGrants(savedGrants, 'saved'),
     applied: getPaginatedGrants(appliedGrants, 'applied'),
     ignored: getPaginatedGrants(ignoredGrants, 'ignored')
@@ -233,6 +240,10 @@ export default function Dashboard() {
       try {
         setLoading(true);
         setError(null);
+
+        // Fetch user preferences for scoring
+        const preferences = await fetchUserPreferences(user.id);
+        setUserPreferences(preferences);
 
         // Get current date for filtering expired grants
         const today = new Date().toISOString();
@@ -290,32 +301,21 @@ export default function Dashboard() {
         setAppliedGrants(initialApplied);
         setIgnoredGrants(initialIgnored);
 
-        // Fetch initial recommended grants
-        let recommendedQuery = supabase
-          .from('grants')
-          .select('*')
-          .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
+        // Fetch recommended grants based on user preferences
+        const initialRecommended = await fetchRecommendedGrants(
+          user.id,
+          interactedGrantIds,
+          TARGET_RECOMMENDED_COUNT
+        );
 
-        if (interactedGrantIds.length > 0) {
-          recommendedQuery = recommendedQuery.not('id', 'in', `(${interactedGrantIds.join(',')})`);
-        }
+        // Calculate match scores for recommended grants
+        const scoredRecommendations = initialRecommended ? initialRecommended.map(grant => ({
+          ...grant,
+          matchScore: preferences ? calculateMatchScore(grant, preferences) : undefined
+        })) : [];
 
-        // --- Add preference filtering here if needed ---
-        // Example:
-        // const { data: userPreferences } = await supabase...
-        // if (userPreferences?.topics) { recommendedQuery = recommendedQuery.overlaps(...) }
-        // ---
-
-        recommendedQuery = recommendedQuery.limit(TARGET_RECOMMENDED_COUNT); // Fetch up to the target count
-
-        const { data: initialRecommended, error: recommendedError } = await recommendedQuery;
-
-        if (recommendedError) {
-          console.error('Error fetching initial recommended grants:', recommendedError);
-          setRecommendedGrants([]);
-        } else {
-          setRecommendedGrants(initialRecommended || []);
-        }
+        // Set recommended grants with scores
+        setRecommendedGrants(scoredRecommendations || []);
 
       } catch (error: any) {
          if (error && Object.keys(error).length > 0 && error.code !== 'PGRST116' && error.message !== 'No grants found') {
@@ -358,25 +358,20 @@ export default function Dashboard() {
 
         const today = new Date().toISOString();
 
-        let query = supabase
-          .from('grants')
-          .select('*')
-          .or(`close_date.gt.${today},close_date.is.null`); // Active grants only
+        // Fetch more recommended grants with preferences
+        const newGrants = await fetchRecommendedGrants(
+          user.id,
+          allCurrentGrantIds,
+          neededCount
+        );
 
-        if (allCurrentGrantIds.length > 0) {
-          query = query.not('id', 'in', `(${allCurrentGrantIds.join(',')})`); // Exclude current grants
-        }
-
-        // --- Add preference filtering here if needed ---
-
-        query = query.limit(neededCount); // Fetch exactly the number needed
-
-        const { data: newGrants, error } = await query;
-
-        if (error) {
-          console.error('Error fetching replacement grants:', error);
-        } else if (newGrants && newGrants.length > 0) {
-          setRecommendedGrants(prev => [...prev, ...newGrants]); // Add new grants
+        if (newGrants && newGrants.length > 0 && userPreferences) {
+          // Add match scores to new grants
+          const scoredNewGrants = newGrants.map(grant => ({
+            ...grant,
+            matchScore: calculateMatchScore(grant, userPreferences)
+          }));
+          setRecommendedGrants(prev => [...prev, ...scoredNewGrants]); // Add new grants with scores
         }
       } catch (e) {
         console.error('Exception fetching replacement grants:', e);
@@ -678,23 +673,30 @@ export default function Dashboard() {
               {filteredAndSortedGrants.recommended.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
-                    {displayedGrants.recommended.map((grant) => (
-                      <DashboardGrantCard
-                        ref={grant.id === pendingGrantId ? cardRef : undefined}
-                        key={grant.id}
-                        id={grant.id}
-                        title={grant.title}
-                        agency={grant.agency_name}
-                        closeDate={grant.close_date}
-                        fundingAmount={grant.award_ceiling}
-                        description={grant.description}
-                        categories={grant.activity_category || []}
-                        onSave={() => handleGrantInteraction(grant.id, 'saved')}
-                        onApply={() => handleApplyClick(grant.id)} // Shows confirmation first
-                        onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                        onShare={() => handleShare(grant.id)}
-                      />
-                    ))}
+                    {displayedGrants.recommended.map((grant) => {
+                      // Cast the grant to ScoredGrant to fix TypeScript error
+                      const scoredGrant = grant as ScoredGrant;
+                      return (
+                        <DashboardGrantCard
+                          ref={scoredGrant.id === pendingGrantId ? cardRef : undefined}
+                          key={scoredGrant.id}
+                          id={scoredGrant.id}
+                          title={scoredGrant.title}
+                          agency={scoredGrant.agency_name}
+                          closeDate={scoredGrant.close_date}
+                          fundingAmount={scoredGrant.award_ceiling}
+                          description={scoredGrant.description}
+                          categories={scoredGrant.activity_category || []}
+                          onSave={() => handleGrantInteraction(scoredGrant.id, 'saved')}
+                          onApply={() => handleApplyClick(scoredGrant.id)} // Shows confirmation first
+                          onIgnore={() => handleGrantInteraction(scoredGrant.id, 'ignored')}
+                          onShare={() => handleShare(scoredGrant.id)}
+                          matchScore={scoredGrant.matchScore}
+                          showMatchScore={true}
+                        />
+                      );
+                    }
+                    )}
                   </div>
 
                   {/* Pagination */}

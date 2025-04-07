@@ -20,6 +20,8 @@ export default function Preferences() {
   const [fundingMax, setFundingMax] = useState<number>(1000000);
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [deadlineRange, setDeadlineRange] = useState<string>('0');
+  const [showNoDeadline, setShowNoDeadline] = useState<boolean>(true);
+  const [showNoFunding, setShowNoFunding] = useState<boolean>(true);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -54,6 +56,8 @@ export default function Preferences() {
           setFundingMax(data.funding_max || 1000000);
           setSelectedAgencies(data.agencies || []);
           setDeadlineRange(data.deadline_range || '0');
+          setShowNoDeadline(data.show_no_deadline !== undefined ? data.show_no_deadline : true);
+          setShowNoFunding(data.show_no_funding !== undefined ? data.show_no_funding : true);
         } else {
           // If no preferences exist yet, use defaults
           setSelectedTopics(DEFAULT_USER_PREFERENCES.topics || []);
@@ -61,6 +65,8 @@ export default function Preferences() {
           setFundingMax(DEFAULT_USER_PREFERENCES.funding_max || 1000000);
           setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
           setDeadlineRange(DEFAULT_USER_PREFERENCES.deadline_range || '0');
+          setShowNoDeadline(DEFAULT_USER_PREFERENCES.show_no_deadline !== undefined ? DEFAULT_USER_PREFERENCES.show_no_deadline : true);
+          setShowNoFunding(DEFAULT_USER_PREFERENCES.show_no_funding !== undefined ? DEFAULT_USER_PREFERENCES.show_no_funding : true);
         }
       } catch (error) {
         console.error('Error loading preferences:', error);
@@ -91,6 +97,8 @@ export default function Preferences() {
         funding_max: fundingMax,
         agencies: selectedAgencies,
         deadline_range: deadlineRange,
+        show_no_deadline: showNoDeadline,
+        show_no_funding: showNoFunding,
         updated_at: new Date().toISOString(),
       };
 
@@ -229,6 +237,19 @@ export default function Preferences() {
               />
             </div>
           </div>
+          
+          <div className="mt-4 flex items-center">
+            <input
+              type="checkbox"
+              id="showNoFunding"
+              checked={showNoFunding}
+              onChange={(e) => setShowNoFunding(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showNoFunding" className="ml-2 text-sm text-gray-700">
+              Show grants with no funding amount specified
+            </label>
+          </div>
         </div>
 
         {/* Deadline Range */}
@@ -244,7 +265,7 @@ export default function Preferences() {
               id="deadlineRange"
               value={deadlineRange}
               onChange={handleDeadlineRangeChange}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
             >
               {DEADLINE_RANGES.map((range) => (
                 <option key={range.value} value={range.value}>
@@ -252,6 +273,19 @@ export default function Preferences() {
                 </option>
               ))}
             </select>
+            
+            <div className="mt-4 flex items-center">
+              <input
+                type="checkbox"
+                id="showNoDeadline"
+                checked={showNoDeadline}
+                onChange={(e) => setShowNoDeadline(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="showNoDeadline" className="ml-2 text-sm text-gray-700">
+                Show grants with no deadline or open-ended deadlines
+              </label>
+            </div>
           </div>
         </div>
 

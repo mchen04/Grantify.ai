@@ -39,6 +39,8 @@ export const DEFAULT_USER_PREFERENCES = {
     notify_deadlines: true,
   },
   deadline_range: '0',
+  show_no_deadline: true,
+  show_no_funding: true,
 };
 
 // Grant categories

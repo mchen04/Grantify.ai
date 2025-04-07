@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
@@ -45,7 +45,7 @@ interface SimilarGrant {
 }
 
 export default function GrantDetail({ params }: { params: { grantId: string } }) {
-  const { grantId } = params;
+  const { grantId } = use(params);
   const { user } = useAuth();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);
