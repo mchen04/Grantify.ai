@@ -45,7 +45,7 @@ interface SimilarGrant {
 }
 
 export default function GrantDetail({ params }: { params: { grantId: string } }) {
-  const { grantId } = React.use(params);
+  const { grantId } = params;
   const { user } = useAuth();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);

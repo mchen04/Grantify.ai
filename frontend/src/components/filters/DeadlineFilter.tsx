@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { debounce } from '@/utils/debounce';
 import { MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS } from '@/utils/constants';
 
 interface DeadlineFilterProps {
@@ -25,6 +26,32 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
 }) => {
   const rangeRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
+  const [localDeadlineMinDays, setLocalDeadlineMinDays] = useState(deadlineMinDays);
+  const [localDeadlineMaxDays, setLocalDeadlineMaxDays] = useState(deadlineMaxDays);
+  
+  // Create debounced versions of the setters
+  const debouncedSetDeadlineMinDays = useMemo(
+    () => debounce((value: number) => {
+      setDeadlineMinDays(value);
+    }, 300),
+    [setDeadlineMinDays]
+  );
+  
+  const debouncedSetDeadlineMaxDays = useMemo(
+    () => debounce((value: number) => {
+      setDeadlineMaxDays(value);
+    }, 300),
+    [setDeadlineMaxDays]
+  );
+  
+  // Update local state when props change (e.g., from preset buttons)
+  useEffect(() => {
+    setLocalDeadlineMinDays(deadlineMinDays);
+  }, [deadlineMinDays]);
+  
+  useEffect(() => {
+    setLocalDeadlineMaxDays(deadlineMaxDays);
+  }, [deadlineMaxDays]);
 
   // Format the deadline display text
   const formatDeadlineText = (days: number) => {
@@ -48,8 +75,8 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
   };
 
   // Calculate percentage for positioning handles
-  const minPercentage = ((deadlineMinDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
-  const maxPercentage = ((deadlineMaxDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
+  const minPercentage = ((localDeadlineMinDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
+  const maxPercentage = ((localDeadlineMaxDays - MIN_DEADLINE_DAYS) / (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS)) * 100;
 
   // Handle mouse/touch events for slider interaction
   useEffect(() => {
@@ -65,12 +92,14 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
       const value = Math.round(MIN_DEADLINE_DAYS + percentage * (MAX_DEADLINE_DAYS - MIN_DEADLINE_DAYS));
       
       if (isDragging === 'min') {
-        if (value <= deadlineMaxDays) {
-          setDeadlineMinDays(value);
+        if (value <= localDeadlineMaxDays) {
+          setLocalDeadlineMinDays(value);
+          debouncedSetDeadlineMinDays(value);
         }
       } else if (isDragging === 'max') {
-        if (value >= deadlineMinDays) {
-          setDeadlineMaxDays(value);
+        if (value >= localDeadlineMinDays) {
+          setLocalDeadlineMaxDays(value);
+          debouncedSetDeadlineMaxDays(value);
         }
       }
     };
@@ -90,7 +119,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
       document.removeEventListener('mouseup', handleEnd);
       document.removeEventListener('touchend', handleEnd);
     };
-  }, [isDragging, deadlineMinDays, deadlineMaxDays, setDeadlineMinDays, setDeadlineMaxDays]);
+  }, [isDragging, localDeadlineMinDays, localDeadlineMaxDays, debouncedSetDeadlineMinDays, debouncedSetDeadlineMaxDays]);
 
   // Predefined deadline ranges for quick selection
   const deadlinePresets = [
@@ -104,7 +133,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
-        Deadline Range: {formatDeadlineText(deadlineMinDays)} - {formatDeadlineText(deadlineMaxDays)}
+        Deadline Range: {formatDeadlineText(localDeadlineMinDays)} - {formatDeadlineText(localDeadlineMaxDays)}
       </label>
       
       {/* Quick deadline range selection */}
@@ -114,6 +143,9 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
             key={preset.label}
             type="button"
             onClick={() => {
+              // Update both local and parent state immediately for preset buttons
+              setLocalDeadlineMinDays(preset.min);
+              setLocalDeadlineMaxDays(preset.max);
               setDeadlineMinDays(preset.min);
               setDeadlineMaxDays(preset.max);
               if (preset.label === "Any") {
@@ -122,7 +154,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
               }
             }}
             className={`px-2 py-1 text-xs rounded-full transition-colors ${
-              deadlineMinDays === preset.min && deadlineMaxDays === preset.max
+              localDeadlineMinDays === preset.min && localDeadlineMaxDays === preset.max
                 ? 'bg-primary-100 text-primary-800 font-medium'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
@@ -157,7 +189,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
             role="slider"
             aria-valuemin={MIN_DEADLINE_DAYS}
             aria-valuemax={MAX_DEADLINE_DAYS}
-            aria-valuenow={deadlineMinDays}
+            aria-valuenow={localDeadlineMinDays}
             aria-label="Minimum deadline days"
             tabIndex={0}
           />
@@ -171,7 +203,7 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
             role="slider"
             aria-valuemin={MIN_DEADLINE_DAYS}
             aria-valuemax={MAX_DEADLINE_DAYS}
-            aria-valuenow={deadlineMaxDays}
+            aria-valuenow={localDeadlineMaxDays}
             aria-label="Maximum deadline days"
             tabIndex={0}
           />

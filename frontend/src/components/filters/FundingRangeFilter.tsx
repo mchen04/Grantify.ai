@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { debounce } from '@/utils/debounce';
 import { MAX_FUNDING } from '@/utils/constants';
 
 interface FundingRangeFilterProps {
@@ -25,6 +26,32 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
 }) => {
   const rangeRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
+  const [localFundingMin, setLocalFundingMin] = useState(fundingMin);
+  const [localFundingMax, setLocalFundingMax] = useState(fundingMax);
+  
+  // Create debounced versions of the setters
+  const debouncedSetFundingMin = useMemo(
+    () => debounce((value: number) => {
+      setFundingMin(value);
+    }, 300),
+    [setFundingMin]
+  );
+  
+  const debouncedSetFundingMax = useMemo(
+    () => debounce((value: number) => {
+      setFundingMax(value);
+    }, 300),
+    [setFundingMax]
+  );
+  
+  // Update local state when props change (e.g., from preset buttons)
+  useEffect(() => {
+    setLocalFundingMin(fundingMin);
+  }, [fundingMin]);
+  
+  useEffect(() => {
+    setLocalFundingMax(fundingMax);
+  }, [fundingMax]);
   
   // Format currency for display
   const formatCurrency = (amount: number) => {
@@ -39,8 +66,8 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
   };
 
   // Calculate percentage for positioning handles
-  const minPercentage = (fundingMin / MAX_FUNDING) * 100;
-  const maxPercentage = (fundingMax / MAX_FUNDING) * 100;
+  const minPercentage = (localFundingMin / MAX_FUNDING) * 100;
+  const maxPercentage = (localFundingMax / MAX_FUNDING) * 100;
 
   // Handle mouse/touch events for slider interaction
   useEffect(() => {
@@ -58,12 +85,14 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
       const value = Math.round((percentage * MAX_FUNDING) / 100000) * 100000;
       
       if (isDragging === 'min') {
-        if (value <= fundingMax) {
-          setFundingMin(value);
+        if (value <= localFundingMax) {
+          setLocalFundingMin(value);
+          debouncedSetFundingMin(value);
         }
       } else if (isDragging === 'max') {
-        if (value >= fundingMin) {
-          setFundingMax(value);
+        if (value >= localFundingMin) {
+          setLocalFundingMax(value);
+          debouncedSetFundingMax(value);
         }
       }
     };
@@ -83,7 +112,7 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
       document.removeEventListener('mouseup', handleEnd);
       document.removeEventListener('touchend', handleEnd);
     };
-  }, [isDragging, fundingMin, fundingMax, setFundingMin, setFundingMax]);
+  }, [isDragging, localFundingMin, localFundingMax, debouncedSetFundingMin, debouncedSetFundingMax]);
 
   // Predefined funding ranges for quick selection
   const fundingPresets = [
@@ -98,7 +127,7 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
-        Funding Range: {formatCurrency(fundingMin)} - {formatCurrency(fundingMax)}
+        Funding Range: {formatCurrency(localFundingMin)} - {formatCurrency(localFundingMax)}
       </label>
       
       {/* Quick funding range selection */}
@@ -108,6 +137,9 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
             key={preset.label}
             type="button"
             onClick={() => {
+              // Update both local and parent state immediately for preset buttons
+              setLocalFundingMin(preset.min);
+              setLocalFundingMax(preset.max);
               setFundingMin(preset.min);
               setFundingMax(preset.max);
               if (preset.label === "Any") {
@@ -116,7 +148,7 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
               }
             }}
             className={`px-2 py-1 text-xs rounded-full transition-colors ${
-              fundingMin === preset.min && fundingMax === preset.max
+              localFundingMin === preset.min && localFundingMax === preset.max
                 ? 'bg-primary-100 text-primary-800 font-medium'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}

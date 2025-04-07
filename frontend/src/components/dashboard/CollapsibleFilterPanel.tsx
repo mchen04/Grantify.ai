@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { debounce } from '@/utils/debounce';
 import { SelectOption } from '@/types/grant';
 
 interface CollapsibleFilterPanelProps {
@@ -27,6 +28,20 @@ const CollapsibleFilterPanel: React.FC<CollapsibleFilterPanelProps> = ({
   setSearchTerm
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
+
+  // Create a debounced version of setSearchTerm to reduce frequency of parent state updates
+  const debouncedSetSearchTerm = React.useMemo(
+    () => debounce((value: string) => {
+      setSearchTerm(value);
+    }, 300), // 300ms delay
+    [setSearchTerm]
+  );
+
+  // Update localSearchTerm when searchTerm prop changes (e.g. from parent clear action)
+  useEffect(() => {
+    setLocalSearchTerm(searchTerm);
+  }, [searchTerm]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm mb-6 overflow-hidden">
@@ -39,8 +54,12 @@ const CollapsibleFilterPanel: React.FC<CollapsibleFilterPanelProps> = ({
               <input
                 type="text"
                 placeholder="Search grants..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={localSearchTerm}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setLocalSearchTerm(value); // Update local state immediately for responsive UI
+                  debouncedSetSearchTerm(value); // Debounce the update to parent state
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
               <svg
@@ -56,9 +75,12 @@ const CollapsibleFilterPanel: React.FC<CollapsibleFilterPanelProps> = ({
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
-              {searchTerm && (
+              {localSearchTerm && (
                 <button
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => {
+                    setLocalSearchTerm('');
+                    setSearchTerm(''); // Update parent state immediately for clear action
+                  }}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

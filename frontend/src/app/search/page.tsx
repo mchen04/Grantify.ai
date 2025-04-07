@@ -1,7 +1,7 @@
- "use client";
+"use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import Layout from '@/components/Layout/Layout';
 import supabase from '@/lib/supabaseClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
@@ -13,6 +13,19 @@ import {
   MAX_DEADLINE_DAYS,
   SEARCH_GRANTS_PER_PAGE
 } from '@/utils/constants';
+
+// Dynamically import ApplyConfirmationPopup component
+const DynamicApplyConfirmationPopup = dynamic(
+  () => import('@/components/ApplyConfirmationPopup'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+      </div>
+    )
+  }
+);
 
 // Components
 import SearchBar from '@/components/search/SearchBar';
@@ -74,9 +87,10 @@ export default function Search() {
     { value: 'title_desc', label: 'Title (Z-A)' }
   ];
 
-  const updateFilter = (key: keyof GrantFilter, value: any) => {
+  // Memoize the filter update function
+  const updateFilter = useCallback((key: keyof GrantFilter, value: any) => {
     setFilter(prev => ({ ...prev, [key]: value }));
-  };
+  }, []);
 
   const handleFundingOptionChange = (option: 'include' | 'only', checked: boolean) => {
     if (option === 'only') {
@@ -110,12 +124,18 @@ export default function Search() {
     }
   };
 
+  // Memoize the buildGrantQuery call to optimize performance
+  const buildMemoizedQuery = useCallback(async () => {
+    return await buildGrantQuery(filter, SEARCH_GRANTS_PER_PAGE);
+  }, [filter, SEARCH_GRANTS_PER_PAGE]);
+
   useEffect(() => {
     const fetchGrants = async () => {
       try {
         setLoading(true);
         setError(null);
-        const query = await buildGrantQuery(filter, SEARCH_GRANTS_PER_PAGE);
+        
+        const query = await buildMemoizedQuery();
         const { data, error: queryError, count } = await query;
         
         if (queryError) throw queryError;
@@ -131,20 +151,23 @@ export default function Search() {
     };
     
     fetchGrants();
-  }, [filter]);
+  }, [buildMemoizedQuery, SEARCH_GRANTS_PER_PAGE]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  // Memoize the search handler to avoid recreating on every render
+  const handleSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     updateFilter('page', 1);
-  };
+  }, [updateFilter]);
 
-  const goToPage = (newPage: number) => {
+  // Memoize the pagination handler
+  const goToPage = useCallback((newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       updateFilter('page', newPage);
     }
-  };
+  }, [updateFilter, totalPages]);
 
-  const resetFilters = () => {
+  // Memoize the filter reset function
+  const resetFilters = useCallback(() => {
     setFilter({
       searchTerm: '',
       agencies: [],
@@ -160,9 +183,9 @@ export default function Search() {
       sortBy: 'relevance',
       page: 1
     });
-  };
+  }, [MAX_FUNDING, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS]);
 
-  const handleInteraction = async (grantId: string, action: 'applied' | 'saved' | 'ignored', removeFromUI: boolean = true): Promise<void> => {
+  const handleInteraction = useCallback(async (grantId: string, action: 'applied' | 'saved' | 'ignored', removeFromUI: boolean = true): Promise<void> => {
     if (!user) return;
 
     try {
@@ -210,10 +233,10 @@ export default function Search() {
       console.error(`Error ${action} grant:`, error.message || error);
       setError(`Failed to ${action} grant: ${error.message || 'Please try again.'}`);
     }
-  };
+  }, [user, setGrants, grants, setError]);
 
-  // Function to handle apply button click and show confirmation popup
-  const handleApplyClick = (grantId: string): Promise<void> => {
+  // Memoize the apply click handler to avoid recreating on every render
+  const handleApplyClick = useCallback((grantId: string): Promise<void> => {
     return new Promise<void>(resolve => {
       // Find the grant in the list
       const grant = grants.find(g => g.id === grantId);
@@ -231,7 +254,7 @@ export default function Search() {
       setShowApplyConfirmation(true);
       resolve();
     });
-  };
+  }, [grants, setPendingGrantId, setPendingGrantTitle, setShowApplyConfirmation]);
   
   // Reference to the SearchResults component's fadeAndRemoveCard function
   const searchResultsRef = React.useRef<{
@@ -260,21 +283,22 @@ export default function Search() {
     setPendingGrantTitle('');
   };
 
-  // Function to be passed to SearchResults for handling confirmation
-  const handleConfirmApply = async (grantId: string): Promise<void> => {
-    // This function will be called after the card has faded out
-    // The database update is already handled in handleApplyConfirmation
-  };
+  // Remove or simplify the function since it's no longer needed
+  // after refactoring the confirmation flow
+  const handleConfirmApply = useCallback(async (grantId: string): Promise<void> => {
+    // This is now just a stub - actual logic is in handleApplyConfirmation
+  }, []);
   
-  const handleApply = async (grantId: string): Promise<void> => {
+  // Memoize handlers for grant interactions
+  const handleApply = useCallback(async (grantId: string): Promise<void> => {
     await handleInteraction(grantId, 'applied', true);
-  };
+  }, [handleInteraction]);
 
-  const handleSave = async (grantId: string): Promise<void> => {
+  const handleSave = useCallback(async (grantId: string): Promise<void> => {
     await handleInteraction(grantId, 'saved', true);
-  };
+  }, [handleInteraction]);
 
-  const handleShare = async (grantId: string) => {
+  const handleShare = useCallback(async (grantId: string) => {
     const shareUrl = `${window.location.origin}/grants/${grantId}`;
     
     try {
@@ -294,11 +318,11 @@ export default function Search() {
         await navigator.clipboard.writeText(shareUrl);
       }
     }
-  };
+  }, []);
 
-  const handleIgnore = async (grantId: string): Promise<void> => {
+  const handleIgnore = useCallback(async (grantId: string): Promise<void> => {
     await handleInteraction(grantId, 'ignored', true);
-  };
+  }, [handleInteraction]);
 
   return (
     <Layout>
@@ -489,13 +513,21 @@ export default function Search() {
         </div>
       </div>
       
-      {/* Apply Confirmation Popup */}
-      <ApplyConfirmationPopup
-        isOpen={showApplyConfirmation}
-        grantTitle={pendingGrantTitle}
-        onConfirm={() => handleApplyConfirmation(true)}
-        onCancel={() => handleApplyConfirmation(false)}
-      />
+      {/* Apply Confirmation Popup - Dynamically loaded */}
+      {showApplyConfirmation && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+          </div>
+        }>
+          <DynamicApplyConfirmationPopup
+            isOpen={showApplyConfirmation}
+            grantTitle={pendingGrantTitle}
+            onConfirm={() => handleApplyConfirmation(true)}
+            onCancel={() => handleApplyConfirmation(false)}
+          />
+        </Suspense>
+      )}
     </Layout>
   );
 }

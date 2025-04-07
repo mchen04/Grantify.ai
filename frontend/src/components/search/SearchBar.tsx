@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { debounce } from '@/utils/debounce';
 
 interface SearchBarProps {
   searchTerm: string;
@@ -11,6 +12,22 @@ const SearchBar: React.FC<SearchBarProps> = ({
   setSearchTerm,
   onSubmit
 }) => {
+  // Local state for immediate UI updates
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
+
+  // Create a debounced version of setSearchTerm
+  const debouncedSetSearchTerm = React.useMemo(
+    () => debounce((value: string) => {
+      setSearchTerm(value);
+    }, 300), // 300ms delay
+    [setSearchTerm]
+  );
+
+  // Update localSearchTerm when searchTerm prop changes (e.g. from parent clear action)
+  useEffect(() => {
+    setLocalSearchTerm(searchTerm);
+  }, [searchTerm]);
+
   return (
     <div className="pt-8 pb-4 px-6">
       <div className="text-center mb-6">
@@ -47,8 +64,12 @@ const SearchBar: React.FC<SearchBarProps> = ({
             type="text"
             placeholder="Search by keyword, category, or funding amount..."
             className="w-full py-3 pl-12 pr-20 rounded-full border border-gray-300 shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={localSearchTerm}
+            onChange={(e) => {
+              const value = e.target.value;
+              setLocalSearchTerm(value); // Update local state immediately
+              debouncedSetSearchTerm(value); // Debounce the update to parent state
+            }}
           />
 
           {/* Search button */}
@@ -68,7 +89,9 @@ const SearchBar: React.FC<SearchBarProps> = ({
               key={term}
               type="button"
               onClick={() => {
-                setSearchTerm(term.toLowerCase());
+                const value = term.toLowerCase();
+                setLocalSearchTerm(value);
+                setSearchTerm(value); // Immediate update for popular search
                 onSubmit({} as any);
               }}
               className="hover:text-primary-600 hover:underline transition-colors"

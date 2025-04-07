@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import ApplyConfirmationPopup from '@/components/ApplyConfirmationPopup';
+import React, { useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '../../components/Layout/Layout';
@@ -13,6 +13,19 @@ import { DASHBOARD_GRANTS_PER_PAGE } from '@/utils/constants';
 import Pagination from '@/components/dashboard/Pagination';
 import CollapsibleFilterPanel from '@/components/dashboard/CollapsibleFilterPanel';
 import { SelectOption } from '@/types/grant';
+
+// Dynamically import ApplyConfirmationPopup component
+const DynamicApplyConfirmationPopup = dynamic(
+  () => import('@/components/ApplyConfirmationPopup'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+      </div>
+    )
+  }
+);
 
 // Grant type definition
 interface Grant {
@@ -78,7 +91,7 @@ export default function Dashboard() {
   ];
 
   // Filter and sort grants based on search term, filter options, and sort option
-  const filterAndSortGrants = (grants: Grant[]) => {
+  const filterAndSortGrants = useCallback((grants: Grant[]) => {
     // Apply filters in sequence
     let filteredGrants = grants;
 
@@ -93,10 +106,6 @@ export default function Dashboard() {
       );
     } else {
       // When the filter is off, exclude grants with open-ended deadlines
-      // NOTE: This behavior is different from the search page, where turning off the filter
-      // simply means "don't apply this filter". In the dashboard context, we actively filter out
-      // open-ended deadlines when the filter is off to provide a cleaner view of grants with
-      // specific deadlines by default.
       filteredGrants = filteredGrants.filter(grant =>
         !(typeof grant.close_date === 'string' &&
           (grant.close_date.toLowerCase().includes('open') ||
@@ -159,29 +168,7 @@ export default function Dashboard() {
           return 0;
       }
     });
-  };
-
-  // Get paginated grants for the current tab
-  const getPaginatedGrants = (grants: Grant[], tabName: string) => {
-    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
-    const startIndex = (currentPage[tabName as keyof typeof currentPage] - 1) * GRANTS_PER_PAGE;
-    const endIndex = startIndex + GRANTS_PER_PAGE;
-    return filtered.slice(startIndex, endIndex);
-  };
-
-  // Get total number of pages for a tab
-  const getTotalPages = (grants: Grant[], tabName: string) => {
-    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
-    return Math.ceil(filtered.length / GRANTS_PER_PAGE);
-  };
-
-  // Handle page change
-  const handlePageChange = (tabName: string, newPage: number) => {
-    setCurrentPage(prev => ({
-      ...prev,
-      [tabName]: newPage
-    }));
-  };
+  }, [sortBy, filterOnlyNoDeadline, filterOnlyNoFunding, searchTerm]);
 
   // Memoize filtered and sorted grants to prevent unnecessary recalculations
   const filteredAndSortedGrants = useMemo(() => {
@@ -191,22 +178,45 @@ export default function Dashboard() {
       applied: filterAndSortGrants(appliedGrants),
       ignored: filterAndSortGrants(ignoredGrants)
     };
-  }, [recommendedGrants, savedGrants, appliedGrants, ignoredGrants,
-      sortBy, filterOnlyNoDeadline, filterOnlyNoFunding, searchTerm]);
+  }, [filterAndSortGrants, recommendedGrants, savedGrants, appliedGrants, ignoredGrants]);
 
-  const displayedGrants = {
+  // Handle page change
+  const handlePageChange = (tabName: string, newPage: number) => {
+    setCurrentPage(prev => ({
+      ...prev,
+      [tabName]: newPage
+    }));
+  };
+
+  // Get paginated grants for the current tab
+  const getPaginatedGrants = useCallback((grants: Grant[], tabName: string) => {
+    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
+    const startIndex = (currentPage[tabName as keyof typeof currentPage] - 1) * GRANTS_PER_PAGE;
+    const endIndex = startIndex + GRANTS_PER_PAGE;
+    return filtered.slice(startIndex, endIndex);
+  }, [filteredAndSortedGrants, currentPage, GRANTS_PER_PAGE]);
+
+  // Get total number of pages for a tab
+  const getTotalPages = useCallback((grants: Grant[], tabName: string) => {
+    const filtered = filteredAndSortedGrants[tabName as keyof typeof filteredAndSortedGrants];
+    return Math.ceil(filtered.length / GRANTS_PER_PAGE);
+  }, [filteredAndSortedGrants, GRANTS_PER_PAGE]);
+
+  // Memoize displayed grants to prevent unnecessary recalculations
+  const displayedGrants = useMemo(() => ({
     recommended: getPaginatedGrants(recommendedGrants, 'recommended'),
     saved: getPaginatedGrants(savedGrants, 'saved'),
     applied: getPaginatedGrants(appliedGrants, 'applied'),
     ignored: getPaginatedGrants(ignoredGrants, 'ignored')
-  };
+  }), [getPaginatedGrants, recommendedGrants, savedGrants, appliedGrants, ignoredGrants]);
 
-  const totalPages = {
+  // Memoize total pages calculation to prevent unnecessary recalculations
+  const totalPages = useMemo(() => ({
     recommended: getTotalPages(recommendedGrants, 'recommended'),
     saved: getTotalPages(savedGrants, 'saved'),
     applied: getTotalPages(appliedGrants, 'applied'),
     ignored: getTotalPages(ignoredGrants, 'ignored')
-  };
+  }), [getTotalPages, recommendedGrants, savedGrants, appliedGrants, ignoredGrants]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -414,7 +424,7 @@ export default function Dashboard() {
   } | null>(null);
 
   // Function to handle apply button click and show confirmation popup
-  const handleApplyClick = (grantId: string): Promise<void> => {
+  const handleApplyClick = useCallback((grantId: string): Promise<void> => {
     return new Promise<void>(resolve => {
       // Find the grant in any of the lists
       const grant = recommendedGrants.find(g => g.id === grantId) ||
@@ -435,7 +445,7 @@ export default function Dashboard() {
       setShowApplyConfirmation(true);
       resolve();
     });
-  };
+  }, [recommendedGrants, savedGrants, appliedGrants, ignoredGrants]);
 
   // Function to handle confirmation response
   const handleApplyConfirmation = async (didApply: boolean) => {
@@ -463,12 +473,11 @@ export default function Dashboard() {
     setPendingGrantTitle('');
   };
 
-  // Function to be called after the card has faded out (now redundant as update happens in handleApplyConfirmation)
+  // Function is maintained but simplified for compatibility
   const handleConfirmApply = async (grantId: string): Promise<void> => {
-      // This function is no longer strictly necessary as the state update
-      // is handled immediately in handleApplyConfirmation after the fade attempt.
+    // This function is now just a placeholder for compatibility
+    // The actual functionality is handled in handleApplyConfirmation
   };
-
 
   // Handle grant interaction (save, apply, ignore) - Refactored
   const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
@@ -476,14 +485,11 @@ export default function Dashboard() {
 
     try {
       // Find the grant in any of the lists to get its data
-      // Use useCallback or memoization if performance becomes an issue here
-      const findGrant = () =>
-          recommendedGrants.find(g => g.id === grantId) ||
+      const grant = recommendedGrants.find(g => g.id === grantId) ||
           savedGrants.find(g => g.id === grantId) ||
           appliedGrants.find(g => g.id === grantId) ||
           ignoredGrants.find(g => g.id === grantId);
-
-      const grant = findGrant();
+      
       if (!grant) {
           console.warn(`Grant ${grantId} not found in local state for interaction.`);
           return; // Grant not found locally, maybe already processed?
@@ -669,7 +675,7 @@ export default function Dashboard() {
           {activeTab === 'recommended' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Recommended Grants</h2>
-              {filterAndSortGrants(recommendedGrants).length > 0 ? (
+              {filteredAndSortedGrants.recommended.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
                     {displayedGrants.recommended.map((grant) => (
@@ -687,7 +693,6 @@ export default function Dashboard() {
                         onApply={() => handleApplyClick(grant.id)} // Shows confirmation first
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShare(grant.id)}
-                        onConfirmApply={() => handleConfirmApply(grant.id)} // Likely redundant now
                       />
                     ))}
                   </div>
@@ -736,7 +741,7 @@ export default function Dashboard() {
           {activeTab === 'saved' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Saved Grants</h2>
-              {filterAndSortGrants(savedGrants).length > 0 ? (
+              {filteredAndSortedGrants.saved.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
                     {displayedGrants.saved.map((grant) => (
@@ -755,7 +760,6 @@ export default function Dashboard() {
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShare(grant.id)}
                         isSaved={true}
-                        onConfirmApply={() => handleConfirmApply(grant.id)}
                       />
                     ))}
                   </div>
@@ -804,7 +808,7 @@ export default function Dashboard() {
           {activeTab === 'applied' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Applied Grants</h2>
-              {filterAndSortGrants(appliedGrants).length > 0 ? (
+              {filteredAndSortedGrants.applied.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
                     {displayedGrants.applied.map((grant) => (
@@ -870,7 +874,7 @@ export default function Dashboard() {
           {activeTab === 'ignored' && (
             <div className="bg-white rounded-lg shadow-sm p-4">
               <h2 className="text-xl font-bold mb-4">Ignored Grants</h2>
-              {filterAndSortGrants(ignoredGrants).length > 0 ? (
+              {filteredAndSortedGrants.ignored.length > 0 ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 auto-rows-fr">
                     {displayedGrants.ignored.map((grant) => (
@@ -889,7 +893,6 @@ export default function Dashboard() {
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows un-ignoring
                         onShare={() => handleShare(grant.id)}
                         isIgnored={true}
-                        onConfirmApply={() => handleConfirmApply(grant.id)}
                       />
                     ))}
                   </div>
@@ -937,13 +940,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Apply Confirmation Popup */}
-      <ApplyConfirmationPopup
-        isOpen={showApplyConfirmation}
-        grantTitle={pendingGrantTitle}
-        onConfirm={() => handleApplyConfirmation(true)}
-        onCancel={() => handleApplyConfirmation(false)}
-      />
+      {/* Apply Confirmation Popup - Dynamically loaded */}
+      {showApplyConfirmation && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg p-6 animate-pulse">Loading...</div>
+          </div>
+        }>
+          <DynamicApplyConfirmationPopup
+            isOpen={showApplyConfirmation}
+            grantTitle={pendingGrantTitle}
+            onConfirm={() => handleApplyConfirmation(true)}
+            onCancel={() => handleApplyConfirmation(false)}
+          />
+        </Suspense>
+      )}
     </div>
   </Layout>
   );

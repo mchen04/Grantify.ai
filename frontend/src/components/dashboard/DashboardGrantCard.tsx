@@ -18,7 +18,6 @@ interface DashboardGrantCardProps {
   isApplied?: boolean;
   isIgnored?: boolean;
   isSaved?: boolean;
-  onConfirmApply?: () => Promise<void>;
 }
 
 // Define the ref type
@@ -39,10 +38,7 @@ const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardP
     // Wait for fade animation to complete
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    // Call the onConfirmApply callback if provided
-    if (props.onConfirmApply) {
-      await props.onConfirmApply();
-    }
+    // No need to call onConfirmApply anymore as parent component handles the state update
   };
 
   // Expose the fadeAndRemoveCard function to parent components
