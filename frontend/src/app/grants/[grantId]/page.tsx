@@ -512,24 +512,28 @@ export default function GrantDetail({ params }: { params: { grantId: string } })
                 ) : null}
                 
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const shareUrl = `${window.location.origin}/grants/${grantId}`;
                     try {
                       if (navigator.share) {
-                        navigator.share({
+                        await navigator.share({
                           title: grant.title,
                           text: 'Check out this grant opportunity',
                           url: shareUrl
                         });
                       } else {
-                        navigator.clipboard.writeText(shareUrl);
+                        await navigator.clipboard.writeText(shareUrl);
                         // Could add a toast notification here
                       }
                     } catch (error: any) {
-                      // Don't log errors if the user canceled the share
+                      // Silently handle AbortError when user cancels share dialog
                       if (error.name !== 'AbortError') {
                         // Only copy to clipboard if it's not a cancel action
-                        navigator.clipboard.writeText(shareUrl);
+                        try {
+                          await navigator.clipboard.writeText(shareUrl);
+                        } catch (clipboardError) {
+                          console.error('Failed to copy URL to clipboard', clipboardError);
+                        }
                       }
                     }
                   }}
