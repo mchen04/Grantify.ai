@@ -64,7 +64,7 @@ async function runRawGrantsUpdateJob(useMock = false, source = 'grants.gov'): Pr
     // Set the source for all grants
     grants.forEach(grant => {
       grant.source = source;
-      grant.processing_status = 'raw'; // Mark as raw data
+      grant.processing_status = 'not_processed'; // Use allowed value from check constraint
     });
     console.log(`Parsed ${grants.length} grants from XML`);
     
