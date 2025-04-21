@@ -117,6 +117,8 @@ interface TransformedGrant {
   grantor_contact_name: string;
   grantor_contact_email: string;
   grantor_contact_phone: string;
+  processing_status: string;
+  source: string;
   created_at: string;
   updated_at: string;
 }
@@ -266,6 +268,8 @@ async function parseGrantsXml(
         grantor_contact_name: cleanedData.contactInfo.name || '',
         grantor_contact_email: cleanedData.contactInfo.email || '',
         grantor_contact_phone: cleanedData.contactInfo.phone || '',
+        processing_status: isExisting ? 'not_processed' : 'processed', // Mark as processed if we just cleaned it
+        source: 'grants.gov', // Default source
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

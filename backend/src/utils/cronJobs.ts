@@ -51,8 +51,10 @@ export function initCronJobs(): void {
 /**
  * Update grants data from Grants.gov
  * @param useMock - Whether to use the mock XML file (for testing)
+ * @param customTextCleaner - Optional custom text cleaner to use
+ * @param source - Source of the grant data (default: 'grants.gov')
  */
-export async function updateGrantsData(useMock = false, customTextCleaner?: TextCleaner): Promise<void> {
+export async function updateGrantsData(useMock = false, customTextCleaner?: TextCleaner, source: string = 'grants.gov'): Promise<void> {
   try {
     console.log('Starting grants data update process...');
     
@@ -66,6 +68,11 @@ export async function updateGrantsData(useMock = false, customTextCleaner?: Text
 
     // Step 3: Parse the XML data, skipping text cleaning for existing grants
     const grants = await parseGrantsXml(xmlPath, existingGrantIds, customTextCleaner);
+    
+    // Set the source for all grants
+    grants.forEach(grant => {
+      grant.source = source;
+    });
     console.log(`Parsed ${grants.length} grants from XML`);
     
     // Step 4: Store the grants in the database
@@ -88,8 +95,10 @@ export async function updateGrantsData(useMock = false, customTextCleaner?: Text
 /**
  * Run the grants update job manually
  * @param useMock - Whether to use the mock XML file (for testing)
+ * @param customTextCleaner - Optional custom text cleaner to use
+ * @param source - Source of the grant data (default: 'grants.gov')
  */
-export async function runGrantsUpdateJob(useMock = true, customTextCleaner?: TextCleaner): Promise<void> {
-  console.log('Manually running grants update job...');
-  await updateGrantsData(useMock, customTextCleaner);
+export async function runGrantsUpdateJob(useMock = true, customTextCleaner?: TextCleaner, source: string = 'grants.gov'): Promise<void> {
+  console.log(`Manually running grants update job for source: ${source}...`);
+  await updateGrantsData(useMock, customTextCleaner, source);
 }

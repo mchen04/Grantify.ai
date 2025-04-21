@@ -213,6 +213,28 @@ const DashboardSortAndFilterControls: React.FC<DashboardSortAndFilterControlsPro
           >
             A-Z
           </button>
+          <button
+            type="button"
+            onClick={() => setSortBy('available')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              sortBy === 'available'
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Available Grants
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortBy('popular')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              sortBy === 'popular'
+                ? 'bg-primary-100 text-primary-800 font-medium'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Popular Grants
+          </button>
         </div>
         
         {/* Special filters for null values */}

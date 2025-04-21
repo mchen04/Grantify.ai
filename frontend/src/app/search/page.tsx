@@ -49,6 +49,7 @@ export default function Search() {
   const [filter, setFilter] = useState<GrantFilter>({
     searchTerm: '',
     agencies: [],
+    sources: ['grants.gov'], // Default to grants.gov as the only source for now
     fundingMin: 0,
     fundingMax: MAX_FUNDING,
     includeFundingNull: false, // Changed to false - hide grants with no funding by default
@@ -64,16 +65,9 @@ export default function Search() {
 
   const { user } = useAuth();
 
-  const agencyOptions: SelectOption[] = [
-    { value: 'Department of Health and Human Services', label: 'Department of Health and Human Services' },
-    { value: 'Department of Education', label: 'Department of Education' },
-    { value: 'National Science Foundation', label: 'National Science Foundation' },
-    { value: 'Department of Energy', label: 'Department of Energy' },
-    { value: 'Department of Agriculture', label: 'Department of Agriculture' },
-    { value: 'Department of Defense', label: 'Department of Defense' },
-    { value: 'Department of Commerce', label: 'Department of Commerce' },
-    { value: 'Small Business Administration', label: 'Small Business Administration' },
-    { value: 'Environmental Protection Agency', label: 'Environmental Protection Agency' }
+  const sourceOptions: SelectOption[] = [
+    { value: 'grants.gov', label: 'Grants.gov' }
+    // More sources can be added in the future as needed
   ];
 
   const sortOptions: SelectOption[] = [
@@ -170,7 +164,7 @@ export default function Search() {
   const resetFilters = useCallback(() => {
     setFilter({
       searchTerm: '',
-      agencies: [],
+      sources: ['grants.gov'], // Keep the default source
       fundingMin: 0,
       fundingMax: MAX_FUNDING,
       includeFundingNull: true,
@@ -383,20 +377,20 @@ export default function Search() {
                   <button
                     onClick={() => {
                       resetFilters();
-                      updateFilter('agencies', ['National Science Foundation']);
+                      updateFilter('sortBy', 'available');
                     }}
                     className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
                   >
-                    NSF Grants
+                    Available Grants
                   </button>
                   <button
                     onClick={() => {
                       resetFilters();
-                      updateFilter('agencies', ['Department of Health and Human Services']);
+                      updateFilter('sortBy', 'popular');
                     }}
                     className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm text-gray-700 transition-colors"
                   >
-                    HHS Grants
+                    Popular Grants
                   </button>
                 </div>
               </div>
@@ -415,10 +409,10 @@ export default function Search() {
                 <div className="px-6 pb-6 pt-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <MultiSelect
-                      options={agencyOptions}
-                      selectedValues={filter.agencies}
-                      onChange={(values) => updateFilter('agencies', values)}
-                      label="Agencies"
+                      options={sourceOptions}
+                      selectedValues={filter.sources || []}
+                      onChange={(values) => updateFilter('sources', values)}
+                      label="Data Sources"
                     />
                     
                     <div>

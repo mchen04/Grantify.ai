@@ -73,14 +73,14 @@ export const buildGrantQuery = async (
     }
   }
   
-  // --- APPLY AGENCY FILTER ---
-  if (filter.agencies.length > 0) {
-    // Create a filter for any selected agency (OR logic)
-    const agencyFilter = filter.agencies.map(agency => 
-      `agency_name.eq.${agency}`
+  // --- APPLY SOURCE FILTER ---
+  if (filter.sources && filter.sources.length > 0) {
+    // Create a filter for any selected source (OR logic)
+    const sourceFilter = filter.sources.map(source =>
+      `source.eq.${source}`
     ).join(',');
     
-    query = query.or(agencyFilter);
+    query = query.or(sourceFilter);
   }
   
   // --- APPLY FUNDING FILTER ---
@@ -134,6 +134,17 @@ export const buildGrantQuery = async (
     query = query.order('title', { ascending: true });
   } else if (filter.sortBy === 'title_desc') {
     query = query.order('title', { ascending: false });
+  } else if (filter.sortBy === 'available') {
+    // Filter for grants that are still available (not expired)
+    const today = new Date().toISOString();
+    query = query.gt('close_date', today)
+                .order('close_date', { ascending: true, nullsFirst: false });
+  } else if (filter.sortBy === 'popular') {
+    // For popular grants, we could implement this in various ways
+    // Here we're assuming popular means high funding amount and recent
+    query = query.gt('award_ceiling', 100000)
+                .gt('post_date', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()) // Last 90 days
+                .order('award_ceiling', { ascending: false, nullsFirst: false });
   }
   
   // --- APPLY PAGINATION ---

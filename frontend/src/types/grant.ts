@@ -20,6 +20,8 @@ export interface Grant {
   grantor_contact_name?: string | null;
   grantor_contact_email?: string | null;
   grantor_contact_phone?: string | null;
+  processing_status?: 'processed' | 'not_processed';
+  source?: string;
   interactions?: Array<{
     action: 'saved' | 'applied' | 'ignored';
     timestamp: string;
@@ -29,7 +31,7 @@ export interface Grant {
 
 export interface GrantFilter {
   searchTerm: string;
-  agencies: string[];
+  sources: string[];
   fundingMin: number;
   fundingMax: number;
   includeFundingNull: boolean;

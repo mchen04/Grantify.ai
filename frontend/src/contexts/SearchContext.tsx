@@ -41,6 +41,7 @@ interface SearchContextType {
   // Constants
   agencyOptions: SelectOption[];
   sortOptions: SelectOption[];
+  sourceOptions: SelectOption[];
 }
 
 // Create the context with a default value
@@ -53,7 +54,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   // Search filter state
   const [filter, setFilter] = useState<GrantFilter>({
     searchTerm: '',
-    agencies: [],
+    sources: ['grants.gov'], // Default to grants.gov as the only source for now
     fundingMin: 0,
     fundingMax: MAX_FUNDING,
     includeFundingNull: false,
@@ -98,6 +99,12 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   });
   
   // Options for dropdowns
+  const sourceOptions: SelectOption[] = useMemo(() => [
+    { value: 'grants.gov', label: 'Grants.gov' }
+    // More sources can be added here in the future
+  ], []);
+
+  // Agency options - currently only showing grants.gov agencies
   const agencyOptions: SelectOption[] = useMemo(() => [
     { value: 'Department of Health and Human Services', label: 'Department of Health and Human Services' },
     { value: 'Department of Education', label: 'Department of Education' },
@@ -113,12 +120,14 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const sortOptions: SelectOption[] = useMemo(() => [
     { value: 'relevance', label: 'Relevance' },
     { value: 'recent', label: 'Recently Added' },
-    { value: 'deadline', label: 'Deadline (Soonest)' },
+    { value: 'deadline', label: 'Closing Soon' },
     { value: 'deadline_latest', label: 'Deadline (Latest)' },
-    { value: 'amount', label: 'Funding Amount (Highest)' },
+    { value: 'amount', label: 'Highest Funding' },
     { value: 'amount_asc', label: 'Funding Amount (Lowest)' },
     { value: 'title_asc', label: 'Title (A-Z)' },
-    { value: 'title_desc', label: 'Title (Z-A)' }
+    { value: 'title_desc', label: 'Title (Z-A)' },
+    { value: 'available', label: 'Available Grants' },
+    { value: 'popular', label: 'Popular Grants' }
   ], []);
   
   // Memoize the filter update function
@@ -177,7 +186,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const resetFilters = useCallback(() => {
     setFilter({
       searchTerm: '',
-      agencies: [],
+      sources: ['grants.gov'], // Keep the default source
       fundingMin: 0,
       fundingMax: MAX_FUNDING,
       includeFundingNull: true,
@@ -254,7 +263,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     handleApplyConfirmation,
     refetchGrants,
     agencyOptions,
-    sortOptions
+    sortOptions,
+    sourceOptions
   };
   
   return (

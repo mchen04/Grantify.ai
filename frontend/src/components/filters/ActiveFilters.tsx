@@ -46,7 +46,7 @@ const ActiveFilters: React.FC<ActiveFiltersProps> = ({ filter }) => {
   // Check if any filters are active
   const hasActiveFilters = () => {
     return (
-      filter.agencies.length > 0 ||
+      (filter.sources && filter.sources.length > 0) ||
       filter.fundingMin > 0 ||
       filter.fundingMax < MAX_FUNDING ||
       filter.onlyNoFunding ||
@@ -65,11 +65,9 @@ const ActiveFilters: React.FC<ActiveFiltersProps> = ({ filter }) => {
   return (
     <div className="mt-4">
       <div className="flex flex-wrap gap-2">
-        {filter.agencies.length > 0 && (
+        {filter.sources && filter.sources.length > 0 && (
           <span className="bg-primary-100 text-primary-800 text-xs font-medium px-3 py-1 rounded-full flex items-center">
-            {filter.agencies.length === 1
-              ? filter.agencies[0].split(' ').pop() // Show just the last word of the agency name
-              : `${filter.agencies.length} Agencies`}
+            Source: Grants.gov
           </span>
         )}
         
@@ -110,12 +108,14 @@ const ActiveFilters: React.FC<ActiveFiltersProps> = ({ filter }) => {
         {filter.sortBy !== 'relevance' && (
           <span className="bg-primary-100 text-primary-800 text-xs font-medium px-3 py-1 rounded-full flex items-center">
             Sort: {filter.sortBy === 'recent' ? 'Recently Added' :
-                  filter.sortBy === 'deadline' ? 'Deadline (Soonest)' :
+                  filter.sortBy === 'deadline' ? 'Closing Soon' :
                   filter.sortBy === 'deadline_latest' ? 'Deadline (Latest)' :
-                  filter.sortBy === 'amount' ? 'Funding (Highest)' :
+                  filter.sortBy === 'amount' ? 'Highest Funding' :
                   filter.sortBy === 'amount_asc' ? 'Funding (Lowest)' :
                   filter.sortBy === 'title_asc' ? 'Title (A-Z)' :
                   filter.sortBy === 'title_desc' ? 'Title (Z-A)' :
+                  filter.sortBy === 'available' ? 'Available Grants' :
+                  filter.sortBy === 'popular' ? 'Popular Grants' :
                   'Custom'}
           </span>
         )}
