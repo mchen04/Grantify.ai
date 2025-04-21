@@ -21,12 +21,14 @@ This script downloads grant data from grants.gov and processes it using Google's
 
 **Usage:**
 ```bash
-ts-node backend/scripts/updateGrantsWithGemini.ts [--chunk-size=20] [--max-requests=50]
+ts-node backend/scripts/updateGrantsWithGemini.ts --chunk-size=20 --max-requests=50
 ```
 
 **Parameters:**
 - `--chunk-size`: Number of grants to process in each batch (default: 20)
 - `--max-requests`: Maximum number of API requests to make in a single run (default: 50)
+
+**Note:** The parameters are optional. You can run the script without parameters to use the defaults.
 
 **Notes:**
 - Uses Gemini 2.0 Flash Lite (free tier)
@@ -42,11 +44,13 @@ This script downloads grant data from grants.gov and processes it using OpenRout
 
 **Usage:**
 ```bash
-ts-node backend/scripts/updateGrantsLive.ts [--source=grants.gov]
+ts-node backend/scripts/updateGrantsLive.ts --source=grants.gov
 ```
 
 **Parameters:**
 - `--source`: Source of the grant data (default: grants.gov)
+
+**Note:** The parameter is optional. You can run the script without parameters to use the default source.
 
 **Notes:**
 - This is the default method used by the scheduled cron job
@@ -60,11 +64,13 @@ This script downloads grant data from grants.gov and processes it using basic te
 
 **Usage:**
 ```bash
-ts-node backend/scripts/updateGrantsNoAI.ts [--source=grants.gov]
+ts-node backend/scripts/updateGrantsNoAI.ts --source=grants.gov
 ```
 
 **Parameters:**
 - `--source`: Source of the grant data (default: grants.gov)
+
+**Note:** The parameter is optional. You can run the script without parameters to use the default source.
 
 **Notes:**
 - Uses simple regex-based cleaning for HTML entities, formatting, etc.
@@ -79,11 +85,13 @@ This script downloads grant data from grants.gov and stores it in the database w
 
 **Usage:**
 ```bash
-ts-node backend/scripts/updateGrantsRaw.ts [--source=grants.gov]
+ts-node backend/scripts/updateGrantsRaw.ts --source=grants.gov
 ```
 
 **Parameters:**
 - `--source`: Source of the grant data (default: grants.gov)
+
+**Note:** The parameter is optional. You can run the script without parameters to use the default source.
 
 **Notes:**
 - Stores data exactly as received from grants.gov
@@ -102,6 +110,33 @@ Grants in the database have a `processing_status` field that indicates their pro
 
 - `processed`: Grant has been processed with AI text cleaning
 - `not_processed`: Grant has not been processed with AI text cleaning
+
+## Enhanced Phone Number Handling
+
+The text cleaning process now includes enhanced phone number handling:
+
+### Features
+
+1. **International Number Support**
+   - Detects and preserves international phone number formats
+   - Adds country code prefix (+) when missing
+   - Adds country identification in parentheses (e.g., "(UK)", "(France)", etc.)
+
+2. **Parenthetical Information**
+   - Preserves any text in parentheses from the original data
+   - Example: "123-456-7890 (Extension 123)" or "+44 20 1234 5678 (London Office)"
+
+3. **Standardization**
+   - US numbers are formatted as XXX-XXX-XXXX
+   - International numbers maintain their original format with appropriate labeling
+   - Numbers that don't match known patterns are preserved with their original format
+
+### Examples
+
+- US Number: `555-123-4567`
+- US Number with Extension: `555-123-4567 (Ext. 123)`
+- UK Number: `+44 20 1234 5678 (UK)`
+- International: `+33 1 23 45 67 89 (France)`
 
 ## Troubleshooting
 
@@ -134,3 +169,42 @@ If you encounter database constraint errors:
 2. For production data, use Gemini or OpenRouter for better quality
 3. Run the Gemini processing script with smaller chunk sizes to avoid rate limiting
 4. Monitor the pipeline_runs table for processing statistics and errors
+
+## Clearing Grants from the Database
+
+If you need to delete grants from the database, there are two scripts available:
+
+### 1. Clear Grants Only
+
+This script deletes all grants and pipeline runs from the database.
+
+**Script Path:** `backend/scripts/clearGrants.ts`
+
+**Usage:**
+```bash
+ts-node backend/scripts/clearGrants.ts
+```
+
+**What it does:**
+- Deletes all records from the grants table
+- Deletes all records from the pipeline_runs table
+- Does not affect user data or interactions
+
+### 2. Clear All Data
+
+This script deletes all grants and related data from the database, handling foreign key constraints by deleting in the correct order.
+
+**Script Path:** `backend/scripts/clearAllData.ts`
+
+**Usage:**
+```bash
+ts-node backend/scripts/clearAllData.ts
+```
+
+**What it does:**
+- Deletes all user interactions first (these reference grants)
+- Deletes all grants
+- Deletes all pipeline runs
+- Provides a complete clean slate for the database
+
+**Note:** Use this script with caution as it will delete user interaction data.

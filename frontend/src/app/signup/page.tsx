@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
+import { validatePassword } from '@/utils/passwordValidator';
 
 export default function SignUp() {
   const router = useRouter();
@@ -41,8 +43,10 @@ export default function SignUp() {
       return;
     }
     
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    // Validate password strength
+    const validation = validatePassword(password);
+    if (!validation.isValid) {
+      setError(validation.errors[0]); // Show the first error
       return;
     }
     
@@ -127,6 +131,7 @@ export default function SignUp() {
                 placeholder="••••••••"
                 required
               />
+              <PasswordStrengthIndicator password={password} />
             </div>
             
             <div>
@@ -169,6 +174,10 @@ export default function SignUp() {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-sm text-gray-500 text-center mb-4">
               By creating an account, you agree to our Terms of Service and Privacy Policy.
+            </p>
+            <p className="text-xs text-gray-500 text-center">
+              Password must be at least 8 characters and include uppercase, lowercase,
+              numbers, and special characters.
             </p>
           </div>
         </div>

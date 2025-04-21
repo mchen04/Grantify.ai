@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import SettingsLayout from '@/components/settings/SettingsLayout';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
+import { validatePassword } from '@/utils/passwordValidator';
 
 export default function Settings() {
   const { user, isLoading, updatePassword } = useAuth();
@@ -40,8 +42,10 @@ export default function Settings() {
       return;
     }
     
-    if (newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters long' });
+    // Validate password strength
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      setMessage({ type: 'error', text: validation.errors[0] }); // Show the first error
       return;
     }
     
@@ -171,9 +175,12 @@ export default function Settings() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
-                  minLength={6}
                 />
-                <p className="mt-1 text-xs text-gray-500">Password must be at least 6 characters long</p>
+                <PasswordStrengthIndicator password={newPassword} />
+                <p className="mt-1 text-xs text-gray-500">
+                  Password must be at least 8 characters and include uppercase, lowercase,
+                  numbers, and special characters.
+                </p>
               </div>
               
               <div>

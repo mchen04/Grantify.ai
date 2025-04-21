@@ -92,7 +92,11 @@ const SearchBar: React.FC<SearchBarProps> = ({
                 const value = term.toLowerCase();
                 setLocalSearchTerm(value);
                 setSearchTerm(value); // Immediate update for popular search
-                onSubmit({} as any);
+                // Create a mock event object with preventDefault method
+                const mockEvent = {
+                  preventDefault: () => {}
+                };
+                onSubmit(mockEvent as React.FormEvent);
               }}
               className="hover:text-primary-600 hover:underline transition-colors"
             >

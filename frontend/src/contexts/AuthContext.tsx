@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabaseClient';
+import { validatePassword } from '@/utils/passwordValidator';
 
 // Define the context type
 type AuthContextType = {
@@ -58,9 +59,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Sign up function
+  // Sign up function with password validation
   const signUp = async (email: string, password: string) => {
     try {
+      // Validate password strength before sending to Supabase
+      const validation = validatePassword(password);
+      if (!validation.isValid) {
+        return { error: { message: validation.errors[0] } };
+      }
+      
       const { error } = await supabase.auth.signUp({ email, password });
       return { error };
     } catch (error) {
@@ -99,9 +106,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Update password function with current password verification
+  // Update password function with current password verification and strength validation
   const updatePassword = async (newPassword: string, currentPassword: string) => {
     try {
+      // Validate password strength before sending to Supabase
+      const validation = validatePassword(newPassword);
+      if (!validation.isValid) {
+        return { error: { message: validation.errors[0] } };
+      }
+      
       // First verify the current password by attempting to sign in
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: user?.email || '',

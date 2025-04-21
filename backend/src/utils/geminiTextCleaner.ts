@@ -287,17 +287,24 @@ class GeminiTextCleaner {
     // Extract digits only
     const digits = phone.replace(/\D/g, '');
     
+    // Extract any text in parentheses
+    let additionalInfo = '';
+    const parenthesesMatch = phone.match(/\(([^)]+)\)/);
+    if (parenthesesMatch) {
+      additionalInfo = ` (${parenthesesMatch[1]})`;
+    }
+    
     // US format (10 digits)
     if (digits.length === 10) {
       return {
-        number: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`,
+        number: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${additionalInfo}`,
         status: `${source}-valid`
       };
     }
     // US with country code (11 digits starting with 1)
     else if (digits.length === 11 && digits[0] === '1') {
       return {
-        number: `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`,
+        number: `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}${additionalInfo}`,
         status: `${source}-valid`
       };
     }
@@ -307,18 +314,39 @@ class GeminiTextCleaner {
       // Format with country code if possible
       console.log(`International phone number detected: ${phone} (${digits.length} digits)`);
       
+      // Determine country based on digit patterns
+      let countryInfo = '';
+      if (digits.length === 12 && digits.startsWith('44')) {
+        countryInfo = ' (UK)';
+      } else if (digits.length === 12 && digits.startsWith('33')) {
+        countryInfo = ' (France)';
+      } else if (digits.length === 13 && digits.startsWith('49')) {
+        countryInfo = ' (Germany)';
+      } else if (digits.length === 12 && digits.startsWith('61')) {
+        countryInfo = ' (Australia)';
+      } else if (digits.length === 11 && digits.startsWith('86')) {
+        countryInfo = ' (China)';
+      } else if (digits.length === 12 && digits.startsWith('91')) {
+        countryInfo = ' (India)';
+      } else if (digits.length >= 10 && digits.length <= 12) {
+        countryInfo = ' (International)';
+      }
+      
+      // Combine any existing additional info with country info
+      const combinedInfo = additionalInfo ? additionalInfo : countryInfo;
+      
       if (phone.startsWith('+')) {
-        console.log(`Preserving international format with country code: ${phone}`);
+        console.log(`Preserving international format with country code: ${phone}${combinedInfo}`);
         return {
-          number: phone, // Keep original international format
+          number: `${phone}${combinedInfo}`, // Keep original international format with country info
           status: `${source}-valid-international`
         };
       } else {
         // Try to add + if it's missing
         const formattedNumber = phone.startsWith('00') ? '+' + phone.substring(2) : '+' + phone;
-        console.log(`Reformatting international number to: ${formattedNumber}`);
+        console.log(`Reformatting international number to: ${formattedNumber}${combinedInfo}`);
         return {
-          number: formattedNumber,
+          number: `${formattedNumber}${combinedInfo}`,
           status: `${source}-valid-international`
         };
       }
@@ -326,7 +354,7 @@ class GeminiTextCleaner {
     
     // If we can't determine a valid format, keep original but mark as invalid
     return {
-      number: phone, // Keep original format
+      number: `${phone}${additionalInfo}`, // Keep original format with any additional info
       status: `${source}-invalid`
     };
   }

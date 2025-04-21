@@ -149,7 +149,10 @@ export default function Search() {
 
   // Memoize the search handler to avoid recreating on every render
   const handleSearch = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
+    // Safely call preventDefault if it exists
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
     updateFilter('page', 1);
   }, [updateFilter]);
 

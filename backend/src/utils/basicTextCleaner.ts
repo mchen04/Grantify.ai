@@ -48,14 +48,51 @@ class BasicTextCleaner {
     // Extract digits only
     const digits = match[0].replace(/\D/g, '');
     
-    // Format as XXX-XXX-XXXX if possible
-    if (digits.length === 10) {
-      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-    } else if (digits.length === 11 && digits[0] === '1') {
-      return `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
+    // Extract any text in parentheses
+    let additionalInfo = '';
+    const parenthesesMatch = text.match(/\(([^)]+)\)/);
+    if (parenthesesMatch) {
+      additionalInfo = ` (${parenthesesMatch[1]})`;
     }
     
-    return match[0]; // Return original format if can't standardize
+    // Format as XXX-XXX-XXXX if possible
+    if (digits.length === 10) {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}${additionalInfo}`;
+    } else if (digits.length === 11 && digits[0] === '1') {
+      return `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}${additionalInfo}`;
+    }
+    
+    // Handle international numbers
+    if (digits.length >= 8 && digits.length <= 15) {
+      // Add country info for international numbers
+      let countryInfo = '';
+      if (!additionalInfo) {
+        if (digits.length === 12 && digits.startsWith('44')) {
+          countryInfo = ' (UK)';
+        } else if (digits.length === 12 && digits.startsWith('33')) {
+          countryInfo = ' (France)';
+        } else if (digits.length === 13 && digits.startsWith('49')) {
+          countryInfo = ' (Germany)';
+        } else if (digits.length === 12 && digits.startsWith('61')) {
+          countryInfo = ' (Australia)';
+        } else if (digits.length === 11 && digits.startsWith('86')) {
+          countryInfo = ' (China)';
+        } else if (digits.length === 12 && digits.startsWith('91')) {
+          countryInfo = ' (India)';
+        } else if (digits.length >= 10 && digits.length <= 12) {
+          countryInfo = ' (International)';
+        }
+      }
+      
+      // Format international number with + if needed
+      if (match[0].startsWith('+')) {
+        return `${match[0]}${additionalInfo || countryInfo}`;
+      } else if (digits.length > 10) {
+        return `+${digits}${additionalInfo || countryInfo}`;
+      }
+    }
+    
+    return `${match[0]}${additionalInfo}`; // Return original format with any additional info
   }
 
   /**
