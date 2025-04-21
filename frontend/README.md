@@ -31,6 +31,7 @@ frontend/
 - Responsive design
 - Progressive web app
 - SEO optimization
+- Integration with multiple AI processing pipelines (OpenRouter, Gemini, No-AI)
 
 ## Components
 
@@ -196,3 +197,17 @@ npm run export
 - State management docs
 - Styling guidelines
 - Contribution guide
+
+## Backend Integration
+
+The frontend interacts with the backend API which provides:
+
+- Grant data processed through multiple AI pipelines:
+  - OpenRouter (Mistral) for text cleaning
+  - Google Gemini for text cleaning with rate limiting
+  - Basic processing without AI
+- Search functionality with filters
+- User preference management
+- Personalized recommendations
+
+For more details on the backend implementation, see the [backend README](../backend/README.md) and the [AI Integration Strategy](../docs/ai-integration-strategy.md).

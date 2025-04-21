@@ -82,7 +82,13 @@ root/
 
 ## Data Pipeline
 
-The data pipeline automatically fetches grant data from Grants.gov, processes it, and stores it in the Supabase database.
+The data pipeline automatically fetches grant data from Grants.gov, processes it, and stores it in the Supabase database. The system supports multiple AI processing pipelines to accommodate different needs.
+
+### AI Processing Pipelines
+
+1. **OpenRouter Pipeline** - Uses OpenRouter API with Mistral model for text cleaning
+2. **Gemini Pipeline** - Uses Google's Gemini 2.0 Flash Lite model with rate limiting and caching
+3. **No-AI Pipeline** - Uses basic text cleaning without AI for faster processing
 
 ### Running the Data Pipeline
 

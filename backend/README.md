@@ -176,7 +176,11 @@ The system supports three processing pipelines:
    npm run update-grants-live
    ```
 
-2. **Gemini Pipeline** - Uses Google's Gemini 2.0 Flash Lite model
+2. **Gemini Pipeline** - Uses Google's Gemini 2.0 Flash Lite model with advanced features:
+   - Sophisticated rate limiting (stays within free tier limits)
+   - Text cleaning cache to avoid redundant API calls
+   - Advanced contact information processing
+   - Fallback to basic cleaning when API calls fail
    ```bash
    npm run update-grants-gemini
    ```
