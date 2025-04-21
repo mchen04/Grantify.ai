@@ -17,14 +17,43 @@ create table public.users (
 ```sql
 create table public.grants (
   id uuid default uuid_generate_v4() primary key,
+  opportunity_id text unique,
+  opportunity_number text,
   title text not null,
+  category text,
+  funding_type text,
+  activity_category text[],
+  eligible_applicants text[],
+  agency_name text,
+  agency_code text,
+  post_date timestamp with time zone,
+  close_date timestamp with time zone,
+  total_funding bigint,
+  award_ceiling bigint,
+  award_floor bigint,
+  cost_sharing boolean default false,
   description text,
-  funding_amount numeric,
-  deadline timestamp with time zone,
-  eligibility_criteria text,
-  application_url text,
+  additional_info_url text,
+  grantor_contact_name text,
+  grantor_contact_email text,
+  grantor_contact_phone text,
+  processing_status text not null default 'not_processed' check (processing_status in ('processed', 'not_processed')),
+  source text not null default 'grants.gov',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+comment on column grants.processing_status is 'Indicates whether the grant has been processed by AI for text cleaning';
+comment on column grants.source is 'Indicates the source of the grant data (e.g., grants.gov, Horizon Europe)';
+```
+
+### Pipeline Runs Table
+```sql
+create table public.pipeline_runs (
+  id uuid default uuid_generate_v4() primary key,
+  status text not null check (status in ('completed', 'failed', 'in_progress')),
+  details jsonb default '{}'::jsonb,
+  timestamp timestamp with time zone default timezone('utc'::text, now()) not null
 );
 ```
 
@@ -106,8 +135,11 @@ $$;
 -- Grants table indexes
 create index grants_title_idx on public.grants using gin (to_tsvector('english', title));
 create index grants_description_idx on public.grants using gin (to_tsvector('english', description));
-create index grants_deadline_idx on public.grants (deadline);
-create index grants_funding_amount_idx on public.grants (funding_amount);
+create index grants_deadline_idx on public.grants (close_date);
+create index grants_funding_amount_idx on public.grants (total_funding);
+create index grants_opportunity_id_idx on public.grants (opportunity_id);
+create index grants_processing_status_idx on public.grants (processing_status);
+create index grants_source_idx on public.grants (source);
 
 -- Users table indexes
 create index users_email_idx on public.users (email);

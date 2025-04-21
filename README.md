@@ -73,6 +73,7 @@ root/
      SUPABASE_URL=your_supabase_url
      SUPABASE_SERVICE_KEY=your_supabase_service_key
      ENABLE_CRON_JOBS=true
+     GEMINI_API_KEY=your_gemini_api_key
      ```
 
 5. Start the development servers
@@ -108,10 +109,13 @@ The data pipeline automatically fetches grant data from Grants.gov, processes it
 ### Available Scripts
 
 - `npm run update-grants`: Run the pipeline with mock data (for testing)
-- `npm run update-grants-live`: Run the pipeline with real data from Grants.gov
+- `npm run update-grants-live`: Run the pipeline with real data from Grants.gov using OpenRouter
+- `npm run update-grants-gemini`: Run the pipeline with real data using Gemini API
+- `npm run update-grants-no-ai`: Run the pipeline with real data without AI processing
 - `npm run clear-grants`: Clear all grants from the database
 - `npm run update-schema`: Update the database schema (requires manual SQL execution)
 - `npm run cleanup-expired`: Remove grants with past deadlines from the database
+- `npm run apply-migration`: Apply database migrations
 
 ### Active Grants Only
 

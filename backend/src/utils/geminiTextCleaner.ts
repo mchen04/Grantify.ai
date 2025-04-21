@@ -23,17 +23,20 @@ interface CleanedGrantData {
 
 class GeminiTextCleaner {
   private apiKey: string;
-  private apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent';
+  private apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent';
   private lastRequestTime: number = 0;
-  private minRequestInterval: number = 1000; // Minimum 1 second between requests (adjust based on rate limits)
+  private minRequestInterval: number = 2000; // Minimum 2 seconds between requests (to stay well under the 30 RPM limit)
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessing: boolean = false;
   private requestCount: number = 0;
   private cleaningCache: Map<string, string> = new Map(); // Cache for cleaned text
   private maxDescriptionLength: number = 5000; // Maximum length for descriptions
-  private maxRequestsPerMinute: number = 60; // Default rate limit (adjust based on your API tier)
+  private maxRequestsPerMinute: number = 25; // Set to 25 to stay safely under the 30 RPM limit
   private requestsThisMinute: number = 0;
   private minuteStartTime: number = Date.now();
+  private dailyRequestCount: number = 0;
+  private dayStartTime: number = Date.now();
+  private maxRequestsPerDay: number = 1400; // Set to 1400 to stay safely under the 1,500 RPD limit
 
   constructor() {
     this.apiKey = process.env.GEMINI_API_KEY || '';
@@ -51,14 +54,29 @@ class GeminiTextCleaner {
     
     this.isProcessing = true;
     while (this.requestQueue.length > 0) {
-      // Check and reset rate limit counter if a minute has passed
+      // Check and reset rate limit counters
       const now = Date.now();
+      
+      // Reset minute counter if a minute has passed
       if (now - this.minuteStartTime >= 60000) {
         this.requestsThisMinute = 0;
         this.minuteStartTime = now;
       }
+      
+      // Reset daily counter if a day has passed
+      if (now - this.dayStartTime >= 86400000) { // 24 hours in milliseconds
+        this.dailyRequestCount = 0;
+        this.dayStartTime = now;
+      }
 
-      // If we've hit the rate limit, wait until the next minute
+      // If we've hit the daily rate limit, stop processing and log an error
+      if (this.dailyRequestCount >= this.maxRequestsPerDay) {
+        console.error(`Daily rate limit of ${this.maxRequestsPerDay} requests reached. No more requests will be processed until tomorrow.`);
+        this.isProcessing = false;
+        return;
+      }
+
+      // If we've hit the per-minute rate limit, wait until the next minute
       if (this.requestsThisMinute >= this.maxRequestsPerMinute) {
         const timeToWait = 60000 - (now - this.minuteStartTime);
         console.log(`Rate limit reached. Waiting ${timeToWait}ms before next request...`);
@@ -70,6 +88,7 @@ class GeminiTextCleaner {
       const request = this.requestQueue.shift();
       if (request) {
         this.requestsThisMinute++;
+        this.dailyRequestCount++;
         await request();
         await this.sleep(this.minRequestInterval);
       }
@@ -198,7 +217,7 @@ class GeminiTextCleaner {
               temperature: 0.1,
               topP: 0.95,
               topK: 40,
-              maxOutputTokens: 8192
+              maxOutputTokens: 2048 // Reduced to be more conservative with the free tier
             }
           })
         });
@@ -326,7 +345,7 @@ class GeminiTextCleaner {
               {
                 role: "user",
                 parts: [
-                  { 
+                  {
                     text: "You are a contact information parser. Extract and format contact details from the input text. Return in this exact format:\nname: [extracted name] (provided) or name: [inferred name] (assumed)\nemail: [extracted email] (provided) or email: not provided\nphone: [XXX-XXX-XXXX] (given-valid) or phone: [number] (given-invalid) or phone: [inferred number] (assumed-valid) or phone: [inferred number] (assumed-invalid) or phone: not provided\n\nRules:\n- Remove titles (Mr., Mrs., etc)\n- Fix capitalization\n- Clean HTML artifacts\n- If no name found but email exists, infer name from email and mark as (assumed)\n- Format phone as XXX-XXX-XXXX when possible\n- For phone numbers:\n  * Mark as 'given' if explicitly provided in input\n  * Mark as 'assumed' if extracted from other text\n  * Add '-valid' if matches XXX-XXX-XXXX format\n  * Add '-invalid' if in any other format\n- Keep phone numbers as strings even if they're all digits"
                   },
                   { text: data.contactName }
@@ -337,7 +356,7 @@ class GeminiTextCleaner {
               temperature: 0.1,
               topP: 0.95,
               topK: 40,
-              maxOutputTokens: 1024
+              maxOutputTokens: 512 // Reduced to be more conservative with the free tier
             }
           })
         });

@@ -16,7 +16,7 @@ The Privacy Policy covers:
 - User rights regarding their data (access, correction, deletion)
 - Security measures to protect user data
 - Cookie usage and tracking technologies
-- AI and recommendation systems data usage
+- AI and recommendation systems data usage (OpenRouter and Google Gemini)
 - Children's privacy protections
 - International data transfers
 - Changes to the privacy policy

@@ -16,8 +16,8 @@ import { geminiTextCleaner } from '../src/utils/geminiTextCleaner';
 import { TransformedGrant } from '../src/utils/grantsParser';
 
 // Default configuration
-const DEFAULT_CHUNK_SIZE = 50;
-const DEFAULT_MAX_REQUESTS = 100; // Default max requests per run
+const DEFAULT_CHUNK_SIZE = 20; // Smaller chunk size to be more conservative
+const DEFAULT_MAX_REQUESTS = 50; // Reduced max requests per run to stay within free tier limits
 
 // Parse command line arguments
 function parseArgs() {
@@ -46,6 +46,8 @@ function parseArgs() {
 
 /**
  * Process a single grant with Gemini
+ * Using Gemini 2.0 Flash Lite (free tier)
+ * Rate limits: 30 RPM, 1,000,000 TPM, 1,500 RPD
  */
 async function processGrant(grant: any): Promise<{ success: boolean; error?: any }> {
   try {
@@ -142,7 +144,8 @@ async function recordPipelineRun(stats: {
  */
 async function processGrantsWithGemini(): Promise<void> {
   const config = parseArgs();
-  console.log(`Starting Gemini grant processing with chunk size: ${config.chunkSize}, max requests: ${config.maxRequests}`);
+  console.log(`Starting Gemini 2.0 Flash Lite grant processing with chunk size: ${config.chunkSize}, max requests: ${config.maxRequests}`);
+  console.log('Using free tier with rate limits: 30 RPM, 1,000,000 TPM, 1,500 RPD');
   
   const stats = {
     total: 0,

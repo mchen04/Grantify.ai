@@ -36,7 +36,11 @@ DATABASE_URL=your_supabase_connection_string
 SUPABASE_SERVICE_KEY=your_supabase_service_key
 PORT=3001
 NODE_ENV=development
+OPENROUTER_API_KEY=your_openrouter_api_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
+
+You can obtain a Gemini API key from the [Google AI Studio](https://ai.google.dev/).
 
 ## Database Setup
 1. Set up a Supabase project

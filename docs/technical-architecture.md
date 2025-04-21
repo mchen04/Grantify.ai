@@ -8,7 +8,7 @@
 - Database: PostgreSQL (Supabase)
 - Authentication: Supabase Auth
 - Deployment: Vercel (Frontend) + Vercel Serverless (Backend)
-- AI Services: OpenAI GPT + Custom Models
+- AI Services: OpenAI GPT + Google Gemini + Custom Models
 
 ## System Components
 

@@ -228,9 +228,83 @@ The application continues to leverage Supabase Row Level Security (RLS) policies
 3. **Regular Updates**: Keep all dependencies updated to patch security vulnerabilities.
 4. **Security Audits**: Conduct regular security audits of the codebase.
 
+## AI Integration Security
+
+### API Key Management
+
+We securely manage API keys for our AI integrations:
+
+```typescript
+// Environment variables for API keys
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Never expose API keys to the client
+if (!GEMINI_API_KEY) {
+  console.warn('GEMINI_API_KEY not found in environment variables. Gemini text cleaning will not work.');
+}
+```
+
+### Rate Limiting for AI Services
+
+We've implemented sophisticated rate limiting for the Gemini API to prevent quota issues:
+
+```typescript
+// Rate limiting for Gemini API
+private maxRequestsPerMinute: number = 25; // Stay under 30 RPM limit
+private maxRequestsPerDay: number = 1400; // Stay under 1,500 RPD limit
+private requestsThisMinute: number = 0;
+private dailyRequestCount: number = 0;
+private minuteStartTime: number = Date.now();
+private dayStartTime: number = Date.now();
+
+// Check and reset rate limit counters
+const now = Date.now();
+      
+// Reset minute counter if a minute has passed
+if (now - this.minuteStartTime >= 60000) {
+  this.requestsThisMinute = 0;
+  this.minuteStartTime = now;
+}
+
+// Reset daily counter if a day has passed
+if (now - this.dayStartTime >= 86400000) {
+  this.dailyRequestCount = 0;
+  this.dayStartTime = now;
+}
+```
+
+### Error Handling for AI Services
+
+We've implemented robust error handling for AI service calls:
+
+```typescript
+private async retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 2000
+): Promise<T> {
+  let retries = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (retries >= maxRetries) {
+        throw error;
+      }
+      const delay = initialDelay * Math.pow(2, retries);
+      console.log(`Request failed, retrying in ${delay}ms...`);
+      await this.sleep(delay);
+      retries++;
+    }
+  }
+}
+```
+
 ## Future Enhancements
 
 1. **Two-Factor Authentication**: Implement 2FA for additional account security.
 2. **Security Headers**: Add additional security headers like HSTS.
 3. **API Key Rotation**: Implement automatic rotation of API keys.
 4. **Penetration Testing**: Conduct regular penetration testing.
+5. **AI Service Fallbacks**: Implement additional fallback mechanisms for AI services.

@@ -6,6 +6,7 @@
 - TypeScript
 - PostgreSQL (Supabase)
 - OpenAI Integration
+- Google Gemini Integration
 
 ## Directory Structure
 ```
@@ -60,6 +61,8 @@ DATABASE_URL=your_supabase_connection_string
 SUPABASE_SERVICE_KEY=your_supabase_service_key
 PORT=3001
 NODE_ENV=development
+OPENROUTER_API_KEY=your_openrouter_api_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ## Database Operations
@@ -138,6 +141,56 @@ npm start
 - Response time monitoring
 - Database query performance
 - Memory usage tracking
+
+## Grant Processing Scripts
+
+### Available Scripts
+```bash
+# Process grants with mock data (for testing)
+npm run update-grants
+
+# Process grants with real data using OpenRouter
+npm run update-grants-live
+
+# Process grants with real data using Gemini API
+npm run update-grants-gemini
+
+# Process grants with real data without AI processing
+npm run update-grants-no-ai
+
+# Clear all grants from the database
+npm run clear-grants
+
+# Remove grants with past deadlines
+npm run cleanup-expired
+
+# Apply database migrations
+npm run apply-migration
+```
+
+### Processing Pipelines
+The system supports three processing pipelines:
+
+1. **OpenRouter Pipeline** - Uses OpenRouter API with Mistral model
+   ```bash
+   npm run update-grants-live
+   ```
+
+2. **Gemini Pipeline** - Uses Google's Gemini 2.0 Flash Lite model
+   ```bash
+   npm run update-grants-gemini
+   ```
+
+3. **No-AI Pipeline** - Uses basic text cleaning without AI
+   ```bash
+   npm run update-grants-no-ai
+   ```
+
+### Customizing Gemini Processing
+```bash
+# Process with custom chunk size and request limit
+npm run update-grants-gemini -- --chunk-size=10 --max-requests=30
+```
 
 ## Security Features
 - JWT authentication

@@ -26,6 +26,16 @@
 - Recommendation caching
 - Update triggers
 
+### Grant Processing Pipeline
+- Multiple AI processing options:
+  - OpenRouter (Mistral) pipeline for text cleaning
+  - Gemini pipeline with rate limiting and caching
+  - No-AI pipeline for basic text processing
+- Chunked processing for large datasets
+- Processing status tracking
+- Source attribution
+- Pipeline run monitoring
+
 ### User Profile System
 - Profile data model
 - Preference management
