@@ -3,6 +3,7 @@ import { downloadGrantsXml } from './grantsDownloader';
 import { parseGrantsXml } from './grantsParser';
 import grantsService from '../services/grantsService';
 import { textCleaner } from './textCleaner';
+import { geminiTextCleaner } from './geminiTextCleaner';
 
 // Interface for text cleaner
 interface TextCleaner {
@@ -39,13 +40,14 @@ export function initCronJobs(): void {
   // Cron format: second(optional) minute hour day-of-month month day-of-week
   cron.schedule('0 5 * * *', async () => {
     console.log('Running grants update job...');
-    await updateGrantsData();
+    await updateGrantsData(false, geminiTextCleaner); // Using Gemini for text cleaning
   }, {
     scheduled: true,
     timezone: 'America/New_York' // 5 AM EST as specified
   });
   
   console.log('Cron jobs initialized. Grants update scheduled for 5 AM EST daily.');
+  console.log('Using Gemini for text cleaning.');
 }
 
 /**

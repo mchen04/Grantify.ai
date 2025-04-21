@@ -1,13 +1,14 @@
 /**
  * Script to manually run the grants update job with real data from Grants.gov
- * Uses OpenRouter for text cleaning
+ * Uses Gemini for text cleaning
  *
  * Usage: ts-node scripts/updateGrantsLive.ts [--source=grants.gov]
  */
 
 import 'dotenv/config';
 import { runGrantsUpdateJob } from '../src/utils/cronJobs';
-import { textCleaner } from '../src/utils/textCleaner';
+// Switch from OpenRouter to Gemini for text cleaning
+import { geminiTextCleaner } from '../src/utils/geminiTextCleaner';
 
 // Parse command line arguments
 function parseArgs() {
@@ -29,9 +30,10 @@ const { source } = parseArgs();
 console.log(`Starting manual grants update with LIVE data from ${source}...`);
 console.log('This will attempt to download the latest XML extract from Grants.gov.');
 console.log('If the download fails, it will try previous days until it finds a valid file.');
-console.log('Using OpenRouter for text cleaning.');
+console.log('Using Gemini for text cleaning.');
 
-runGrantsUpdateJob(false, textCleaner, source)
+// Run the grants update job with Gemini text cleaner
+runGrantsUpdateJob(false, geminiTextCleaner, source)
   .then(() => {
     console.log(`Manual grants update with LIVE data from ${source} completed.`);
     process.exit(0);
