@@ -29,7 +29,7 @@ class TextCleaner {
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessing: boolean = false;
   private requestCount: number = 0;
-  private cleaningCache: Map<string, string> = new Map(); // Cache for cleaned text
+  // Cache removed to prevent data corruption
   private maxDescriptionLength: number = 5000; // Maximum length for descriptions
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY || '';
@@ -105,16 +105,39 @@ class TextCleaner {
       .trim();
   }
 
+  // Cache key method removed to prevent data corruption
+
   /**
-   * Get a cache key for the text
+   * Determine if text is a contact name based on content analysis
+   * More reliable than just using length
    */
-  private getCacheKey(text: string): string {
-    // Use first 100 chars as cache key to avoid memory issues
-    return text.slice(0, 100);
+  private isContactNameText(text: string): boolean {
+    // Short text is a necessary but not sufficient condition
+    if (text.length > 100) return false;
+    
+    // Check for common contact name patterns
+    const hasNamePatterns = /^[A-Z][a-z]+\s+[A-Z][a-z]+/.test(text) || // First Last format
+                           /^(Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)/.test(text) || // Title format
+                           text.split(' ').length <= 4; // Typically names have few words
+    
+    // Check if it contains email-like patterns
+    const hasEmailPattern = /@/.test(text);
+    
+    // Check if it contains phone-like patterns
+    const hasPhonePattern = /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/.test(text);
+    
+    // Log the detection criteria
+    console.log(`Text type detection: length=${text.length}, hasNamePatterns=${hasNamePatterns}, hasEmailPattern=${hasEmailPattern}, hasPhonePattern=${hasPhonePattern}`);
+    
+    // If it's short and has name/contact patterns, it's likely a contact name
+    const result = hasNamePatterns || hasEmailPattern || hasPhonePattern;
+    console.log(`Text classified as: ${result ? 'Contact Name' : 'Description'}`);
+    
+    return result;
   }
 
   private async cleanWithAI(text: string): Promise<string> {
-    const isContactName = text.length <= 100;
+    const isContactName = this.isContactNameText(text);
     console.log('\n=== AI Text Cleaning ===');
     console.log(`Type: ${isContactName ? 'Contact Name' : 'Description'}`);
     console.log('\nOriginal:');
@@ -126,12 +149,8 @@ class TextCleaner {
       ? basicCleaned.slice(0, this.maxDescriptionLength) + '...'
       : basicCleaned;
 
-    // Check cache first
-    const cacheKey = this.getCacheKey(truncatedText);
-    if (this.cleaningCache.has(cacheKey)) {
-      console.log('Using cached cleaning result');
-      return this.cleaningCache.get(cacheKey)!;
-    }
+    // Log that we're processing without cache
+    console.log('Processing without cache to prevent data corruption');
 
     this.requestCount++;
     const currentRequest = this.requestCount;
@@ -179,7 +198,7 @@ class TextCleaner {
 
         const data = await response.json() as OpenRouterResponse;
         const cleanedText = data.choices[0].message.content || truncatedText;
-        this.cleaningCache.set(cacheKey, cleanedText);
+        // Cache storage removed to prevent data corruption
 
         console.log('\nCleaned:');
         console.log(cleanedText);
@@ -211,19 +230,44 @@ class TextCleaner {
     // Extract digits only
     const digits = phone.replace(/\D/g, '');
     
-    // Try to format as XXX-XXX-XXXX
+    // US format (10 digits)
     if (digits.length === 10) {
       return {
         number: `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`,
         status: `${source}-valid`
       };
-    } else if (digits.length === 11 && digits[0] === '1') {
+    }
+    // US with country code (11 digits starting with 1)
+    else if (digits.length === 11 && digits[0] === '1') {
       return {
         number: `${digits.slice(1, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`,
         status: `${source}-valid`
       };
     }
+    // International format handling (preserve original format but mark as valid)
+    else if (digits.length >= 8 && digits.length <= 15) {
+      // Most international numbers are between 8 and 15 digits
+      // Format with country code if possible
+      console.log(`International phone number detected: ${phone} (${digits.length} digits)`);
+      
+      if (phone.startsWith('+')) {
+        console.log(`Preserving international format with country code: ${phone}`);
+        return {
+          number: phone, // Keep original international format
+          status: `${source}-valid-international`
+        };
+      } else {
+        // Try to add + if it's missing
+        const formattedNumber = phone.startsWith('00') ? '+' + phone.substring(2) : '+' + phone;
+        console.log(`Reformatting international number to: ${formattedNumber}`);
+        return {
+          number: formattedNumber,
+          status: `${source}-valid-international`
+        };
+      }
+    }
     
+    // If we can't determine a valid format, keep original but mark as invalid
     return {
       number: phone, // Keep original format
       status: `${source}-invalid`
