@@ -23,9 +23,7 @@ export default function AboutUs() {
               <h2 className="text-2xl font-bold text-blue-800 mb-6">Our Mission</h2>
               <div className="space-y-4 text-gray-700">
                 <p>
-                  Grantify.ai was born from a conversation with my dad. He had an innovative idea but was struggling to find
-                  appropriate grants to fund it. Hearing about his frustrations with navigating complex grant websites and
-                  understanding eligibility requirements, I realized this was a common problem that needed solving.
+                  While researching funding opportunities for an innovative project, I noticed how difficult it was to navigate complex grant websites and interpret eligibility requirements. This experience revealed a broader problem—many individuals with great ideas struggle to find the right grants. That realization sparked the creation of Grantify.ai.
                 </p>
                 <p>
                   As a student at UC Riverside, I've experienced firsthand how difficult it can be to find and secure funding

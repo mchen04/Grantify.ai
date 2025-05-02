@@ -20,26 +20,6 @@ export default {
     supabaseKey: process.env.SUPABASE_KEY || ''
   },
   
-  // Redis configuration for caching
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD || '',
-    ttl: parseInt(process.env.REDIS_TTL || '3600'), // Default TTL: 1 hour
-    ttlValues: {
-      grant: parseInt(process.env.REDIS_TTL_GRANT || '3600'), // 1 hour
-      search: parseInt(process.env.REDIS_TTL_SEARCH || '300'), // 5 minutes
-      recommendation: parseInt(process.env.REDIS_TTL_RECOMMENDATION || '86400') // 24 hours
-    }
-  },
-  
-  // MeiliSearch configuration
-  meilisearch: {
-    host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
-    apiKey: process.env.MEILISEARCH_API_KEY || '',
-    indexPrefix: process.env.MEILISEARCH_INDEX_PREFIX || ''
-  },
-  
   // Grants.gov API configuration
   grantsGov: {
     baseUrl: 'https://www.grants.gov/grantsws/rest',
