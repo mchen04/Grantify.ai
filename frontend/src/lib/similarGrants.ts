@@ -1,4 +1,4 @@
-import supabase from './supabaseClient';
+import apiClient from './apiClient';
 
 /**
  * Fetch similar grants based on a given grant
@@ -13,31 +13,27 @@ export async function fetchSimilarGrants(
   limit: number = 3
 ) {
   try {
-    // Start with a base query
-    let query = supabase
-      .from('grants')
-      .select('*')
-      .neq('id', grantId) // Exclude the current grant
-      .limit(limit);
-    
-    // Only show active grants (close_date is in the future or null)
-    const today = new Date().toISOString();
-    query = query.or(`close_date.gt.${today},close_date.is.null`);
+    // Build query parameters
+    const queryParams: Record<string, any> = {
+      exclude_id: grantId,
+      limit: limit,
+      active_only: true
+    };
     
     // If we have categories, use them to find similar grants
     if (categories && categories.length > 0) {
-      // Find grants that share at least one category
-      query = query.overlaps('activity_category', categories);
+      queryParams.categories = categories.join(',');
     }
     
-    const { data, error } = await query;
+    // Fetch similar grants using apiClient
+    const { data, error } = await apiClient.grants.getSimilarGrants(queryParams);
     
     if (error) {
       console.error('Error fetching similar grants:', error);
       return [];
     }
     
-    return data || [];
+    return data?.grants || [];
   } catch (error) {
     console.error('Error in fetchSimilarGrants:', error);
     return [];

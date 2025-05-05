@@ -122,11 +122,10 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         
         // If user is logged in, check if they've interacted with this grant
         if (user) {
-          // Fetch user interactions for this grant
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/interactions?user_id=${user.id}&grant_id=${grantId}`);
-          const interactionsData = await response.json();
+          // Fetch user interactions for this grant using apiClient
+          const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, grantId);
           
-          if (!response.ok) throw new Error(interactionsData.message || 'Failed to fetch interactions');
+          if (interactionsError) throw new Error(interactionsError);
           
           if (interactionsData && interactionsData.length > 0) {
             // Get the most recent interaction
@@ -183,23 +182,14 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
     try {
       if (isCurrentStatus) {
         // --- Undoing an action ---
-        // Delete the interaction from the database
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/interactions/delete`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            user_id: user.id,
-            grant_id: grantId,
-            action: action
-          })
-        });
+        // Delete the interaction from the database using apiClient
+        const { error: deleteError } = await apiClient.users.deleteInteraction(
+          user.id,
+          grantId,
+          action
+        );
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to delete interaction');
-        }
+        if (deleteError) throw new Error(deleteError);
       } else {
         // --- Setting a new action or changing an action ---
         // Use apiClient to record the interaction

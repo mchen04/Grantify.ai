@@ -64,9 +64,25 @@ export const grantsApi = {
     return fetchApi<any>(`/grants/${id}`);
   },
   
+  // Get similar grants
+  getSimilarGrants: async (params: Record<string, any>) => {
+    const queryParams = new URLSearchParams(params as Record<string, string>).toString();
+    return fetchApi<any>(`/grants/similar?${queryParams}`);
+  },
+  
   // Get recommended grants for a user
-  getRecommendedGrants: async (userId: string) => {
-    return fetchApi<any>(`/grants/recommended?userId=${userId}`);
+  getRecommendedGrants: async (userId: string, options?: { exclude?: string[], limit?: number }) => {
+    let queryParams = `?userId=${userId}`;
+    
+    if (options?.exclude && options.exclude.length > 0) {
+      queryParams += `&exclude=${options.exclude.join(',')}`;
+    }
+    
+    if (options?.limit) {
+      queryParams += `&limit=${options.limit}`;
+    }
+    
+    return fetchApi<any>(`/grants/recommended${queryParams}`);
   },
 };
 
@@ -99,12 +115,44 @@ export const usersApi = {
   },
 
   // Get user interactions
-  getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
-    const queryParams = action 
-      ? `?userId=${userId}&action=${action}`
-      : `?userId=${userId}`;
+  getUserInteractions: async (
+    userId: string,
+    action?: 'saved' | 'applied' | 'ignored',
+    grantId?: string,
+    additionalParams?: Record<string, any>
+  ) => {
+    let queryParams = `?userId=${userId}`;
+    
+    if (action) {
+      queryParams += `&action=${action}`;
+    }
+    
+    if (grantId) {
+      queryParams += `&grant_id=${grantId}`;
+    }
+    
+    // Add any additional parameters
+    if (additionalParams) {
+      Object.entries(additionalParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams += `&${key}=${encodeURIComponent(String(value))}`;
+        }
+      });
+    }
     
     return fetchApi<any>(`/users/interactions${queryParams}`);
+  },
+  
+  // Delete user interaction
+  deleteInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+    return fetchApi<any>('/users/interactions/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        user_id: userId,
+        grant_id: grantId,
+        action: action
+      }),
+    });
   },
 };
 

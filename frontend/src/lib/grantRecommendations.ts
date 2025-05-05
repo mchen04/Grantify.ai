@@ -1,4 +1,4 @@
-import supabase from './supabaseClient';
+import apiClient from './apiClient';
 import { DEFAULT_USER_PREFERENCES } from './config';
 
 /**
@@ -139,13 +139,9 @@ export async function fetchUserPreferences(userId: string): Promise<UserPreferen
       return DEFAULT_USER_PREFERENCES as UserPreferences;
     }
     
-    const { data, error } = await supabase
-      .from('user_preferences')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
+    const { data, error } = await apiClient.users.getUserPreferences(userId);
     
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+    if (error) {
       console.error('Error fetching user preferences:', error);
       return DEFAULT_USER_PREFERENCES as UserPreferences;
     }
@@ -186,81 +182,58 @@ export async function fetchRecommendedGrants(
     // Get user preferences
     const preferences = await fetchUserPreferences(userId);
     
-    // Get current date for filtering expired grants
-    const today = new Date().toISOString();
-    
-    // Base query for active grants
-    let query = supabase
-      .from('grants')
-      .select('*')
-      .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
+    // Prepare query parameters
+    const queryParams: Record<string, any> = {
+      userId: userId,
+      limit: limit * 2, // Get double the limit first, so we can sort by score
+      active_only: true
+    };
     
     // Exclude grants the user has already interacted with
     if (excludedGrantIds.length > 0) {
-      query = query.not('id', 'in', `(${excludedGrantIds.join(',')})`);
+      queryParams.exclude = excludedGrantIds.join(',');
     }
     
     // Apply preference filters if they exist
-    
-    // Topic filtering
     if (preferences.topics.length > 0) {
-      query = query.overlaps('activity_category', preferences.topics);
+      queryParams.topics = preferences.topics.join(',');
     }
     
-    // Agency filtering
     if (preferences.agencies.length > 0) {
-      query = query.in('agency_name', preferences.agencies);
+      queryParams.agencies = preferences.agencies.join(',');
     }
     
-    // Funding range filtering (complex due to null values)
     if (preferences.funding_min > 0) {
-      if (preferences.show_no_funding) {
-        // Include grants with null award_ceiling OR grants with award_ceiling >= min
-        query = query.or(`award_ceiling.is.null,award_ceiling.gte.${preferences.funding_min}`);
-      } else {
-        // Only grants with award_ceiling >= min
-        query = query.gte('award_ceiling', preferences.funding_min);
-      }
+      queryParams.funding_min = preferences.funding_min;
+      queryParams.include_no_funding = preferences.show_no_funding;
     }
     
     if (preferences.funding_max < 1000000) {
-      if (preferences.show_no_funding) {
-        // Include grants with null award_ceiling OR grants with award_ceiling <= max
-        query = query.or(`award_ceiling.is.null,award_ceiling.lte.${preferences.funding_max}`);
-      } else {
-        // Only grants with award_ceiling <= max
-        query = query.lte('award_ceiling', preferences.funding_max);
-      }
+      queryParams.funding_max = preferences.funding_max;
     }
     
-    // Deadline filtering
     const deadlineDays = parseInt(preferences.deadline_range);
     if (deadlineDays > 0) {
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + deadlineDays);
-      const futureDateString = futureDate.toISOString();
-      
-      if (preferences.show_no_deadline) {
-        // Include grants with null close_date OR grants with close_date <= future date
-        query = query.or(`close_date.is.null,close_date.lte.${futureDateString}`);
-      } else {
-        // Only grants with close_date <= future date (and not null)
-        query = query.lte('close_date', futureDateString).not('close_date', 'is', null);
-      }
+      queryParams.deadline_days = deadlineDays;
+      queryParams.include_no_deadline = preferences.show_no_deadline;
     } else if (!preferences.show_no_deadline) {
-      // If "Any Deadline" is selected but don't show no-deadline grants
-      query = query.not('close_date', 'is', null);
+      queryParams.include_no_deadline = false;
     }
     
-    // Get double the limit first, so we can sort by score
-    const { data: initialGrants, error } = await query.limit(limit * 2);
+    // Fetch grants using apiClient
+    const { data, error } = await apiClient.grants.getRecommendedGrants(userId, {
+      exclude: excludedGrantIds,
+      limit: limit * 2
+    });
     
     if (error) {
       console.error('Error fetching recommended grants:', error);
       return [];
     }
     
-    if (!initialGrants || initialGrants.length === 0) {
+    const initialGrants = data?.grants || [];
+    
+    if (initialGrants.length === 0) {
       // If no grants match the specific preferences, try a more relaxed query
       return fetchFallbackGrants(userId, excludedGrantIds, limit, preferences);
     }
@@ -307,29 +280,33 @@ async function fetchFallbackGrants(
   preferences: UserPreferences
 ): Promise<Grant[]> {
   try {
-    // Get current date for filtering expired grants
-    const today = new Date().toISOString();
-    
-    // Base query for active grants
-    let query = supabase
-      .from('grants')
-      .select('*')
-      .or(`close_date.gt.${today},close_date.is.null`); // Only active grants
+    // Prepare query parameters with relaxed criteria
+    const queryParams: Record<string, any> = {
+      userId: userId,
+      limit: limit * 3,
+      active_only: true,
+      relaxed: true // Signal to the backend that this is a fallback query
+    };
     
     // Exclude grants the user has already interacted with
     if (excludedGrantIds.length > 0) {
-      query = query.not('id', 'in', `(${excludedGrantIds.join(',')})`);
+      queryParams.exclude = excludedGrantIds.join(',');
     }
     
-    // Get grants with more relaxed criteria
-    const { data: allGrants, error } = await query.limit(limit * 3);
+    // Fetch grants using apiClient with relaxed criteria
+    const { data, error } = await apiClient.grants.getRecommendedGrants(userId, {
+      exclude: excludedGrantIds,
+      limit: limit * 3
+    });
     
     if (error) {
       console.error('Error fetching fallback grants:', error);
       return [];
     }
     
-    if (!allGrants || allGrants.length === 0) {
+    const allGrants = data?.grants || [];
+    
+    if (allGrants.length === 0) {
       return []; // No grants found even with relaxed criteria
     }
     

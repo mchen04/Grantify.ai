@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Grant, GrantFilter } from '@/types/grant';
-import { buildGrantQuery } from '@/utils/grantQueryBuilder';
-import enhancedApiClient from '@/lib/enhancedApiClient';
+import apiClient from '@/lib/apiClient';
 
 interface UseFetchGrantsProps {
   filter?: GrantFilter;
@@ -19,7 +18,7 @@ interface UseFetchGrantsReturn {
 
 /**
  * Custom hook for fetching grants with filtering, sorting, and pagination
- * Uses the enhanced API client instead of direct Supabase access
+ * Uses apiClient directly for all API communication
  */
 export function useFetchGrants({
   filter,
@@ -31,15 +30,6 @@ export function useFetchGrants({
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Memoize the buildGrantQuery call to optimize performance
-  const buildMemoizedQuery = useCallback(async () => {
-    if (!filter) {
-      // If no filter is provided, use the enhanced API client
-      return enhancedApiClient.from('grants').select('*');
-    }
-    return await buildGrantQuery(filter, grantsPerPage);
-  }, [filter, grantsPerPage]);
-
   const fetchGrants = useCallback(async () => {
     if (!enabled) return;
     
@@ -47,20 +37,73 @@ export function useFetchGrants({
       setLoading(true);
       setError(null);
       
-      const query = await buildMemoizedQuery();
-      const { data, error: queryError, count } = await query;
+      // Convert filter to API-compatible format
+      const apiFilters: Record<string, any> = {};
       
-      if (queryError) throw queryError;
+      if (filter) {
+        // Basic filters
+        apiFilters.search = filter.searchTerm;
+        apiFilters.limit = grantsPerPage;
+        apiFilters.page = filter.page;
+        apiFilters.sources = filter.sources?.join(',');
+        apiFilters.sort_by = filter.sortBy;
+        
+        // Deadline filters
+        if (filter.onlyNoDeadline) {
+          apiFilters.deadline_null = true;
+        } else {
+          if (filter.deadlineMinDays > 0) {
+            const minFutureDate = new Date();
+            minFutureDate.setDate(minFutureDate.getDate() + filter.deadlineMinDays);
+            apiFilters.deadline_min = minFutureDate.toISOString();
+          }
+          
+          if (filter.deadlineMaxDays < Number.MAX_SAFE_INTEGER) {
+            const maxFutureDate = new Date();
+            maxFutureDate.setDate(maxFutureDate.getDate() + filter.deadlineMaxDays);
+            apiFilters.deadline_max = maxFutureDate.toISOString();
+          }
+          
+          apiFilters.include_no_deadline = filter.includeNoDeadline;
+        }
+        
+        // Funding filters
+        if (filter.onlyNoFunding) {
+          apiFilters.funding_null = true;
+        } else {
+          if (filter.fundingMin > 0) {
+            apiFilters.funding_min = filter.fundingMin;
+          }
+          
+          if (filter.fundingMax < Number.MAX_SAFE_INTEGER) {
+            apiFilters.funding_max = filter.fundingMax;
+          }
+          
+          apiFilters.include_no_funding = filter.includeFundingNull;
+        }
+        
+        // Cost sharing filter
+        if (filter.costSharing) {
+          apiFilters.cost_sharing = filter.costSharing;
+        }
+      }
       
-      setGrants(data || []);
-      setTotalPages(count ? Math.ceil(count / grantsPerPage) : 1);
+      // Make the API call using apiClient
+      const response = await apiClient.grants.getGrants(apiFilters);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      setGrants(response.data?.grants || []);
+      setTotalPages(response.data?.count ? Math.ceil(response.data.count / grantsPerPage) : 1);
     } catch (error: any) {
       console.error('Error fetching grants:', error);
       setError('Failed to load grants. Please try again later.');
     } finally {
       setLoading(false);
     }
-  }, [buildMemoizedQuery, grantsPerPage, enabled]);
+  }, [filter, grantsPerPage, enabled]);
 
   // Fetch grants when dependencies change
   useEffect(() => {

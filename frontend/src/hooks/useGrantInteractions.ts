@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import supabase from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
 import { Grant } from '@/types/grant';
 import { UserInteraction } from '@/types/user';
 
@@ -70,27 +70,14 @@ export function useGrantInteractions({
       setInteractionLoading(true);
 
       try {
-        // Insert the new interaction
-        const { error: insertError } = await supabase
-          .from('user_interactions')
-          .upsert({
-            user_id: userId,
-            grant_id: grantId,
-            action: action,
-            timestamp: new Date().toISOString()
-          }, {
-            onConflict: 'user_id, grant_id, action'
-          });
+        // Record the interaction using apiClient
+        const { error } = await apiClient.users.recordInteraction(
+          userId,
+          grantId,
+          action
+        );
 
-        if (insertError) throw insertError;
-
-        // Delete any other interactions for this grant to ensure only one state exists
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', userId)
-          .eq('grant_id', grantId)
-          .not('action', 'eq', action);
+        if (error) throw new Error(error);
 
       } catch (error: any) {
         console.error(`Error ${action} grant:`, error.message || error);
@@ -115,15 +102,14 @@ export function useGrantInteractions({
       setInteractionLoading(true);
 
       try {
-        // Delete the interaction from the database
-        const { error } = await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', userId)
-          .eq('grant_id', grantId)
-          .eq('action', action);
+        // Delete the interaction using apiClient
+        const { error } = await apiClient.users.deleteInteraction(
+          userId,
+          grantId,
+          action
+        );
 
-        if (error) throw error;
+        if (error) throw new Error(error);
       } catch (error: any) {
         console.error(`Error undoing ${action} grant:`, error.message || error);
         onError(`Failed to undo ${action.replace('ed', '')}: ${error.message || 'Please try again.'}`);

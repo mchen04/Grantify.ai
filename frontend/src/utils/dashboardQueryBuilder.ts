@@ -1,6 +1,5 @@
 import { GrantFilter } from '@/types/grant';
 import apiClient from '@/lib/apiClient';
-import enhancedClient from '@/lib/enhancedApiClient';
 
 /**
  * Builds a query for dashboard grants based on the provided filters
@@ -91,8 +90,19 @@ export const buildDashboardQuery = async (
           apiFilters.sort_by = filter.sortBy;
           
           // Get user interactions with grants using the API client
-          const response = await fetch(`/api/users/interactions?${new URLSearchParams(apiFilters as Record<string, string>).toString()}`);
-          const data = await response.json();
+          const { data, error } = await apiClient.users.getUserInteractions(
+            userId,
+            action as 'saved' | 'applied' | 'ignored',
+            undefined,
+            {
+              search: filter.searchTerm,
+              page: filter.page,
+              limit: grantsPerPage,
+              deadline_null: filter.filterOnlyNoDeadline,
+              funding_null: filter.filterOnlyNoFunding,
+              sort_by: filter.sortBy
+            }
+          );
           
           // Format the response to match the expected structure
           const interactions = data?.interactions || [];

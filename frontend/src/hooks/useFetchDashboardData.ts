@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import supabase from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
 import { Grant, ScoredGrant } from '@/types/grant';
 import { UserInteraction, UserPreferences } from '@/types/user';
-import { fetchRecommendedGrants, calculateMatchScore, fetchUserPreferences } from '@/lib/grantRecommendations';
+import { calculateMatchScore } from '@/lib/grantRecommendations';
 
 interface UseFetchDashboardDataProps {
   userId: string | undefined;
@@ -47,24 +47,36 @@ export function useFetchDashboardData({
       setError(null);
 
       // Fetch user preferences for scoring
-      const preferences = await fetchUserPreferences(userId);
-      setUserPreferences(preferences);
+      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(userId);
+      
+      if (preferencesError) {
+        console.error('Error fetching user preferences:', preferencesError);
+        // Use default preferences
+        setUserPreferences({
+          topics: [],
+          funding_min: 0,
+          funding_max: 1000000,
+          agencies: [],
+          deadline_range: '0',
+          show_no_deadline: true,
+          show_no_funding: true
+        });
+      } else {
+        setUserPreferences(preferences || null);
+      }
 
       // Get current date for filtering expired grants
       const today = new Date().toISOString();
 
       // Fetch all user interactions
-      const { data: allInteractionsData, error: interactionsError } = await supabase
-        .from('user_interactions')
-        .select('*, grants(*)')
-        .eq('user_id', userId);
-
-      if (interactionsError && Object.keys(interactionsError).length > 0) {
+      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(userId);
+      
+      if (interactionsError) {
         console.error('Error fetching user interactions:', interactionsError);
         // Don't throw, try to continue
       }
 
-      const allInteractions = allInteractionsData || [];
+      const allInteractions = interactionsResponse?.interactions || [];
 
       // Process interactions to find the latest action for each grant
       const latestInteractionsMap = new Map<string, UserInteraction>();
@@ -107,17 +119,26 @@ export function useFetchDashboardData({
       setIgnoredGrants(initialIgnored);
 
       // Fetch recommended grants based on user preferences
-      const initialRecommended = await fetchRecommendedGrants(
+      const { data: recommendedData, error: recommendedError } = await apiClient.grants.getRecommendedGrants(
         userId,
-        interactedGrantIds,
-        targetRecommendedCount
+        {
+          exclude: interactedGrantIds,
+          limit: targetRecommendedCount
+        }
       );
 
+      if (recommendedError) {
+        console.error('Error fetching recommended grants:', recommendedError);
+      }
+
       // Calculate match scores for recommended grants
-      const scoredRecommendations = initialRecommended ? initialRecommended.map(grant => ({
-        ...grant,
-        matchScore: preferences ? calculateMatchScore(grant, preferences) : undefined
-      } as ScoredGrant)) : [];
+      const initialRecommended = recommendedData?.grants || [];
+      const scoredRecommendations = initialRecommended.map(grant => {
+        return {
+          ...grant,
+          matchScore: preferences ? calculateMatchScore(grant, preferences) : undefined
+        } as unknown as ScoredGrant;
+      });
 
       // Set recommended grants with scores
       setRecommendedGrants(scoredRecommendations || []);
@@ -158,18 +179,26 @@ export function useFetchDashboardData({
       ];
 
       // Fetch more recommended grants with preferences
-      const newGrants = await fetchRecommendedGrants(
+      const { data: newGrantsData, error: newGrantsError } = await apiClient.grants.getRecommendedGrants(
         userId,
-        allCurrentGrantIds,
-        neededCount
+        {
+          exclude: allCurrentGrantIds,
+          limit: neededCount
+        }
       );
 
-      if (newGrants && newGrants.length > 0 && userPreferences) {
+      if (newGrantsError) {
+        console.error('Error fetching replacement grants:', newGrantsError);
+      }
+
+      const newGrants = newGrantsData?.grants || [];
+      
+      if (newGrants.length > 0 && userPreferences) {
         // Add match scores to new grants
         const scoredNewGrants = newGrants.map(grant => ({
           ...grant,
           matchScore: calculateMatchScore(grant, userPreferences)
-        } as ScoredGrant));
+        } as unknown as ScoredGrant));
         setRecommendedGrants(prev => [...prev, ...scoredNewGrants]);
       }
     } catch (e) {
