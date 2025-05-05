@@ -108,7 +108,7 @@ export const buildGrantQuery = async (
   
   // --- APPLY SEARCH TERM FILTER ---
   if (filter.searchTerm) {
-    const searchFilter = `title.ilike.%${filter.searchTerm}%,description.ilike.%${filter.searchTerm}%`;
+    const searchFilter = `title.ilike.%${filter.searchTerm}%,description_short.ilike.%${filter.searchTerm}%,description_full.ilike.%${filter.searchTerm}%`;
     query = query.or(searchFilter);
   }
   

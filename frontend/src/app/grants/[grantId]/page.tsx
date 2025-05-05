@@ -15,22 +15,39 @@ interface Grant {
   title: string;
   agency_name: string;
   agency_code: string;
+  agency_subdivision?: string;
   opportunity_id: string;
   opportunity_number: string;
   close_date: string | null;
   post_date: string | null;
+  loi_due_date?: string | null;
+  expiration_date?: string | null;
+  earliest_start_date?: string | null;
   total_funding: number | null;
   award_ceiling: number | null;
   award_floor: number | null;
+  expected_award_count?: number | null;
+  project_period_max_years?: number | null;
   cost_sharing: boolean;
-  description: string;
+  description_short: string;
+  description_full: string;
   eligible_applicants: string[] | null;
+  eligibility_pi?: string;
   activity_category: string[] | null;
-  additional_info_url: string | null;
+  activity_code?: string;
+  source_url: string | null;
+  data_source?: string;
+  status?: string;
   grantor_contact_name: string | null;
+  grantor_contact_role?: string;
   grantor_contact_email: string | null;
   grantor_contact_phone: string | null;
-  funding_type: string | null;
+  grantor_contact_affiliation?: string;
+  announcement_type?: string;
+  clinical_trial_allowed?: boolean;
+  additional_notes?: string;
+  keywords?: string[];
+  grant_type: string | null;
 }
 // Interaction type
 interface Interaction {
@@ -464,7 +481,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 Description
               </h2>
               <div className="prose max-w-none text-gray-700">
-                {grant.description.split('\n\n').map((paragraph, index) => (
+                {grant.description_full.split('\n\n').map((paragraph, index) => (
                   <p key={index} className="mb-4">{paragraph}</p>
                 ))}
               </div>
@@ -524,10 +541,10 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                     <span>{grant.grantor_contact_phone || 'Not specified'}</span>
                   </div>
                 </div>
-                {grant.additional_info_url && (
+                {grant.source_url && (
                   <div className="col-span-2 mt-2">
                     <a
-                      href={grant.additional_info_url}
+                      href={grant.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium transition-colors"
@@ -576,8 +593,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 </div>
                 
                 <div className="py-3 flex items-start">
-                  <div className="w-1/3 text-sm text-gray-600">Funding Type</div>
-                  <div className="w-2/3">{grant.funding_type || 'Not specified'}</div>
+                  <div className="w-1/3 text-sm text-gray-600">Grant Type</div>
+                  <div className="w-2/3">{grant.grant_type || 'Not specified'}</div>
                 </div>
                 
                 <div className="py-3 flex items-start">

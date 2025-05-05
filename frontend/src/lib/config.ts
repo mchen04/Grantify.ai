@@ -9,13 +9,10 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001
 export const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 export const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// AI service configuration
-export const AI_API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
-
 // Feature flags
 export const FEATURES = {
   AUTH_ENABLED: true,
-  AI_RECOMMENDATIONS_ENABLED: true,
+  RECOMMENDATIONS_ENABLED: true,
   NOTIFICATIONS_ENABLED: false,
 };
 

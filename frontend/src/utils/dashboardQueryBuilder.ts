@@ -62,10 +62,10 @@ export const buildDashboardQuery = async (
   if (filter.searchTerm) {
     if (action === null) {
       // Direct search on grants table
-      query = query.or(`title.ilike.%${filter.searchTerm}%,description.ilike.%${filter.searchTerm}%,agency_name.ilike.%${filter.searchTerm}%`);
+      query = query.or(`title.ilike.%${filter.searchTerm}%,description_short.ilike.%${filter.searchTerm}%,description_full.ilike.%${filter.searchTerm}%,agency_name.ilike.%${filter.searchTerm}%`);
     } else {
       // Search on nested grants object
-      query = query.or(`grants.title.ilike.%${filter.searchTerm}%,grants.description.ilike.%${filter.searchTerm}%,grants.agency_name.ilike.%${filter.searchTerm}%`);
+      query = query.or(`grants.title.ilike.%${filter.searchTerm}%,grants.description_short.ilike.%${filter.searchTerm}%,grants.description_full.ilike.%${filter.searchTerm}%,grants.agency_name.ilike.%${filter.searchTerm}%`);
     }
   }
   

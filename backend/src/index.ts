@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import 'dotenv/config';
-import { initCronJobs } from './utils/cronJobs';
 import grantsRouter from './routes/grants.route';
 import usersRouter from './routes/users.route';
 import logger, { logApiRequest } from './utils/logger';
@@ -61,13 +60,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialize cron jobs if enabled
-if (process.env.ENABLE_CRON_JOBS === 'true') {
-  initCronJobs();
-  console.log('Cron jobs initialized');
-} else {
-  console.log('Cron jobs disabled. Set ENABLE_CRON_JOBS=true to enable.');
-}
+// Cron jobs have been removed in the new schema
 
 // Root route
 app.get('/', (_req: Request, res: Response) => {

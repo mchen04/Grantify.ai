@@ -1,7 +1,10 @@
 import supabase from '../db/supabaseClient';
 import { format } from 'date-fns';
 import * as readline from 'readline';
-import { TransformedGrant } from '../utils/grantsParser.js';
+import { Grant } from '../models/grant';
+
+// Define TransformedGrant as an alias for Grant to maintain compatibility
+type TransformedGrant = Grant;
 
 interface ProgressBar {
   total: number;
@@ -46,10 +49,14 @@ interface GrantFilters {
   search?: string;
   category?: string;
   agency_name?: string;
+  agency_subdivision?: string;
   funding_min?: number;
   funding_max?: number;
   activity_categories?: string[];
   eligible_applicant_types?: string[];
+  grant_type?: string;  // Renamed from funding_type
+  status?: string;
+  keywords?: string[];
   page?: number;
   limit?: number;
 }
@@ -335,7 +342,7 @@ class GrantsService {
       
       // Apply filters
       if (filters.search) {
-        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        query = query.or(`title.ilike.%${filters.search}%,description_short.ilike.%${filters.search}%,description_full.ilike.%${filters.search}%`);
       }
       
       if (filters.category) {
@@ -344,6 +351,22 @@ class GrantsService {
       
       if (filters.agency_name) {
         query = query.eq('agency_name', filters.agency_name);
+      }
+      
+      if (filters.agency_subdivision) {
+        query = query.eq('agency_subdivision', filters.agency_subdivision);
+      }
+      
+      if (filters.grant_type) {
+        query = query.eq('grant_type', filters.grant_type);
+      }
+      
+      if (filters.status) {
+        query = query.eq('status', filters.status);
+      }
+      
+      if (filters.keywords && Array.isArray(filters.keywords)) {
+        query = query.contains('keywords', filters.keywords);
       }
       
       if (filters.funding_min) {

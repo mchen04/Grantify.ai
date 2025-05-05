@@ -13,7 +13,7 @@ interface GrantCardProps {
   agency: string;
   closeDate: string | null;
   fundingAmount: number | null;
-  description: string;
+  description: string; // This will use description_short from the Grant interface
   categories: string[];
   onSave?: () => void;
   onApply?: () => void;

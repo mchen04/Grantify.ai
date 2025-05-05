@@ -13,7 +13,6 @@ export interface UserPreferences {
   eligible_applicant_types?: string[];
   agencies?: string[];
   locations?: string[];
-  preference_vector?: number[];
   notification_settings?: NotificationSettings;
 }
 
