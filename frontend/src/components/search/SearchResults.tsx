@@ -223,7 +223,7 @@ const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
               agency={grant.agency_name}
               closeDate={grant.close_date}
               fundingAmount={grant.award_ceiling}
-              description={grant.description}
+              description={grant.description_short}
               categories={grant.activity_category || []}
               onApply={() => handleApplyClick(grant.id)}
               onSave={() => handleInteraction(grant.id, () => onSave(grant.id))}

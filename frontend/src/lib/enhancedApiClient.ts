@@ -4,6 +4,7 @@
  */
 
 import apiClient from './apiClient';
+import { API_URL } from './config';
 
 // Types
 export interface ApiResponse<T> {
@@ -168,8 +169,8 @@ export const usersApi = {
         ? `/users/interactions?userId=${userId}&action=${action}`
         : `/users/interactions?userId=${userId}`;
       
-      // Make a direct fetch request since this endpoint isn't in the apiClient
-      const response = await fetch(`/api${endpoint}`);
+      // Make a fetch request using the API_URL from config
+      const response = await fetch(`${API_URL}${endpoint}`);
       const data = await response.json();
       
       return {
@@ -194,14 +195,14 @@ export const usersApi = {
               async then(callback: any) {
                 try {
                   if (table === 'user_interactions' && column === 'user_id') {
-                    const response = await fetch(`/api/users/interactions?userId=${value}`);
+                    const response = await fetch(`${API_URL}/users/interactions?userId=${value}`);
                     const data = await response.json();
                     return callback({
                       data: data?.interactions || [],
                       error: null
                     });
                   } else if (table === 'user_preferences' && column === 'user_id') {
-                    const response = await fetch(`/api/users/preferences?userId=${value}`);
+                    const response = await fetch(`${API_URL}/users/preferences?userId=${value}`);
                     const data = await response.json();
                     return callback({
                       data: data?.preferences || null,
@@ -226,7 +227,7 @@ export const usersApi = {
           async then(callback: any) {
             try {
               if (table === 'user_interactions') {
-                const response = await fetch('/api/users/interactions', {
+                const response = await fetch(`${API_URL}/users/interactions`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json'
@@ -255,7 +256,7 @@ export const usersApi = {
           async then(callback: any) {
             try {
               if (table === 'user_preferences') {
-                const response = await fetch('/api/users/preferences', {
+                const response = await fetch(`${API_URL}/users/preferences`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json'

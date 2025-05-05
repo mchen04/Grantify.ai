@@ -194,7 +194,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       const term = state.searchTerm.toLowerCase();
       filteredGrants = filteredGrants.filter(grant =>
         grant.title.toLowerCase().includes(term) ||
-        grant.description.toLowerCase().includes(term) ||
+        grant.description_short.toLowerCase().includes(term) ||
         grant.agency_name.toLowerCase().includes(term)
       );
     }

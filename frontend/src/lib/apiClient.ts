@@ -97,6 +97,15 @@ export const usersApi = {
       }),
     });
   },
+
+  // Get user interactions
+  getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
+    const queryParams = action 
+      ? `?userId=${userId}&action=${action}`
+      : `?userId=${userId}`;
+    
+    return fetchApi<any>(`/users/interactions${queryParams}`);
+  },
 };
 
 // Auth API (to be implemented with Supabase)

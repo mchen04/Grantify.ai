@@ -305,9 +305,9 @@ CREATE POLICY pipeline_runs_admin_only ON pipeline_runs
     -- OR (auth.jwt() ->> 'app_metadata')::jsonb ->> 'is_admin' = 'true' -- Preferred: Check custom claim
   );
 
--- Optional: Grant service_role full access to grants table for backend processes
--- DROP POLICY IF EXISTS grants_service_role_access ON grants;
--- CREATE POLICY grants_service_role_access ON grants
---   FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+-- Grant service_role full access to grants table for backend processes
+DROP POLICY IF EXISTS grants_service_role_access ON grants;
+CREATE POLICY grants_service_role_access ON grants
+  FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 -- ========= End of Script =========

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import supabase from '@/lib/supabaseClient';
 import { Grant, GrantFilter } from '@/types/grant';
 import { buildGrantQuery } from '@/utils/grantQueryBuilder';
+import enhancedApiClient from '@/lib/enhancedApiClient';
 
 interface UseFetchGrantsProps {
   filter?: GrantFilter;
@@ -19,6 +19,7 @@ interface UseFetchGrantsReturn {
 
 /**
  * Custom hook for fetching grants with filtering, sorting, and pagination
+ * Uses the enhanced API client instead of direct Supabase access
  */
 export function useFetchGrants({
   filter,
@@ -33,11 +34,8 @@ export function useFetchGrants({
   // Memoize the buildGrantQuery call to optimize performance
   const buildMemoizedQuery = useCallback(async () => {
     if (!filter) {
-      // If no filter is provided, return a basic query
-      return supabase
-        .from('grants')
-        .select('*', { count: 'exact' })
-        .limit(grantsPerPage);
+      // If no filter is provided, use the enhanced API client
+      return enhancedApiClient.from('grants').select('*');
     }
     return await buildGrantQuery(filter, grantsPerPage);
   }, [filter, grantsPerPage]);
