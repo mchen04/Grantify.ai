@@ -370,11 +370,11 @@ class GrantsService {
       }
       
       if (filters.funding_min) {
-        query = query.gte('award_ceiling', filters.funding_min);
+        query = query.gte('award_floor', filters.funding_min);
       }
       
       if (filters.funding_max) {
-        query = query.lte('award_floor', filters.funding_max);
+        query = query.lte('award_ceiling', filters.funding_max);
       }
       
       if (filters.activity_categories && Array.isArray(filters.activity_categories)) {

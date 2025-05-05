@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Layout from '@/components/Layout/Layout';
-import supabase from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
+import enhancedApiClient from '@/lib/enhancedApiClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
-import { buildGrantQuery } from '@/utils/grantQueryBuilder';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   MAX_FUNDING,
@@ -48,7 +48,6 @@ export default function Search() {
 
   const [filter, setFilter] = useState<GrantFilter>({
     searchTerm: '',
-    agencies: [],
     sources: ['grants.gov'], // Default to grants.gov as the only source for now
     fundingMin: 0,
     fundingMax: MAX_FUNDING,
@@ -118,10 +117,58 @@ export default function Search() {
     }
   };
 
-  // Memoize the buildGrantQuery call to optimize performance
-  const buildMemoizedQuery = useCallback(async () => {
-    return await buildGrantQuery(filter, SEARCH_GRANTS_PER_PAGE);
-  }, [filter, SEARCH_GRANTS_PER_PAGE]);
+  // Memoize the API call to optimize performance
+  const fetchGrantsData = useCallback(async () => {
+    // Convert filter to API-compatible format
+    const apiFilters: Record<string, any> = {
+      search: filter.searchTerm,
+      limit: SEARCH_GRANTS_PER_PAGE,
+      page: filter.page,
+      sources: filter.sources?.join(','),
+      sort_by: filter.sortBy
+    };
+    
+    // Apply deadline filters
+    if (filter.onlyNoDeadline) {
+      apiFilters.deadline_null = true;
+    } else {
+      if (filter.deadlineMinDays > MIN_DEADLINE_DAYS) {
+        const minFutureDate = new Date();
+        minFutureDate.setDate(minFutureDate.getDate() + filter.deadlineMinDays);
+        apiFilters.deadline_min = minFutureDate.toISOString();
+      }
+      
+      if (filter.deadlineMaxDays < MAX_DEADLINE_DAYS) {
+        const maxFutureDate = new Date();
+        maxFutureDate.setDate(maxFutureDate.getDate() + filter.deadlineMaxDays);
+        apiFilters.deadline_max = maxFutureDate.toISOString();
+      }
+      
+      apiFilters.include_no_deadline = filter.includeNoDeadline;
+    }
+    
+    // Apply funding filters
+    if (filter.onlyNoFunding) {
+      apiFilters.funding_null = true;
+    } else {
+      if (filter.fundingMin > 0) {
+        apiFilters.funding_min = filter.fundingMin;
+      }
+      
+      if (filter.fundingMax < MAX_FUNDING) {
+        apiFilters.funding_max = filter.fundingMax;
+      }
+      
+      apiFilters.include_no_funding = filter.includeFundingNull;
+    }
+    
+    // Apply cost sharing filter
+    if (filter.costSharing) {
+      apiFilters.cost_sharing = filter.costSharing;
+    }
+    
+    return apiClient.grants.getGrants(apiFilters);
+  }, [filter, SEARCH_GRANTS_PER_PAGE, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS, MAX_FUNDING]);
 
   useEffect(() => {
     const fetchGrants = async () => {
@@ -129,13 +176,12 @@ export default function Search() {
         setLoading(true);
         setError(null);
         
-        const query = await buildMemoizedQuery();
-        const { data, error: queryError, count } = await query;
+        const response = await fetchGrantsData();
         
-        if (queryError) throw queryError;
+        if (response.error) throw response.error;
         
-        setGrants(data || []);
-        setTotalPages(count ? Math.ceil(count / SEARCH_GRANTS_PER_PAGE) : 1);
+        setGrants(response.data?.grants || []);
+        setTotalPages(response.data?.count ? Math.ceil(response.data.count / SEARCH_GRANTS_PER_PAGE) : 1);
       } catch (error: any) {
         console.error('Error fetching grants:', error);
         setError('Failed to load grants. Please try again later.');
@@ -145,7 +191,7 @@ export default function Search() {
     };
     
     fetchGrants();
-  }, [buildMemoizedQuery, SEARCH_GRANTS_PER_PAGE]);
+  }, [fetchGrantsData, SEARCH_GRANTS_PER_PAGE]);
 
   // Memoize the search handler to avoid recreating on every render
   const handleSearch = useCallback((e: React.FormEvent) => {
@@ -186,17 +232,10 @@ export default function Search() {
     if (!user) return;
 
     try {
-      // Insert the new interaction
-      const { error: insertError } = await supabase
-        .from('user_interactions')
-        .insert({
-          user_id: user.id,
-          grant_id: grantId,
-          action: action,
-          timestamp: new Date().toISOString()
-        });
-
-      if (insertError) throw insertError;
+      // Insert the new interaction using apiClient
+      const response = await apiClient.users.recordInteraction(user.id, grantId, action);
+      
+      if (response.error) throw response.error;
 
       // Only remove the grant from the UI if specified (for "applied" action, this depends on user confirmation)
       if (removeFromUI) {
@@ -207,16 +246,16 @@ export default function Search() {
         const currentCount = grants.length;
         if (currentCount > 0) {
           const lastGrant = grants[currentCount - 1];
-          const { data: newGrants, error } = await supabase
-            .from('grants')
-            .select(`
-              *,
-              interactions:user_interactions!left(action, timestamp)
-            `)
-            .eq('interactions.user_id', user.id)
-            .is('interactions', null)
-            .gt('id', lastGrant.id)
-            .limit(1);
+          // Fetch one more grant using apiClient
+          const response = await apiClient.grants.getGrants({
+            limit: 1,
+            after_id: lastGrant.id,
+            exclude_interactions: true,
+            user_id: user.id
+          });
+          
+          const newGrants = response.data?.grants;
+          const error = response.error;
 
           if (!error && newGrants && newGrants.length > 0) {
             // Add the new grant to the end of the list

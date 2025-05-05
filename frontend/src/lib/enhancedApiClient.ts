@@ -1,190 +1,316 @@
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+/**
+ * Enhanced API client that provides the same functionality as direct Supabase queries
+ * but uses the backend API instead.
+ */
 
-// Base URL for API requests
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+import apiClient from './apiClient';
 
-// Create an axios instance with default config
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000, // 10 seconds
-});
+// Types
+export interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+  message?: string;
+}
 
-// Request interceptor for adding auth token
-apiClient.interceptors.request.use(
-  (config) => {
-    // Get token from localStorage or other storage
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    
-    // If token exists, add it to the headers
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor for handling common errors
-apiClient.interceptors.response.use(
-  (response) => {
-    return response;
-  },
-  async (error: AxiosError) => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
-    
-    // Handle 401 Unauthorized errors (token expired)
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        // Attempt to refresh the token (implementation depends on your auth system)
-        // const newToken = await refreshToken();
-        // localStorage.setItem('authToken', newToken);
-        
-        // Retry the original request with the new token
-        // if (originalRequest.headers) {
-        //   originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        // }
-        // return apiClient(originalRequest);
-      } catch (refreshError) {
-        // If refresh fails, redirect to login
-        if (typeof window !== 'undefined') {
-          // Clear auth data
-          localStorage.removeItem('authToken');
-          
-          // Redirect to login page
-          window.location.href = '/login';
-        }
-      }
-    }
-    
-    // Handle 429 Too Many Requests (rate limiting)
-    if (error.response?.status === 429) {
-      console.warn('Rate limit exceeded. Please try again later.');
-    }
-    
-    return Promise.reject(error);
-  }
-);
-
-// Grants API
+// Enhanced grants API
 export const grantsApi = {
-  // Get all grants with optional filters
+  // Get all grants with filtering
   getGrants: async (filters?: Record<string, any>) => {
-    try {
-      const response = await apiClient.get('/grants', { params: filters });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching grants:', error);
-      throw error;
-    }
+    return apiClient.grants.getGrants(filters);
   },
   
   // Get a specific grant by ID
   getGrantById: async (id: string) => {
-    try {
-      const response = await apiClient.get(`/grants/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching grant ${id}:`, error);
-      throw error;
-    }
+    return apiClient.grants.getGrantById(id);
   },
   
   // Get recommended grants for a user
-  getRecommendedGrants: async (limit?: number) => {
-    try {
-      const response = await apiClient.get('/grants/recommended', {
-        params: { limit }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching recommended grants:', error);
-      throw error;
-    }
+  getRecommendedGrants: async (userId: string) => {
+    return apiClient.grants.getRecommendedGrants(userId);
   },
   
-  // Trigger recommendation update for current user
-  triggerRecommendationUpdate: async () => {
-    try {
-      const response = await apiClient.post('/grants/trigger-recommendations');
-      return response.data;
-    } catch (error) {
-      console.error('Error triggering recommendation update:', error);
-      throw error;
+  // Build a query for grants (replacement for buildGrantQuery)
+  buildQuery: (filter: any, grantsPerPage: number = 10) => {
+    // Convert the filter to API-compatible format
+    const apiFilters = {
+      search: filter.searchTerm,
+      funding_min: filter.fundingMin,
+      funding_max: filter.fundingMax,
+      eligible_applicant_types: filter.eligible_applicant_types,
+      activity_categories: filter.activity_categories,
+      grant_type: filter.grant_type,
+      status: filter.status,
+      keywords: filter.keywords,
+      page: filter.page,
+      limit: grantsPerPage
+    };
+    
+    // Create a promise-like object that mimics Supabase's query interface
+    return {
+      async then(callback: any) {
+        try {
+          const response = await apiClient.grants.getGrants(apiFilters);
+          if (response.error) {
+            throw response.error;
+          }
+          
+          // Format the response to match the Supabase response
+          const result = {
+            data: response.data?.grants || [],
+            error: null,
+            count: response.data?.count || 0
+          };
+          
+          return callback(result);
+        } catch (error) {
+          return callback({
+            data: null,
+            error,
+            count: 0
+          });
+        }
+      }
+    };
+  },
+  
+  // Mimic Supabase's from() method
+  from: (table: string) => {
+    if (table !== 'grants') {
+      console.warn(`Table ${table} not supported in enhanced API client`);
     }
+    
+    return {
+      select: (columns: string) => {
+        return {
+          eq: (column: string, value: any) => {
+            return {
+              single: async () => {
+                try {
+                  if (column === 'id') {
+                    const response = await apiClient.grants.getGrantById(value);
+                    return {
+                      data: response.data?.grant || null,
+                      error: response.error
+                    };
+                  } else {
+                    throw new Error(`Column ${column} not supported for eq operation`);
+                  }
+                } catch (error) {
+                  return {
+                    data: null,
+                    error
+                  };
+                }
+              }
+            };
+          }
+        };
+      }
+    };
   }
 };
 
-// Users API
+// Enhanced users API
 export const usersApi = {
   // Get user preferences
-  getUserPreferences: async () => {
+  getUserPreferences: async (userId: string) => {
     try {
-      const response = await apiClient.get('/users/preferences');
-      return response.data;
+      const response = await apiClient.users.getUserPreferences(userId);
+      return {
+        data: response.data?.preferences || null,
+        error: response.error
+      };
     } catch (error) {
-      console.error('Error fetching user preferences:', error);
-      throw error;
+      return {
+        data: null,
+        error
+      };
     }
   },
   
   // Update user preferences
-  updateUserPreferences: async (preferences: any) => {
+  updateUserPreferences: async (userId: string, preferences: any) => {
     try {
-      const response = await apiClient.post('/users/preferences', { preferences });
-      return response.data;
+      const response = await apiClient.users.updateUserPreferences(userId, preferences);
+      return {
+        data: response.data?.preferences || null,
+        error: response.error
+      };
     } catch (error) {
-      console.error('Error updating user preferences:', error);
-      throw error;
+      return {
+        data: null,
+        error
+      };
     }
   },
   
   // Record user interaction with a grant
-  recordInteraction: async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+  recordInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored') => {
     try {
-      const response = await apiClient.post('/users/interactions', {
-        grant_id: grantId,
-        action,
-        timestamp: new Date().toISOString()
-      });
-      return response.data;
+      const response = await apiClient.users.recordInteraction(userId, grantId, action);
+      return {
+        data: response.data?.interaction || null,
+        error: response.error
+      };
     } catch (error) {
-      console.error('Error recording interaction:', error);
-      throw error;
+      return {
+        data: null,
+        error
+      };
     }
   },
   
-  // Get user profile
-  getUserProfile: async () => {
+  // Get user interactions
+  getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
     try {
-      const response = await apiClient.get('/users/profile');
-      return response.data;
+      // Use a custom endpoint for user interactions
+      const endpoint = action 
+        ? `/users/interactions?userId=${userId}&action=${action}`
+        : `/users/interactions?userId=${userId}`;
+      
+      // Make a direct fetch request since this endpoint isn't in the apiClient
+      const response = await fetch(`/api${endpoint}`);
+      const data = await response.json();
+      
+      return {
+        data: data?.interactions || [],
+        error: null
+      };
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw error;
+      return {
+        data: [],
+        error
+      };
     }
   },
   
-  // Update user profile
-  updateUserProfile: async (profileData: any) => {
-    try {
-      const response = await apiClient.put('/users/profile', profileData);
-      return response.data;
-    } catch (error) {
-      console.error('Error updating user profile:', error);
-      throw error;
+  // Mimic Supabase's from() method
+  from: (table: string) => {
+    return {
+      select: (columns: string) => {
+        return {
+          eq: (column: string, value: any) => {
+            return {
+              async then(callback: any) {
+                try {
+                  if (table === 'user_interactions' && column === 'user_id') {
+                    const response = await fetch(`/api/users/interactions?userId=${value}`);
+                    const data = await response.json();
+                    return callback({
+                      data: data?.interactions || [],
+                      error: null
+                    });
+                  } else if (table === 'user_preferences' && column === 'user_id') {
+                    const response = await fetch(`/api/users/preferences?userId=${value}`);
+                    const data = await response.json();
+                    return callback({
+                      data: data?.preferences || null,
+                      error: null
+                    });
+                  } else {
+                    throw new Error(`Table ${table} or column ${column} not supported`);
+                  }
+                } catch (error) {
+                  return callback({
+                    data: null,
+                    error
+                  });
+                }
+              }
+            };
+          }
+        };
+      },
+      insert: (data: any) => {
+        return {
+          async then(callback: any) {
+            try {
+              if (table === 'user_interactions') {
+                const response = await fetch('/api/users/interactions', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify(data)
+                });
+                const responseData = await response.json();
+                return callback({
+                  data: responseData?.interaction || null,
+                  error: null
+                });
+              } else {
+                throw new Error(`Table ${table} not supported for insert operation`);
+              }
+            } catch (error) {
+              return callback({
+                data: null,
+                error
+              });
+            }
+          }
+        };
+      },
+      upsert: (data: any, options?: any) => {
+        return {
+          async then(callback: any) {
+            try {
+              if (table === 'user_preferences') {
+                const response = await fetch('/api/users/preferences', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ preferences: data })
+                });
+                const responseData = await response.json();
+                return callback({
+                  data: responseData?.preferences || null,
+                  error: null
+                });
+              } else {
+                throw new Error(`Table ${table} not supported for upsert operation`);
+              }
+            } catch (error) {
+              return callback({
+                data: null,
+                error
+              });
+            }
+          }
+        };
+      }
+    };
+  }
+};
+
+// Create a Supabase-like client
+const enhancedClient = {
+  from: (table: string) => {
+    if (table === 'grants') {
+      return grantsApi.from(table);
+    } else if (table === 'user_interactions' || table === 'user_preferences') {
+      return usersApi.from(table);
+    } else {
+      console.warn(`Table ${table} not supported in enhanced API client`);
+      return {
+        select: () => ({
+          eq: () => ({
+            then: (callback: any) => callback({ data: null, error: new Error(`Table ${table} not supported`) })
+          })
+        })
+      };
+    }
+  },
+  auth: {
+    getUser: async () => {
+      try {
+        // This would need to be implemented with your auth system
+        return { data: { user: null }, error: null };
+      } catch (error) {
+        return { data: { user: null }, error };
+      }
     }
   }
 };
 
-export default {
-  grants: grantsApi,
-  users: usersApi
-};
+export default enhancedClient;

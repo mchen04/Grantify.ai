@@ -5,7 +5,7 @@ export interface Grant {
   agency_name: string;
   agency_code?: string;
   agency_subdivision?: string;
-  opportunity_id?: string;
+  opportunity_id: string;
   opportunity_number?: string;
   close_date: string | null;
   post_date: string | null;
@@ -22,10 +22,10 @@ export interface Grant {
   activity_category: string[];
   activity_code?: string;
   grant_type?: string | null;
-  eligible_applicants?: string[] | null;
+  eligible_applicants: string[];
   eligibility_pi?: string;
   cost_sharing: boolean;
-  source_url?: string | null;
+  source_url: string | null;
   data_source?: string;
   status?: string;
   grantor_contact_name?: string | null;

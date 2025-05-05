@@ -30,12 +30,14 @@ router.get('/',
         userId: req.user?.id || 'unauthenticated'
       });
 
-      // TODO: Implement grants service to fetch grants with filters
+      // Use the grants service to fetch grants with filters
+      const grantsService = require('../services/grantsService').default;
+      const grants = await grantsService.getGrants(filters);
+      
       res.json({
-        message: 'Grants endpoint',
+        message: 'Grants fetched successfully',
         filters,
-        // This is a placeholder, will be replaced with actual data
-        grants: []
+        grants
       });
     } catch (error) {
       logger.error('Error fetching grants:', {
@@ -84,10 +86,25 @@ router.get('/:id', async (req: Request, res: Response) => {
       userId: req.user?.id || 'unauthenticated'
     });
     
-    // TODO: Implement grants service to fetch specific grant
+    // Use Supabase directly to fetch the specific grant
+    const supabase = require('../db/supabaseClient').default;
+    const { data: grant, error } = await supabase
+      .from('grants')
+      .select('*')
+      .eq('id', grantId)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (!grant) {
+      return res.status(404).json({ message: 'Grant not found' });
+    }
+    
     res.json({
-      message: `Grant with ID: ${grantId}`,
-      grant: { id: grantId }
+      message: 'Grant fetched successfully',
+      grant
     });
   } catch (error) {
     logger.error('Error fetching grant:', {

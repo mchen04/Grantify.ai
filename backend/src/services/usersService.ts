@@ -1,5 +1,5 @@
 import supabase from '../db/supabaseClient';
-import { UserProfile, UserPreferences, UserInteraction } from '../models/user';
+import { User, UserPreferences, UserInteraction } from '../models/user';
 import logger, { logSecurityEvent } from '../utils/logger';
 
 /**
@@ -11,7 +11,7 @@ class UsersService {
    * @param userId - User ID
    * @returns User profile or null if not found
    */
-  async getUserProfile(userId: string): Promise<UserProfile | null> {
+  async getUserProfile(userId: string): Promise<User | null> {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
@@ -40,7 +40,7 @@ class UsersService {
    * @param profileData - Profile data to update
    * @returns Updated profile
    */
-  async updateUserProfile(userId: string, profileData: Partial<UserProfile>): Promise<UserProfile> {
+  async updateUserProfile(userId: string, profileData: Partial<User>): Promise<User> {
     try {
       // Use upsert to insert or update the profile
       const { data: updatedProfile, error } = await supabase
@@ -111,9 +111,14 @@ class UsersService {
         .from('user_preferences')
         .upsert({
           user_id: userId,
-          // Only include fields defined in UserPreferences model
-          filter_keywords: preferencesUpdate.filter_keywords || [],
-          // Add other preference fields here from preferencesUpdate
+          // Include fields defined in UserPreferences model
+          topics: preferencesUpdate.topics || [],
+          funding_min: preferencesUpdate.funding_min,
+          funding_max: preferencesUpdate.funding_max,
+          eligible_applicant_types: preferencesUpdate.eligible_applicant_types || [],
+          agencies: preferencesUpdate.agencies || [],
+          locations: preferencesUpdate.locations || [],
+          notification_settings: preferencesUpdate.notification_settings,
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' }) // Ensure constraint name is correct
         .select()

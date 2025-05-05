@@ -8,8 +8,9 @@ import Layout from '../../components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
-import supabase from '@/lib/supabaseClient';
-import { fetchRecommendedGrants, calculateMatchScore, fetchUserPreferences, UserPreferences } from '@/lib/grantRecommendations';
+import apiClient from '@/lib/apiClient';
+import { calculateMatchScore, UserPreferences } from '@/lib/grantRecommendations';
+import { DEFAULT_USER_PREFERENCES } from '@/lib/config';
 import { DASHBOARD_GRANTS_PER_PAGE } from '@/utils/constants';
 import Pagination from '@/components/dashboard/Pagination';
 import CollapsibleFilterPanel from '@/components/dashboard/CollapsibleFilterPanel';
@@ -259,19 +260,22 @@ export default function Dashboard() {
         setError(null);
 
         // Fetch user preferences for scoring
-        const preferences = await fetchUserPreferences(user.id);
-        setUserPreferences(preferences);
+        const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id);
+        
+        if (preferencesError) {
+          console.error('Error fetching user preferences:', preferencesError);
+          // Continue with default preferences
+        }
+        
+        setUserPreferences(preferences || DEFAULT_USER_PREFERENCES);
 
         // Get current date for filtering expired grants
         const today = new Date().toISOString();
 
         // Fetch all user interactions
-        const { data: allInteractionsData, error: interactionsError } = await supabase
-          .from('user_interactions')
-          .select('*, grants(*)')
-          .eq('user_id', user.id);
+        const { data: allInteractionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id);
 
-        if (interactionsError && Object.keys(interactionsError).length > 0) {
+        if (interactionsError) {
           console.error('Error fetching user interactions:', interactionsError);
           // Don't throw, try to continue
         }
@@ -319,11 +323,12 @@ export default function Dashboard() {
         setIgnoredGrants(initialIgnored);
 
         // Fetch recommended grants based on user preferences
-        const initialRecommended = await fetchRecommendedGrants(
-          user.id,
-          interactedGrantIds,
-          TARGET_RECOMMENDED_COUNT
-        );
+        const { data: initialRecommended, error: recommendedError } = await apiClient.grants.getRecommendedGrants(user.id);
+        
+        if (recommendedError) {
+          console.error('Error fetching recommended grants:', recommendedError);
+          // Continue with empty array
+        }
 
         // Calculate match scores for recommended grants
         const scoredRecommendations = initialRecommended ? initialRecommended.map(grant => ({
@@ -376,18 +381,22 @@ export default function Dashboard() {
         const today = new Date().toISOString();
 
         // Fetch more recommended grants with preferences
-        const newGrants = await fetchRecommendedGrants(
-          user.id,
-          allCurrentGrantIds,
-          neededCount
-        );
-
-        if (newGrants && newGrants.length > 0 && userPreferences) {
+        const { data: newGrants, error: newGrantsError } = await apiClient.grants.getRecommendedGrants(user.id);
+        
+        if (newGrantsError) {
+          console.error('Error fetching replacement grants:', newGrantsError);
+        } else if (newGrants && newGrants.length > 0 && userPreferences) {
+          // Filter out grants that are already in any list
+          const filteredNewGrants = newGrants.filter(grant =>
+            !allCurrentGrantIds.includes(grant.id)
+          ).slice(0, neededCount);
+          
           // Add match scores to new grants
-          const scoredNewGrants = newGrants.map(grant => ({
+          const scoredNewGrants = filteredNewGrants.map(grant => ({
             ...grant,
             matchScore: calculateMatchScore(grant, userPreferences)
           }));
+          
           setRecommendedGrants(prev => [...prev, ...scoredNewGrants]); // Add new grants with scores
         }
       } catch (e) {
@@ -519,13 +528,17 @@ export default function Dashboard() {
 
       if (isCurrentStatus) {
         // --- Undoing an action ---
-        // Delete the interaction from the database
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId)
-          .eq('action', action); // Delete the specific action row
+        // Delete the interaction from the database using the API
+        const { error: deleteError } = await apiClient.users.recordInteraction(
+          user.id,
+          grantId,
+          'delete' as any // Using 'delete' as a special action to remove the interaction
+        );
+        
+        if (deleteError) {
+          console.error('Error deleting interaction:', deleteError);
+          throw deleteError;
+        }
 
         // Update local state: Remove the grant from its current list
         if (action === 'saved') {
@@ -540,27 +553,18 @@ export default function Dashboard() {
 
       } else {
         // --- Setting a new action or changing an action ---
-        // First, delete any *other* interactions for this grant to ensure only one state exists
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId)
-          .not('action', 'eq', action); // Delete rows where action is NOT the target action
-
-        // Then, upsert the target interaction.
-        const { error: upsertError } = await supabase
-          .from('user_interactions')
-          .upsert({
-            user_id: user.id,
-            grant_id: grantId,
-            action: action,
-            timestamp: new Date().toISOString()
-          }, {
-            onConflict: 'user_id, grant_id, action' // Specify the constraint columns
-          });
-
-        if (upsertError) throw upsertError;
+        // Record the new interaction using the API
+        // The API will handle deleting any previous interactions
+        const { error: recordError } = await apiClient.users.recordInteraction(
+          user.id,
+          grantId,
+          action
+        );
+        
+        if (recordError) {
+          console.error('Error recording interaction:', recordError);
+          throw recordError;
+        }
 
         // Update local state:
         // 1. Remove from *all* lists first to handle changes and ensure no duplicates

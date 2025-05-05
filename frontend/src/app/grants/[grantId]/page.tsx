@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout/Layout';
-import supabase from '@/lib/supabaseClient';
+import apiClient from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchSimilarGrants, formatSimilarGrant } from '@/lib/similarGrants';
 
@@ -108,14 +108,10 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         setLoading(true);
         setError(null);
         
-        // Fetch the grant by ID
-        const { data, error } = await supabase
-          .from('grants')
-          .select('*')
-          .eq('id', grantId)
-          .single();
+        // Fetch the grant by ID using apiClient
+        const { data, error } = await apiClient.grants.getGrantById(grantId);
         
-        if (error) throw error;
+        if (error) throw new Error(error);
         
         if (!data) {
           setError('Grant not found');
@@ -126,18 +122,15 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         
         // If user is logged in, check if they've interacted with this grant
         if (user) {
-          const { data: interactions, error: interactionsError } = await supabase
-            .from('user_interactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .eq('grant_id', grantId)
-            .order('timestamp', { ascending: false });
+          // Fetch user interactions for this grant
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/interactions?user_id=${user.id}&grant_id=${grantId}`);
+          const interactionsData = await response.json();
           
-          if (interactionsError) throw interactionsError;
+          if (!response.ok) throw new Error(interactionsData.message || 'Failed to fetch interactions');
           
-          if (interactions && interactions.length > 0) {
+          if (interactionsData && interactionsData.length > 0) {
             // Get the most recent interaction
-            const latestInteraction = interactions[0] as Interaction;
+            const latestInteraction = interactionsData[0] as Interaction;
             setInteractionState(latestInteraction.action);
           } else {
             setInteractionState(null);
@@ -191,37 +184,32 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
       if (isCurrentStatus) {
         // --- Undoing an action ---
         // Delete the interaction from the database
-        const { error } = await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId)
-          .eq('action', action);
-        
-        if (error) throw error;
-      } else {
-        // --- Setting a new action or changing an action ---
-        // First, delete any other interactions for this grant that are NOT the target action
-        await supabase
-          .from('user_interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('grant_id', grantId)
-          .not('action', 'eq', action);
-        
-        // Then, upsert the new interaction (matches dashboard implementation)
-        const { error } = await supabase
-          .from('user_interactions')
-          .upsert({
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/users/interactions/delete`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             user_id: user.id,
             grant_id: grantId,
-            action: action,
-            timestamp: new Date().toISOString()
-          }, {
-            onConflict: 'user_id, grant_id, action' // Specify the constraint columns
-          });
+            action: action
+          })
+        });
         
-        if (error) throw error;
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to delete interaction');
+        }
+      } else {
+        // --- Setting a new action or changing an action ---
+        // Use apiClient to record the interaction
+        const { error } = await apiClient.users.recordInteraction(
+          user.id,
+          grantId,
+          action
+        );
+        
+        if (error) throw new Error(error);
       }
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error);

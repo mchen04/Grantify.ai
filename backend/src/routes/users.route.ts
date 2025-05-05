@@ -4,6 +4,7 @@ import { authMiddleware, authorizeUserMiddleware } from '../middleware/auth.midd
 import { userPreferencesValidation, userInteractionValidation } from '../middleware/validation.middleware';
 import { userPreferencesLimiter } from '../middleware/rate-limit.middleware';
 import logger, { logSecurityEvent } from '../utils/logger';
+import usersService from '../services/usersService';
 
 const router = express.Router();
 
@@ -17,11 +18,12 @@ router.get('/preferences',
       
       logSecurityEvent(userId, 'preferences_access', { method: 'GET' });
       
-      // TODO: Implement users service to fetch user preferences
+      // Use users service to fetch user preferences
+      const preferences = await usersService.getUserPreferences(userId);
+      
       res.json({
         message: `Preferences for user: ${userId}`,
-        // This is a placeholder, will be replaced with actual data
-        preferences: {} as UserPreferences
+        preferences
       });
     } catch (error) {
       logger.error('Error fetching user preferences:', {
@@ -49,11 +51,12 @@ router.post('/preferences',
         preferencesUpdated: Object.keys(preferences)
       });
       
-      // TODO: Implement users service to update user preferences
+      // Use users service to update user preferences
+      const updatedPreferences = await usersService.updateUserPreferences(userId, preferences);
+      
       res.json({
         message: `Updated preferences for user: ${userId}`,
-        // This is a placeholder, will be replaced with actual data
-        preferences
+        preferences: updatedPreferences
       });
     } catch (error) {
       logger.error('Error updating user preferences:', {
@@ -82,11 +85,12 @@ router.post('/interactions',
         grantId: interaction.grant_id
       });
       
-      // TODO: Implement users service to record user interaction
+      // Use users service to record user interaction
+      const recordedInteraction = await usersService.recordUserInteraction(req.user.id, interaction);
+      
       res.json({
         message: `Recorded interaction for user: ${interaction.user_id}`,
-        // This is a placeholder, will be replaced with actual data
-        interaction
+        interaction: recordedInteraction
       });
     } catch (error) {
       logger.error('Error recording user interaction:', {
@@ -94,6 +98,32 @@ router.post('/interactions',
         userId: req.user?.id,
         grantId: req.body.grant_id,
         action: req.body.action
+      });
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// GET /api/users/interactions - Get user interactions with grants
+router.get('/interactions',
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      // Use authenticated user ID from middleware
+      const userId = req.user.id;
+      const action = req.query.action as string | undefined;
+      
+      // Use users service to fetch interactions
+      const result = await usersService.getUserInteractions(userId, action);
+      
+      res.json({
+        message: `User interactions for user: ${userId}`,
+        interactions: result.interactions || []
+      });
+    } catch (error) {
+      logger.error('Error fetching user interactions:', {
+        error: error instanceof Error ? error.message : error,
+        userId: req.user?.id
       });
       res.status(500).json({ message: 'Internal server error' });
     }
