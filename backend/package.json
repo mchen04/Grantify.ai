@@ -11,12 +11,8 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "lint": "eslint src --ext .js,.ts",
-    "update-grants-live": "ts-node scripts/updateGrantsLive.ts",
-    "clear-grants": "ts-node scripts/clearGrants.ts",
-    "cleanup-expired": "ts-node scripts/cleanupExpiredGrants.ts",
     "prebuild": "rimraf dist",
-    "postbuild": "copyfiles -u 1 src/**/*.d.ts dist/",
-    "update-grants-no-ai": "ts-node scripts/updateGrantsNoAI.ts"
+    "postbuild": "copyfiles -u 1 src/**/*.d.ts dist/"
   },
   "keywords": [
     "grants",
@@ -24,11 +20,10 @@
     "recommendation",
     "api"
   ],
-  "author": "",
+  "author": "Michael Chen",
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.10.0",
-    "adm-zip": "^0.5.10",
     "axios": "^1.9.0",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
@@ -41,8 +36,7 @@
     "mkdirp": "^3.0.1",
     "morgan": "^1.10.0",
     "node-fetch": "^3.3.2",
-    "winston": "^3.17.0",
-    "xml2js": "^0.6.2"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35",
@@ -50,7 +44,6 @@
     "@types/express": "^4.17.21",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.0.0",
-    "@types/xml2js": "^0.4.14",
     "copyfiles": "^2.4.1",
     "eslint": "^8.35.0",
     "nodemon": "^3.1.9",

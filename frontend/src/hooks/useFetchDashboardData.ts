@@ -207,7 +207,7 @@ export function useFetchDashboardData({
       setIsFetchingReplacements(false);
     }
   }, [
-    userId,
+    user, // Add user to dependency array
     isFetchingReplacements,
     recommendedGrants,
     savedGrants,
@@ -217,11 +217,13 @@ export function useFetchDashboardData({
     userPreferences
   ]);
 
-  // Fetch dashboard data on mount and when dependencies change
+  // Fetch dashboard data when user is available and dependencies change
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
+    if (user) { // Only fetch if user is logged in
+      fetchDashboardData();
+    }
+  }, [fetchDashboardData, user]); // Keep user in dependency array
+ 
   return {
     recommendedGrants,
     savedGrants,

@@ -338,6 +338,18 @@ class GrantsService {
 
   async getGrants(filters: GrantFilters = {}): Promise<TransformedGrant[]> {
     try {
+      console.log('Fetching grants with filters:', JSON.stringify(filters, null, 2));
+      
+      // First, check if we can access the grants table at all
+      const testQuery = await supabase.from('grants').select('count');
+      if (testQuery.error) {
+        console.error('Error accessing grants table:', testQuery.error);
+        throw new Error(`Cannot access grants table: ${testQuery.error.message}`);
+      }
+      
+      console.log(`Found ${testQuery.data?.[0]?.count || 0} total grants in database`);
+      
+      // Now proceed with the actual query
       let query = supabase.from('grants').select('*');
       
       // Apply filters
@@ -385,6 +397,36 @@ class GrantsService {
         query = query.contains('eligible_applicants', filters.eligible_applicant_types);
       }
       
+      // Handle additional parameters that might be passed from the frontend
+      if ((filters as any).close_date_min) {
+        console.log(`Filtering by minimum close date: ${(filters as any).close_date_min}`);
+        query = query.gte('close_date', (filters as any).close_date_min);
+      }
+      
+      if ((filters as any).has_award_ceiling === true) {
+        console.log('Filtering to include only grants with award ceiling');
+        query = query.not('award_ceiling', 'is', null);
+      }
+      
+      // Apply sorting
+      if ((filters as any).sort_by) {
+        const sortBy = (filters as any).sort_by;
+        const sortDirection = (filters as any).sort_direction === 'desc' ? { ascending: false } : { ascending: true };
+        
+        console.log(`Sorting by ${sortBy} in ${(filters as any).sort_direction || 'asc'} order`);
+        
+        // Map frontend sort fields to database fields
+        let dbSortField = sortBy;
+        if (sortBy === 'amount') dbSortField = 'award_ceiling';
+        else if (sortBy === 'deadline') dbSortField = 'close_date';
+        else if (sortBy === 'recent') dbSortField = 'post_date';
+        
+        query = query.order(dbSortField, sortDirection);
+      } else {
+        // Default sort by post date (newest first)
+        query = query.order('post_date', { ascending: false });
+      }
+      
       // Pagination
       const page = filters.page || 1;
       const limit = filters.limit || 20;
@@ -393,14 +435,174 @@ class GrantsService {
       query = query.range(offset, offset + limit - 1);
       
       // Execute query
-      const { data, error } = await query;
+      console.log('Executing grants query...');
+      const { data, error, status, statusText } = await query;
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error fetching grants:', {
+          error,
+          status,
+          statusText,
+          filters
+        });
+        throw error;
+      }
       
-      return data || [];
+      console.log(`Successfully fetched ${data?.length || 0} grants`);
+      
+      // If no data was returned but there was no error, return an empty array
+      if (!data || data.length === 0) {
+        console.log('No grants found matching the criteria');
+        return [];
+      }
+      
+      return data;
     } catch (error) {
       console.error('Error getting grants:', error);
-      throw error;
+      // Return empty array instead of throwing to prevent UI errors
+      return [];
+    }
+  }
+  /**
+   * Get recommended grants for a user
+   * @param userId - User ID to get recommendations for
+   * @param options - Options for filtering recommendations
+   * @returns Array of recommended grants
+   */
+  async getRecommendedGrants(userId: string, options: { exclude?: string[], limit?: number } = {}): Promise<TransformedGrant[]> {
+    try {
+      console.log(`Fetching recommended grants for user ${userId} with options:`, JSON.stringify(options, null, 2));
+      
+      // First, check if we can access the grants table at all
+      const testQuery = await supabase.from('grants').select('count');
+      if (testQuery.error) {
+        console.error('Error accessing grants table:', testQuery.error);
+        throw new Error(`Cannot access grants table: ${testQuery.error.message}`);
+      }
+      
+      console.log(`Found ${testQuery.data?.[0]?.count || 0} total grants in database`);
+      
+      // Start with a basic query to get grants
+      let query = supabase.from('grants').select('*');
+      
+      // Exclude grants that the user has already interacted with
+      if (options.exclude && options.exclude.length > 0) {
+        console.log(`Excluding ${options.exclude.length} grants that user has already interacted with`);
+        // Use a different approach if the exclude list is very long
+        if (options.exclude.length > 100) {
+          // For large exclusion lists, use a different approach
+          console.log('Large exclusion list detected, using alternative query approach');
+          // Just limit the query instead of using a potentially problematic NOT IN clause
+          query = query.limit(options.limit || 10);
+        } else {
+          query = query.not('id', 'in', `(${options.exclude.join(',')})`);
+        }
+      }
+      
+      // Get user preferences to tailor recommendations
+      console.log(`Fetching preferences for user ${userId}`);
+      const { data: userPrefs, error: prefsError } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (prefsError) {
+        console.log(`No preferences found for user ${userId}:`, prefsError);
+      } else {
+        console.log(`Found preferences for user ${userId}:`, userPrefs);
+      }
+      
+      if (!prefsError && userPrefs) {
+        // Apply user preferences to filter grants
+        if (userPrefs.topics && userPrefs.topics.length > 0) {
+          console.log(`Filtering by topics: ${userPrefs.topics.join(', ')}`);
+          query = query.overlaps('keywords', userPrefs.topics);
+        }
+        
+        if (userPrefs.agencies && userPrefs.agencies.length > 0) {
+          console.log(`Filtering by agencies: ${userPrefs.agencies.join(', ')}`);
+          query = query.in('agency_name', userPrefs.agencies);
+        }
+        
+        if (userPrefs.funding_min > 0) {
+          console.log(`Filtering by minimum funding: ${userPrefs.funding_min}`);
+          query = query.gte('award_floor', userPrefs.funding_min);
+        }
+        
+        if (userPrefs.funding_max < Number.MAX_SAFE_INTEGER) {
+          console.log(`Filtering by maximum funding: ${userPrefs.funding_max}`);
+          query = query.lte('award_ceiling', userPrefs.funding_max);
+        }
+        
+        // Handle deadline preferences
+        if (userPrefs.deadline_range && userPrefs.deadline_range !== '0') {
+          const days = parseInt(userPrefs.deadline_range);
+          if (!isNaN(days) && days > 0) {
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + days);
+            console.log(`Filtering by deadline within ${days} days (until ${futureDate.toISOString()})`);
+            query = query.lte('close_date', futureDate.toISOString());
+          }
+        }
+      } else {
+        console.log('Using default preferences (no user preferences found)');
+      }
+      
+      // Only include grants that haven't expired
+      const today = new Date().toISOString();
+      console.log(`Filtering to include only non-expired grants (after ${today})`);
+      query = query.or(`close_date.gt.${today},close_date.is.null`);
+      
+      // Limit the number of results
+      const limit = options.limit || 10;
+      console.log(`Limiting results to ${limit} grants`);
+      query = query.limit(limit);
+      
+      // Order by relevance (can be improved with more sophisticated ranking)
+      query = query.order('created_at', { ascending: false });
+      
+      // Execute the query
+      console.log('Executing recommended grants query...');
+      const { data, error, status, statusText } = await query;
+      
+      if (error) {
+        console.error('Supabase error fetching recommended grants:', {
+          error,
+          status,
+          statusText,
+          userId,
+          options
+        });
+        throw error;
+      }
+      
+      console.log(`Successfully fetched ${data?.length || 0} recommended grants`);
+      
+      // If no data was returned but there was no error, return an empty array
+      if (!data || data.length === 0) {
+        console.log('No recommended grants found matching the criteria');
+        
+        // As a fallback, try to get any grants without filtering
+        console.log('Attempting to fetch fallback grants without filtering');
+        const fallbackQuery = await supabase
+          .from('grants')
+          .select('*')
+          .limit(limit);
+        
+        if (!fallbackQuery.error && fallbackQuery.data && fallbackQuery.data.length > 0) {
+          console.log(`Found ${fallbackQuery.data.length} fallback grants`);
+          return fallbackQuery.data;
+        }
+        
+        return [];
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting recommended grants:', error);
+      // Return empty array instead of throwing to prevent UI errors
+      return [];
     }
   }
 }

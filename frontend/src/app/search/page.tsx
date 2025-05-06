@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import dynamic from 'next/dynamic';
 import Layout from '@/components/Layout/Layout';
 import apiClient from '@/lib/apiClient';
-import enhancedApiClient from '@/lib/enhancedApiClient';
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -178,13 +177,19 @@ export default function Search() {
         
         const response = await fetchGrantsData();
         
-        if (response.error) throw response.error;
+        if (response.error) {
+          throw new Error(response.error);
+        }
         
-        setGrants(response.data?.grants || []);
-        setTotalPages(response.data?.count ? Math.ceil(response.data.count / SEARCH_GRANTS_PER_PAGE) : 1);
+        if (!response.data) {
+          throw new Error('No data returned from API');
+        }
+        
+        setGrants(response.data.grants || []);
+        setTotalPages(response.data.count ? Math.ceil(response.data.count / SEARCH_GRANTS_PER_PAGE) : 1);
       } catch (error: any) {
         console.error('Error fetching grants:', error);
-        setError('Failed to load grants. Please try again later.');
+        setError(`Failed to load grants: ${error.message || 'Please try again later.'}`);
       } finally {
         setLoading(false);
       }
@@ -252,14 +257,17 @@ export default function Search() {
             after_id: lastGrant.id,
             exclude_interactions: true,
             user_id: user.id
-          });
+          }, user.session?.access_token);
           
-          const newGrants = response.data?.grants;
-          const error = response.error;
-
-          if (!error && newGrants && newGrants.length > 0) {
-            // Add the new grant to the end of the list
-            setGrants(prevGrants => [...prevGrants, ...newGrants]);
+          if (response.error) {
+            console.error('Error fetching replacement grant:', response.error);
+          } else {
+            const newGrants = response.data?.grants;
+            
+            if (newGrants && newGrants.length > 0) {
+              // Add the new grant to the end of the list
+              setGrants(prevGrants => [...prevGrants, ...newGrants]);
+            }
           }
         }
       }

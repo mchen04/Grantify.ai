@@ -29,33 +29,12 @@ const DynamicApplyConfirmationPopup = dynamic(
   }
 );
 
-// Grant type definition
-interface Grant {
-  id: string;
-  title: string;
-  agency_name: string;
-  close_date: string | null;
-  award_ceiling: number | null;
-  description: string;
-  activity_category: string[];
-}
-
-// User interaction type
-interface UserInteraction {
-  id: string;
-  user_id: string;
-  grant_id: string;
-  action: 'saved' | 'applied' | 'ignored';
-  timestamp: string;
-  grants: Grant;
-}
+import { useFetchDashboardData } from '@/hooks/useFetchDashboardData';
+import { useGrantInteractions } from '@/hooks/useGrantInteractions';
+import { Grant, ScoredGrant } from '@/types/grant';
+import { UserInteraction } from '@/types/user';
 
 const TARGET_RECOMMENDED_COUNT = 10; // Target number of recommended grants
-
-// Interface for grant with match score
-interface ScoredGrant extends Grant {
-  matchScore?: number;
-}
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
@@ -68,13 +47,45 @@ export default function Dashboard() {
       ? tabParam
       : 'recommended';
   });
-  const [loading, setLoading] = useState(false);
-  const [recommendedGrants, setRecommendedGrants] = useState<ScoredGrant[]>([]);
-  const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
-  const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
-  const [ignoredGrants, setIgnoredGrants] = useState<Grant[]>([]);
+  
   const [error, setError] = useState<string | null>(null);
-  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
+  
+  // Use the custom hooks for data fetching and interactions
+  const {
+    recommendedGrants,
+    savedGrants,
+    appliedGrants,
+    ignoredGrants,
+    userPreferences,
+    loading,
+    error: dashboardError,
+    refetch,
+    fetchReplacementRecommendations
+  } = useFetchDashboardData({
+    userId: user?.id,
+    targetRecommendedCount: TARGET_RECOMMENDED_COUNT,
+    enabled: !!user
+  });
+  
+  // Set error from dashboard hook
+  useEffect(() => {
+    if (dashboardError) {
+      setError(dashboardError);
+    }
+  }, [dashboardError]);
+  
+  const {
+    interactionLoading,
+    handleSaveGrant,
+    handleApplyGrant,
+    handleIgnoreGrant,
+    handleShareGrant,
+    handleUndoInteraction
+  } = useGrantInteractions({
+    userId: user?.id,
+    onError: (message) => setError(message)
+  });
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
   const [pendingGrantId, setPendingGrantId] = useState<string | null>(null);
@@ -82,7 +93,6 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState<string>('deadline');
   const [filterOnlyNoDeadline, setFilterOnlyNoDeadline] = useState(false);
   const [filterOnlyNoFunding, setFilterOnlyNoFunding] = useState(false);
-  const [isFetchingReplacements, setIsFetchingReplacements] = useState(false); // Prevent concurrent fetches
 
   // Pagination state for each tab
   const [currentPage, setCurrentPage] = useState({
@@ -139,7 +149,7 @@ export default function Dashboard() {
       const term = searchTerm.toLowerCase();
       filteredGrants = filteredGrants.filter(grant =>
         grant.title.toLowerCase().includes(term) ||
-        grant.description.toLowerCase().includes(term) ||
+        grant.description_short.toLowerCase().includes(term) ||
         grant.agency_name.toLowerCase().includes(term)
       );
     }
@@ -250,194 +260,8 @@ export default function Dashboard() {
     }
   }, [activeTab, user]);
 
-  // Fetch initial user grants and recommended grants
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!user) return;
 
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch user preferences for scoring
-        const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id);
-        
-        if (preferencesError) {
-          console.error('Error fetching user preferences:', preferencesError);
-          // Continue with default preferences
-        }
-        
-        setUserPreferences(preferences || DEFAULT_USER_PREFERENCES);
-
-        // Get current date for filtering expired grants
-        const today = new Date().toISOString();
-
-        // Fetch all user interactions
-        const { data: allInteractionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id);
-
-        if (interactionsError) {
-          console.error('Error fetching user interactions:', interactionsError);
-          // Don't throw, try to continue
-        }
-
-        const allInteractions = allInteractionsData || [];
-
-        // Process interactions to find the latest action for each grant
-        const latestInteractionsMap = new Map<string, UserInteraction>();
-        allInteractions.forEach(interaction => {
-          const existing = latestInteractionsMap.get(interaction.grant_id);
-          if (!existing || new Date(interaction.timestamp) > new Date(existing.timestamp)) {
-            latestInteractionsMap.set(interaction.grant_id, interaction);
-          }
-        });
-
-        const latestInteractions = Array.from(latestInteractionsMap.values());
-        const interactedGrantIds = Array.from(latestInteractionsMap.keys());
-
-        // Separate grants into lists based on the latest action
-        const initialSaved: Grant[] = [];
-        const initialApplied: Grant[] = [];
-        const initialIgnored: Grant[] = [];
-
-        const filterActiveGrants = (interaction: UserInteraction) => {
-          const grant = interaction.grants;
-          if (!grant) return false; // Skip if grant data is missing
-          if (!grant.close_date) return true; // Keep if no close date
-          return new Date(grant.close_date) >= new Date(); // Keep if not expired
-        };
-
-        latestInteractions.forEach(interaction => {
-          if (!interaction.grants) return; // Skip if grant data is missing
-
-          if (interaction.action === 'saved' && filterActiveGrants(interaction)) {
-            initialSaved.push(interaction.grants);
-          } else if (interaction.action === 'applied') { // Keep applied regardless of expiry
-            initialApplied.push(interaction.grants);
-          } else if (interaction.action === 'ignored' && filterActiveGrants(interaction)) {
-            initialIgnored.push(interaction.grants);
-          }
-        });
-
-        setSavedGrants(initialSaved);
-        setAppliedGrants(initialApplied);
-        setIgnoredGrants(initialIgnored);
-
-        // Fetch recommended grants based on user preferences
-        const { data: initialRecommended, error: recommendedError } = await apiClient.grants.getRecommendedGrants(user.id);
-        
-        if (recommendedError) {
-          console.error('Error fetching recommended grants:', recommendedError);
-          // Continue with empty array
-        }
-
-        // Calculate match scores for recommended grants
-        const scoredRecommendations = initialRecommended ? initialRecommended.map(grant => ({
-          ...grant,
-          matchScore: preferences ? calculateMatchScore(grant, preferences) : undefined
-        })) : [];
-
-        // Set recommended grants with scores
-        setRecommendedGrants(scoredRecommendations || []);
-
-      } catch (error: any) {
-         if (error && Object.keys(error).length > 0 && error.code !== 'PGRST116' && error.message !== 'No grants found') {
-           console.error('Error fetching initial data:', error);
-           setError('Failed to load your grants. Please try again later.');
-         } else {
-           console.log('No grants found or expected empty result.');
-           setError(null);
-         }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInitialData();
-  }, [user]); // Only run on user change
-
-  // Effect to fetch replacement recommended grants when needed
-  useEffect(() => {
-    const fetchReplacementGrantsIfNeeded = async () => {
-      if (!user || isFetchingReplacements) return; // Exit if no user or already fetching
-
-      const currentRecommendedCount = recommendedGrants.length;
-      const neededCount = TARGET_RECOMMENDED_COUNT - currentRecommendedCount;
-
-      if (neededCount <= 0) {
-        return; // Already have enough or too many
-      }
-
-      setIsFetchingReplacements(true); // Set flag to prevent concurrent fetches
-
-      try {
-        // Get IDs of ALL grants currently displayed in any list
-        const allCurrentGrantIds = [
-          ...recommendedGrants.map(g => g.id),
-          ...savedGrants.map(g => g.id),
-          ...appliedGrants.map(g => g.id),
-          ...ignoredGrants.map(g => g.id)
-        ];
-
-        const today = new Date().toISOString();
-
-        // Fetch more recommended grants with preferences
-        const { data: newGrants, error: newGrantsError } = await apiClient.grants.getRecommendedGrants(user.id);
-        
-        if (newGrantsError) {
-          console.error('Error fetching replacement grants:', newGrantsError);
-        } else if (newGrants && newGrants.length > 0 && userPreferences) {
-          // Filter out grants that are already in any list
-          const filteredNewGrants = newGrants.filter(grant =>
-            !allCurrentGrantIds.includes(grant.id)
-          ).slice(0, neededCount);
-          
-          // Add match scores to new grants
-          const scoredNewGrants = filteredNewGrants.map(grant => ({
-            ...grant,
-            matchScore: calculateMatchScore(grant, userPreferences)
-          }));
-          
-          setRecommendedGrants(prev => [...prev, ...scoredNewGrants]); // Add new grants with scores
-        }
-      } catch (e) {
-        console.error('Exception fetching replacement grants:', e);
-      } finally {
-         setIsFetchingReplacements(false); // Reset flag
-      }
-    };
-
-    // Debounce or delay the fetch slightly to avoid rapid firing during initial load or quick actions
-    const timerId = setTimeout(() => {
-        fetchReplacementGrantsIfNeeded();
-    }, 500); // Adjust delay as needed
-
-    return () => clearTimeout(timerId); // Cleanup timer on unmount or dependency change
-
-  }, [user, recommendedGrants, savedGrants, appliedGrants, ignoredGrants, isFetchingReplacements]); // Dependencies
-
-
-  // Handle grant sharing
-  const handleShare = async (grantId: string) => {
-    const shareUrl = `${window.location.origin}/grants/${grantId}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Check out this grant',
-          text: 'I found this interesting grant opportunity',
-          url: shareUrl
-        });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-      }
-    } catch (error: any) {
-      // Don't log errors if the user canceled the share
-      if (error.name !== 'AbortError') {
-        // Only copy to clipboard if it's not a cancel action
-        await navigator.clipboard.writeText(shareUrl);
-      }
-    }
-  };
+  // Use the share function from the hook
 
   // Reference to the card component's fadeAndRemoveCard function
   const cardRef = useRef<{
@@ -500,92 +324,32 @@ export default function Dashboard() {
     // The actual functionality is handled in handleApplyConfirmation
   };
 
-  // Handle grant interaction (save, apply, ignore) - Refactored
+  // Use the handleGrantInteraction function from the hook
   const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
-    if (!user) return;
+    // Find the grant in any of the lists to get its data
+    const grant = recommendedGrants.find(g => g.id === grantId) ||
+        savedGrants.find(g => g.id === grantId) ||
+        appliedGrants.find(g => g.id === grantId) ||
+        ignoredGrants.find(g => g.id === grantId);
+    
+    if (!grant) {
+      console.warn(`Grant ${grantId} not found in local state for interaction.`);
+      return; // Grant not found locally
+    }
 
     try {
-      // Find the grant in any of the lists to get its data
-      const grant = recommendedGrants.find(g => g.id === grantId) ||
-          savedGrants.find(g => g.id === grantId) ||
-          appliedGrants.find(g => g.id === grantId) ||
-          ignoredGrants.find(g => g.id === grantId);
+      if (action === 'saved') {
+        await handleSaveGrant(grantId);
+      } else if (action === 'applied') {
+        await handleApplyGrant(grantId);
+      } else if (action === 'ignored') {
+        await handleIgnoreGrant(grantId);
+      }
       
-      if (!grant) {
-          console.warn(`Grant ${grantId} not found in local state for interaction.`);
-          return; // Grant not found locally, maybe already processed?
-      }
-
-      // Determine if the grant was in the recommended list *before* this interaction
-      const wasRecommended = recommendedGrants.some(g => g.id === grantId);
-
-      // Check if the user is trying to set the *same* status the grant already has
-      // (e.g., clicking 'Save' on an already saved grant)
-      const isCurrentStatus =
-        (action === 'saved' && savedGrants.some(g => g.id === grantId)) ||
-        (action === 'applied' && appliedGrants.some(g => g.id === grantId)) ||
-        (action === 'ignored' && ignoredGrants.some(g => g.id === grantId));
-
-      if (isCurrentStatus) {
-        // --- Undoing an action ---
-        // Delete the interaction from the database using the API
-        const { error: deleteError } = await apiClient.users.recordInteraction(
-          user.id,
-          grantId,
-          'delete' as any // Using 'delete' as a special action to remove the interaction
-        );
-        
-        if (deleteError) {
-          console.error('Error deleting interaction:', deleteError);
-          throw deleteError;
-        }
-
-        // Update local state: Remove the grant from its current list
-        if (action === 'saved') {
-          setSavedGrants(prev => prev.filter(g => g.id !== grantId));
-        } else if (action === 'applied') {
-          setAppliedGrants(prev => prev.filter(g => g.id !== grantId));
-        } else if (action === 'ignored') {
-          setIgnoredGrants(prev => prev.filter(g => g.id !== grantId));
-        }
-        // NOTE: We DO NOT add it back to recommended here.
-        // The useEffect hook will handle fetching replacements if needed.
-
-      } else {
-        // --- Setting a new action or changing an action ---
-        // Record the new interaction using the API
-        // The API will handle deleting any previous interactions
-        const { error: recordError } = await apiClient.users.recordInteraction(
-          user.id,
-          grantId,
-          action
-        );
-        
-        if (recordError) {
-          console.error('Error recording interaction:', recordError);
-          throw recordError;
-        }
-
-        // Update local state:
-        // 1. Remove from *all* lists first to handle changes and ensure no duplicates
-        setRecommendedGrants(prev => prev.filter(g => g.id !== grantId));
-        setSavedGrants(prev => prev.filter(g => g.id !== grantId));
-        setAppliedGrants(prev => prev.filter(g => g.id !== grantId));
-        setIgnoredGrants(prev => prev.filter(g => g.id !== grantId));
-
-        // 2. Add to the *new* appropriate list
-        if (action === 'saved') {
-          setSavedGrants(prev => [...prev, grant]);
-        } else if (action === 'applied') {
-          setAppliedGrants(prev => [...prev, grant]);
-        } else if (action === 'ignored') {
-          setIgnoredGrants(prev => [...prev, grant]);
-        }
-        // NOTE: The useEffect hook will handle fetching replacements if the grant was removed from recommended.
-      }
-
+      // After successful interaction, refresh the dashboard data
+      await refetch();
     } catch (error: any) {
-      console.error(`Error ${action} grant:`, error.message || error);
+      console.error(`Error handling ${action} interaction:`, error);
       setError(`Failed to ${action.replace('ed', '')} grant: ${error.message || 'Please try again.'}`);
     }
   };
@@ -706,12 +470,12 @@ export default function Dashboard() {
                           agency={scoredGrant.agency_name}
                           closeDate={scoredGrant.close_date}
                           fundingAmount={scoredGrant.award_ceiling}
-                          description={scoredGrant.description}
+                          description={scoredGrant.description_short}
                           categories={scoredGrant.activity_category || []}
                           onSave={() => handleGrantInteraction(scoredGrant.id, 'saved')}
                           onApply={() => handleApplyClick(scoredGrant.id)} // Shows confirmation first
                           onIgnore={() => handleGrantInteraction(scoredGrant.id, 'ignored')}
-                          onShare={() => handleShare(scoredGrant.id)}
+                          onShare={() => handleShareGrant(scoredGrant.id)}
                           matchScore={scoredGrant.matchScore}
                           showMatchScore={true}
                           linkParams={`?from=dashboard&tab=recommended`}
@@ -777,12 +541,12 @@ export default function Dashboard() {
                         agency={grant.agency_name}
                         closeDate={grant.close_date}
                         fundingAmount={grant.award_ceiling}
-                        description={grant.description}
+                        description={grant.description_short}
                         categories={grant.activity_category || []}
                         onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows unsaving
                         onApply={() => handleApplyClick(grant.id)}
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
-                        onShare={() => handleShare(grant.id)}
+                        onShare={() => handleShareGrant(grant.id)}
                         isSaved={true}
                         linkParams={`?from=dashboard&tab=saved`}
                       />
@@ -844,12 +608,12 @@ export default function Dashboard() {
                         agency={grant.agency_name}
                         closeDate={grant.close_date}
                         fundingAmount={grant.award_ceiling}
-                        description={grant.description}
+                        description={grant.description_short}
                         categories={grant.activity_category || []}
                         onApply={() => handleGrantInteraction(grant.id, 'applied')} // Allows un-applying
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows ignoring
                         onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows saving
-                        onShare={() => handleShare(grant.id)}
+                        onShare={() => handleShareGrant(grant.id)}
                         isApplied={true}
                         linkParams={`?from=dashboard&tab=applied`}
                       />
@@ -912,12 +676,12 @@ export default function Dashboard() {
                         agency={grant.agency_name}
                         closeDate={grant.close_date}
                         fundingAmount={grant.award_ceiling}
-                        description={grant.description}
+                        description={grant.description_short}
                         categories={grant.activity_category || []}
                         onSave={() => handleGrantInteraction(grant.id, 'saved')}
                         onApply={() => handleApplyClick(grant.id)}
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows un-ignoring
-                        onShare={() => handleShare(grant.id)}
+                        onShare={() => handleShareGrant(grant.id)}
                         isIgnored={true}
                         linkParams={`?from=dashboard&tab=ignored`}
                       />

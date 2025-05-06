@@ -13,10 +13,10 @@ export function middleware(request: NextRequest) {
   const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval';
-    style-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline' https://rsms.me;
     img-src 'self' data: https:;
-    font-src 'self';
-    connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} ${process.env.NEXT_PUBLIC_API_URL};
+    font-src 'self' https://rsms.me;
+    connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL} ${process.env.NEXT_PUBLIC_API_URL} http://localhost:3001;
     frame-ancestors 'none';
     form-action 'self';
     base-uri 'self';

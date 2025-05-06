@@ -3,38 +3,48 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Layout from '@/components/Layout/Layout';
-import supabase from '@/lib/supabaseClient';
+import { grantsApi } from '@/lib/apiClient';
 import { Grant } from '@/types/grant';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Home() {
   const [featuredGrants, setFeaturedGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { session } = useAuth();
 
   useEffect(() => {
     const fetchFeaturedGrants = async () => {
       try {
+        setLoading(true);
+        setError(null);
+        
         const today = new Date().toISOString();
-        // Get grants with upcoming deadlines and high funding amounts
-        const { data, error } = await supabase
-          .from('grants')
-          .select('*')
-          .gt('close_date', today)
-          .not('award_ceiling', 'is', null)
-          .order('award_ceiling', { ascending: false })
-          .order('close_date', { ascending: true })
-          .limit(3);
+        // Get grants with upcoming deadlines and high funding amounts using the API
+        const response = await grantsApi.getGrants({
+          close_date_min: today,
+          has_award_ceiling: 'true',
+          sort_by: 'award_ceiling',
+          sort_direction: 'desc',
+          limit: '3'
+        }, session?.access_token);
 
-        if (error) throw error;
-        setFeaturedGrants(data || []);
+        if (response.error) throw new Error(response.error);
+        
+        // The API response structure is different from the direct Supabase response
+        // The grants data is in response.data.grants
+        const grants = response.data?.grants || [];
+        setFeaturedGrants(grants);
       } catch (error) {
         console.error('Error fetching featured grants:', error);
+        setError('Failed to load latest grants. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchFeaturedGrants();
-  }, []);
+  }, [session]); // Add session to dependency array
 
   // Format currency
   const formatCurrency = (amount: number | null) => {
@@ -104,6 +114,17 @@ export default function Home() {
                           <div className="h-4 bg-gray-200 rounded w-1/2"></div>
                         </div>
                       ))
+                    ) : error ? (
+                      // Error state
+                      <div className="bg-red-50 rounded-lg p-4 text-center">
+                        <p className="text-red-600 text-sm">{error}</p>
+                        <button
+                          onClick={() => window.location.reload()}
+                          className="mt-2 text-xs text-primary-600 hover:text-primary-700"
+                        >
+                          Try again
+                        </button>
+                      </div>
                     ) : featuredGrants.length > 0 ? (
                       // Real grants
                       featuredGrants.map((grant) => (

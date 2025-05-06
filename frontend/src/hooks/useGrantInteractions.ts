@@ -117,7 +117,7 @@ export function useGrantInteractions({
         setInteractionLoading(false);
       }
     },
-    [userId, onError]
+    [user, onError] // Keep user in dependency array
   );
 
   /**

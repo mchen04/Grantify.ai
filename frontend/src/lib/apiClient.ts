@@ -15,16 +15,21 @@ export interface ApiResponse<T> {
 // Generic fetch function with error handling
 async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  accessToken?: string | null
 ): Promise<ApiResponse<T>> {
   try {
     const url = `${API_BASE_URL}${endpoint}`;
     
     // Default headers
-    const headers = {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     };
+
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
     
     const response = await fetch(url, {
       ...options,
@@ -51,27 +56,27 @@ async function fetchApi<T>(
 // Grants API
 export const grantsApi = {
   // Get all grants with optional filters
-  getGrants: async (filters?: Record<string, any>) => {
+  getGrants: async (filters?: Record<string, any>, accessToken?: string | null) => {
     const queryParams = filters
       ? `?${new URLSearchParams(filters as Record<string, string>).toString()}`
       : '';
     
-    return fetchApi<any>(`/grants${queryParams}`);
+    return fetchApi<any>(`/grants${queryParams}`, {}, accessToken);
   },
   
   // Get a specific grant by ID
-  getGrantById: async (id: string) => {
-    return fetchApi<any>(`/grants/${id}`);
+  getGrantById: async (id: string, accessToken?: string | null) => {
+    return fetchApi<any>(`/grants/${id}`, {}, accessToken);
   },
   
   // Get similar grants
-  getSimilarGrants: async (params: Record<string, any>) => {
+  getSimilarGrants: async (params: Record<string, any>, accessToken?: string | null) => {
     const queryParams = new URLSearchParams(params as Record<string, string>).toString();
-    return fetchApi<any>(`/grants/similar?${queryParams}`);
+    return fetchApi<any>(`/grants/similar?${queryParams}`, {}, accessToken);
   },
   
   // Get recommended grants for a user
-  getRecommendedGrants: async (userId: string, options?: { exclude?: string[], limit?: number }) => {
+  getRecommendedGrants: async (userId: string, options?: { exclude?: string[], limit?: number }, accessToken?: string | null) => {
     let queryParams = `?userId=${userId}`;
     
     if (options?.exclude && options.exclude.length > 0) {
@@ -82,27 +87,27 @@ export const grantsApi = {
       queryParams += `&limit=${options.limit}`;
     }
     
-    return fetchApi<any>(`/grants/recommended${queryParams}`);
+    return fetchApi<any>(`/grants/recommended${queryParams}`, {}, accessToken);
   },
 };
 
 // Users API
 export const usersApi = {
   // Get user preferences
-  getUserPreferences: async (userId: string) => {
-    return fetchApi<any>(`/users/preferences?userId=${userId}`);
+  getUserPreferences: async (userId: string, accessToken?: string | null) => {
+    return fetchApi<any>(`/users/preferences?userId=${userId}`, {}, accessToken);
   },
   
   // Update user preferences
-  updateUserPreferences: async (userId: string, preferences: any) => {
+  updateUserPreferences: async (userId: string, preferences: any, accessToken?: string | null) => {
     return fetchApi<any>('/users/preferences', {
       method: 'POST',
       body: JSON.stringify({ userId, preferences }),
-    });
+    }, accessToken);
   },
   
   // Record user interaction with a grant
-  recordInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+  recordInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored', accessToken?: string | null) => {
     return fetchApi<any>('/users/interactions', {
       method: 'POST',
       body: JSON.stringify({
@@ -111,7 +116,7 @@ export const usersApi = {
         action,
         timestamp: new Date().toISOString(),
       }),
-    });
+    }, accessToken);
   },
 
   // Get user interactions
@@ -119,7 +124,8 @@ export const usersApi = {
     userId: string,
     action?: 'saved' | 'applied' | 'ignored',
     grantId?: string,
-    additionalParams?: Record<string, any>
+    additionalParams?: Record<string, any>,
+    accessToken?: string | null
   ) => {
     let queryParams = `?userId=${userId}`;
     
@@ -140,11 +146,11 @@ export const usersApi = {
       });
     }
     
-    return fetchApi<any>(`/users/interactions${queryParams}`);
+    return fetchApi<any>(`/users/interactions${queryParams}`, {}, accessToken);
   },
   
   // Delete user interaction
-  deleteInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored') => {
+  deleteInteraction: async (userId: string, grantId: string, action: 'saved' | 'applied' | 'ignored', accessToken?: string | null) => {
     return fetchApi<any>('/users/interactions/delete', {
       method: 'DELETE',
       body: JSON.stringify({
@@ -152,7 +158,7 @@ export const usersApi = {
         grant_id: grantId,
         action: action
       }),
-    });
+    }, accessToken);
   },
 };
 
