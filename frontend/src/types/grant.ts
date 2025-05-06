@@ -46,7 +46,6 @@ export interface Grant {
 
 export interface GrantFilter {
   searchTerm: string;
-  sources: string[];
   fundingMin: number;
   fundingMax: number;
   includeFundingNull: boolean;
@@ -55,7 +54,6 @@ export interface GrantFilter {
   deadlineMaxDays: number;
   includeNoDeadline: boolean;
   onlyNoDeadline: boolean;
-  costSharing: string;
   sortBy: string;
   page: number;
   agency_name?: string;

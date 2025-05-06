@@ -55,9 +55,13 @@ async function fetchApi<T>(
 
 // Grants API
 export const grantsApi = {
-  // Get all grants with optional filters
-  getGrants: async (filters?: Record<string, any>, accessToken?: string | null) => {
-    const queryParams = filters
+  // Get all grants with optional filters and sorting
+  getGrants: async (filters?: Record<string, any>, sortBy?: string, accessToken?: string | null) => {
+    const params = new URLSearchParams(filters as Record<string, string>);
+    if (sortBy) {
+      params.append('sortBy', sortBy);
+    }
+    const queryParams = params.toString()
       ? `?${new URLSearchParams(filters as Record<string, string>).toString()}`
       : '';
     

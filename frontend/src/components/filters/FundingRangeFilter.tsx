@@ -116,12 +116,14 @@ const FundingRangeFilter: React.FC<FundingRangeFilterProps> = ({
 
   // Predefined funding ranges for quick selection
   const fundingPresets = [
+    { label: "$0 - $5M+", min: 0, max: MAX_FUNDING },
     { label: "Any", min: 0, max: MAX_FUNDING },
     { label: "Under $100K", min: 0, max: 100000 },
     { label: "$100K-$500K", min: 100000, max: 500000 },
     { label: "$500K-$1M", min: 500000, max: 1000000 },
     { label: "$1M-$5M", min: 1000000, max: 5000000 },
-    { label: "$5M+", min: 5000000, max: MAX_FUNDING }
+    { label: "$5M+", min: 5000000, max: MAX_FUNDING },
+    { label: "$0", min: 0, max: 0 }
   ];
 
   return (

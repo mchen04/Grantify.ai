@@ -34,8 +34,21 @@ router.get('/',
       };
 
       // Additional parameters that might be passed from the frontend
-      if (req.query.close_date_min) {
-        (filters as any).close_date_min = req.query.close_date_min as string;
+      // Additional parameters that might be passed from the frontend
+      if (req.query.deadline_min) {
+        (filters as any).deadline_min = req.query.deadline_min as string;
+      }
+      
+      if (req.query.deadline_max) {
+        (filters as any).deadline_max = req.query.deadline_max as string;
+      }
+      
+      if (req.query.deadline_null) {
+        (filters as any).deadline_null = req.query.deadline_null === 'true';
+      }
+
+      if (req.query.funding_null) {
+        (filters as any).funding_null = req.query.funding_null === 'true';
       }
       
       if (req.query.has_award_ceiling) {

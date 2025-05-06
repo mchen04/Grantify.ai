@@ -59,6 +59,11 @@ interface GrantFilters {
   keywords?: string[];
   page?: number;
   limit?: number;
+  // Added deadline and funding null filters
+  deadline_min?: string;
+  deadline_max?: string;
+  deadline_null?: boolean;
+  funding_null?: boolean;
 }
 
 /**
@@ -339,105 +344,137 @@ class GrantsService {
   async getGrants(filters: GrantFilters = {}): Promise<TransformedGrant[]> {
     try {
       console.log('Fetching grants with filters:', JSON.stringify(filters, null, 2));
-      
+
       // First, check if we can access the grants table at all
       const testQuery = await supabase.from('grants').select('count');
       if (testQuery.error) {
         console.error('Error accessing grants table:', testQuery.error);
         throw new Error(`Cannot access grants table: ${testQuery.error.message}`);
       }
-      
+
       console.log(`Found ${testQuery.data?.[0]?.count || 0} total grants in database`);
-      
+
       // Now proceed with the actual query
       let query = supabase.from('grants').select('*');
-      
+
       // Apply filters
       if (filters.search) {
         query = query.or(`title.ilike.%${filters.search}%,description_short.ilike.%${filters.search}%,description_full.ilike.%${filters.search}%`);
       }
-      
+
       if (filters.category) {
         query = query.eq('category', filters.category);
       }
-      
+
       if (filters.agency_name) {
         query = query.eq('agency_name', filters.agency_name);
       }
-      
+
       if (filters.agency_subdivision) {
         query = query.eq('agency_subdivision', filters.agency_subdivision);
       }
-      
+
       if (filters.grant_type) {
         query = query.eq('grant_type', filters.grant_type);
       }
-      
+
       if (filters.status) {
         query = query.eq('status', filters.status);
       }
-      
+
       if (filters.keywords && Array.isArray(filters.keywords)) {
         query = query.contains('keywords', filters.keywords);
       }
-      
-      if (filters.funding_min) {
+
+      // Apply funding filters
+      if (filters.funding_min !== undefined) { // Use !== undefined to include 0
         query = query.gte('award_floor', filters.funding_min);
       }
-      
-      if (filters.funding_max) {
+
+      if (filters.funding_max !== undefined) { // Use !== undefined to include 0
         query = query.lte('award_ceiling', filters.funding_max);
       }
-      
+
+      if (filters.funding_null === true) {
+        query = query.is('award_ceiling', null); // Assuming award_ceiling being null means no funding specified
+      } else if (filters.funding_null === false) {
+         query = query.not('award_ceiling', 'is', null); // Exclude grants with no funding if funding_null is explicitly false
+      }
+
+
       if (filters.activity_categories && Array.isArray(filters.activity_categories)) {
         query = query.contains('activity_category', filters.activity_categories);
       }
-      
+
       if (filters.eligible_applicant_types && Array.isArray(filters.eligible_applicant_types)) {
         query = query.contains('eligible_applicants', filters.eligible_applicant_types);
       }
-      
-      // Handle additional parameters that might be passed from the frontend
-      if ((filters as any).close_date_min) {
-        console.log(`Filtering by minimum close date: ${(filters as any).close_date_min}`);
-        query = query.gte('close_date', (filters as any).close_date_min);
+
+      // Apply deadline filters
+      if (filters.deadline_null === true) {
+        query = query.is('close_date', null);
+      } else {
+        if (filters.deadline_min) {
+          console.log(`Filtering by minimum close date: ${filters.deadline_min}`);
+          query = query.gte('close_date', filters.deadline_min);
+        }
+
+        if (filters.deadline_max) {
+          console.log(`Filtering by maximum close date: ${filters.deadline_max}`);
+          query = query.lte('close_date', filters.deadline_max);
+        }
       }
-      
+
       if ((filters as any).has_award_ceiling === true) {
         console.log('Filtering to include only grants with award ceiling');
         query = query.not('award_ceiling', 'is', null);
       }
-      
+
       // Apply sorting
-      if ((filters as any).sort_by) {
-        const sortBy = (filters as any).sort_by;
-        const sortDirection = (filters as any).sort_direction === 'desc' ? { ascending: false } : { ascending: true };
-        
-        console.log(`Sorting by ${sortBy} in ${(filters as any).sort_direction || 'asc'} order`);
-        
-        // Map frontend sort fields to database fields
-        let dbSortField = sortBy;
-        if (sortBy === 'amount') dbSortField = 'award_ceiling';
-        else if (sortBy === 'deadline') dbSortField = 'close_date';
-        else if (sortBy === 'recent') dbSortField = 'post_date';
-        
-        query = query.order(dbSortField, sortDirection);
-      } else {
-        // Default sort by post date (newest first)
-        query = query.order('post_date', { ascending: false });
+      const sortBy = (filters as any).sort_by;
+      console.log(`Sorting by: ${sortBy}`);
+
+      switch (sortBy) {
+        case 'recent':
+          query = query.order('post_date', { ascending: false });
+          break;
+        case 'deadline':
+          query = query.order('close_date', { ascending: true });
+          break;
+        case 'deadline_latest':
+          query = query.order('close_date', { ascending: false });
+          break;
+        case 'amount':
+          query = query.order('award_ceiling', { ascending: false });
+          break;
+        case 'amount_asc':
+          query = query.order('award_ceiling', { ascending: true });
+          break;
+        case 'title_asc':
+          query = query.order('title', { ascending: true });
+          break;
+        case 'title_desc':
+          query = query.order('title', { ascending: false });
+          break;
+        case 'relevance':
+        default:
+          // Default sort by relevance (can be improved with full-text search ranking)
+          // For now, default to recent if relevance is selected or no sort is specified
+          query = query.order('post_date', { ascending: false });
+          break;
       }
-      
+
       // Pagination
       const page = filters.page || 1;
       const limit = filters.limit || 20;
       const offset = (page - 1) * limit;
-      
+
       query = query.range(offset, offset + limit - 1);
-      
+
       // Execute query
       console.log('Executing grants query...');
       const { data, error, status, statusText } = await query;
-      
+
       if (error) {
         console.error('Supabase error fetching grants:', {
           error,
@@ -447,15 +484,15 @@ class GrantsService {
         });
         throw error;
       }
-      
+
       console.log(`Successfully fetched ${data?.length || 0} grants`);
-      
+
       // If no data was returned but there was no error, return an empty array
       if (!data || data.length === 0) {
         console.log('No grants found matching the criteria');
         return [];
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error getting grants:', error);

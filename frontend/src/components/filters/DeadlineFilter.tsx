@@ -128,6 +128,8 @@ const DeadlineFilter: React.FC<DeadlineFilterProps> = ({
     { label: "Next 30 days", min: MIN_DEADLINE_DAYS, max: 30 },
     { label: "Next 90 days", min: MIN_DEADLINE_DAYS, max: 90 },
     { label: "Next 6 months", min: MIN_DEADLINE_DAYS, max: 180 },
+    { label: "Today", min: 0, max: 0 },
+    { label: "1 year+", min: 365, max: MAX_DEADLINE_DAYS },
   ];
 
   return (

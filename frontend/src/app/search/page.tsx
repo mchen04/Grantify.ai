@@ -28,10 +28,8 @@ const DynamicApplyConfirmationPopup = dynamic(
 
 // Components
 import SearchBar from '@/components/search/SearchBar';
-import MultiSelect from '@/components/filters/MultiSelect';
 import FundingRangeFilter from '@/components/filters/FundingRangeFilter';
 import DeadlineFilter from '@/components/filters/DeadlineFilter';
-import CostSharingFilter from '@/components/filters/CostSharingFilter';
 import SortAndFilterControls from '@/components/search/SortAndFilterControls';
 import ActiveFilters from '@/components/filters/ActiveFilters';
 import SearchResults from '@/components/search/SearchResults';
@@ -47,7 +45,6 @@ export default function Search() {
 
   const [filter, setFilter] = useState<GrantFilter>({
     searchTerm: '',
-    sources: ['grants.gov'], // Default to grants.gov as the only source for now
     fundingMin: 0,
     fundingMax: MAX_FUNDING,
     includeFundingNull: false, // Changed to false - hide grants with no funding by default
@@ -56,17 +53,12 @@ export default function Search() {
     deadlineMaxDays: MAX_DEADLINE_DAYS,
     includeNoDeadline: false, // Changed to false - hide grants with no deadline by default
     onlyNoDeadline: false,
-    costSharing: '',
     sortBy: 'relevance',
     page: 1
   });
 
   const { user } = useAuth();
 
-  const sourceOptions: SelectOption[] = [
-    { value: 'grants.gov', label: 'Grants.gov' }
-    // More sources can be added in the future as needed
-  ];
 
   const sortOptions: SelectOption[] = [
     { value: 'relevance', label: 'Relevance' },
@@ -123,7 +115,6 @@ export default function Search() {
       search: filter.searchTerm,
       limit: SEARCH_GRANTS_PER_PAGE,
       page: filter.page,
-      sources: filter.sources?.join(','),
       sort_by: filter.sortBy
     };
     
@@ -161,12 +152,7 @@ export default function Search() {
       apiFilters.include_no_funding = filter.includeFundingNull;
     }
     
-    // Apply cost sharing filter
-    if (filter.costSharing) {
-      apiFilters.cost_sharing = filter.costSharing;
-    }
-    
-    return apiClient.grants.getGrants(apiFilters);
+    return apiClient.grants.getGrants(apiFilters, filter.sortBy);
   }, [filter, SEARCH_GRANTS_PER_PAGE, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS, MAX_FUNDING]);
 
   useEffect(() => {
@@ -218,7 +204,6 @@ export default function Search() {
   const resetFilters = useCallback(() => {
     setFilter({
       searchTerm: '',
-      sources: ['grants.gov'], // Keep the default source
       fundingMin: 0,
       fundingMax: MAX_FUNDING,
       includeFundingNull: true,
@@ -227,7 +212,6 @@ export default function Search() {
       deadlineMaxDays: MAX_DEADLINE_DAYS,
       includeNoDeadline: true,
       onlyNoDeadline: false,
-      costSharing: '',
       sortBy: 'relevance',
       page: 1
     });
@@ -458,13 +442,6 @@ export default function Search() {
                 
                 <div className="px-6 pb-6 pt-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <MultiSelect
-                      options={sourceOptions}
-                      selectedValues={filter.sources || []}
-                      onChange={(values) => updateFilter('sources', values)}
-                      label="Data Sources"
-                    />
-                    
                     <div>
                       <label className="block text-sm font-medium text-gray-800 mb-1">Sort by</label>
                       <select
@@ -504,10 +481,6 @@ export default function Search() {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <CostSharingFilter
-                      costSharing={filter.costSharing}
-                      setCostSharing={(value) => updateFilter('costSharing', value)}
-                    />
                     
                     <div className="flex items-end">
                       <button
@@ -543,7 +516,7 @@ export default function Search() {
             onConfirmApply={handleConfirmApply}
           />
         </div>
-
+        
         {/* Right ad sidebar - pushed to edge */}
         <div className="hidden lg:block w-44 flex-shrink-0 -mr-4">
           <div className="sticky top-8">
