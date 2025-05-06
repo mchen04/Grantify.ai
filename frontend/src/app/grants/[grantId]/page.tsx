@@ -88,7 +88,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   // Properly unwrap the params Promise using React.use()
   const unwrappedParams = use(params as Promise<PageParams>);
   const grantId = unwrappedParams.grantId;
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const searchParams = useSearchParams();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,12 +118,13 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
           return;
         }
         
-        setGrant(data);
+        setGrant(data.grant); // Correctly set the nested grant object
+        console.log('Fetched grant data:', JSON.stringify(data, null, 2)); // Keep logging for verification
         
         // If user is logged in, check if they've interacted with this grant
         if (user) {
           // Fetch user interactions for this grant using apiClient
-          const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, grantId);
+          const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, grantId, undefined, session?.access_token);
           
           if (interactionsError) throw new Error(interactionsError);
           
@@ -403,6 +404,9 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         <div className="card p-6 mb-8 border-t-4 border-t-primary-600 transition-all duration-300 hover:shadow-lg">
           <div className="mb-6">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">{grant.title}</h1>
+            {grant.description_short && (
+              <p className="text-gray-700 italic mb-4">{grant.description_short}</p>
+            )}
           </div>
           
           <div className="grant-card-tags mb-6">
@@ -414,6 +418,22 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 {category}
               </span>
             ))}
+             {grant.keywords && grant.keywords.map((keyword, index) => (
+              <span
+                key={`keyword-${index}`}
+                className="grant-tag bg-blue-100 text-blue-800"
+              >
+                {keyword}
+              </span>
+            ))}
+             {grant.category && (
+              <span
+                key="category"
+                className="grant-tag bg-purple-100 text-purple-800"
+              >
+                {grant.category}
+              </span>
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
@@ -424,6 +444,9 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
               <div>
                 <span className="font-medium text-gray-800 block">Agency</span>
                 <span className="text-gray-600">{grant.agency_name} {grant.agency_code ? `(${grant.agency_code})` : ''}</span>
+                {grant.agency_subdivision && (
+                  <span className="text-gray-600 block text-xs mt-1">Subdivision: {grant.agency_subdivision}</span>
+                )}
               </div>
             </div>
             <div className="flex items-center">
@@ -459,7 +482,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 Description
               </h2>
               <div className="prose max-w-none text-gray-700">
-                {grant.description_full.split('\n\n').map((paragraph, index) => (
+                {(grant.description_full ?? '').split('\n\n').map((paragraph, index) => (
                   <p key={index} className="mb-4">{paragraph}</p>
                 ))}
               </div>
@@ -480,6 +503,12 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 </ul>
               ) : (
                 <p className="text-gray-700">No eligibility information available.</p>
+              )}
+              {grant.eligibility_pi && (
+                <div className="mt-4 text-gray-700">
+                  <span className="font-medium text-gray-800 block">Principal Investigator Eligibility:</span>
+                  <span>{grant.eligibility_pi}</span>
+                </div>
               )}
             </div>
             
@@ -519,6 +548,28 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                     <span>{grant.grantor_contact_phone || 'Not specified'}</span>
                   </div>
                 </div>
+                 {grant.grantor_contact_role && (
+                  <div className="flex items-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600 mr-2 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <span className="font-medium text-gray-800 block">Role</span>
+                      <span>{grant.grantor_contact_role}</span>
+                    </div>
+                  </div>
+                )}
+                {grant.grantor_contact_affiliation && (
+                  <div className="flex items-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600 mr-2 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <span className="font-medium text-gray-800 block">Affiliation</span>
+                      <span>{grant.grantor_contact_affiliation}</span>
+                    </div>
+                  </div>
+                )}
                 {grant.source_url && (
                   <div className="col-span-2 mt-2">
                     <a
@@ -536,6 +587,21 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 )}
               </div>
             </div>
+             {grant.additional_notes && (
+              <div className="card p-6 transition-all duration-300 hover:shadow-lg">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-600 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Additional Notes
+                </h2>
+                <div className="prose max-w-none text-gray-700">
+                  {grant.additional_notes.split('\n\n').map((paragraph, index) => (
+                    <p key={index} className="mb-4">{paragraph}</p>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Right Column - Sidebar */}
@@ -549,6 +615,14 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
               </h2>
               
               <div className="divide-y divide-gray-200">
+                <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Status</div>
+                  <div className="w-2/3 font-medium">{grant.status || 'Not specified'}</div>
+                </div>
+                <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Data Source</div>
+                  <div className="w-2/3 font-medium">{grant.data_source || 'Not specified'}</div>
+                </div>
                 <div className="py-3 flex items-start">
                   <div className="w-1/3 text-sm text-gray-600">Posted Date</div>
                   <div className="w-2/3 font-medium">{formatDate(grant.post_date)}</div>
@@ -569,10 +643,34 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                     </div>
                   )}
                 </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">LOI Due Date</div>
+                  <div className="w-2/3 font-medium">{formatDate(grant.loi_due_date)}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Expiration Date</div>
+                  <div className="w-2/3 font-medium">{formatDate(grant.expiration_date)}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Earliest Start Date</div>
+                  <div className="w-2/3 font-medium">{formatDate(grant.earliest_start_date)}</div>
+                </div>
                 
                 <div className="py-3 flex items-start">
                   <div className="w-1/3 text-sm text-gray-600">Grant Type</div>
                   <div className="w-2/3">{grant.grant_type || 'Not specified'}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Activity Code</div>
+                  <div className="w-2/3">{grant.activity_code || 'Not specified'}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Announcement Type</div>
+                  <div className="w-2/3">{grant.announcement_type || 'Not specified'}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Clinical Trial Allowed</div>
+                  <div className="w-2/3">{grant.clinical_trial_allowed !== undefined ? (grant.clinical_trial_allowed ? 'Yes' : 'No') : 'Not specified'}</div>
                 </div>
                 
                 <div className="py-3 flex items-start">
@@ -585,6 +683,14 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                   <div className="w-2/3">
                     {formatCurrency(grant.award_floor)} - {formatCurrency(grant.award_ceiling)}
                   </div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Expected Award Count</div>
+                  <div className="w-2/3">{grant.expected_award_count !== undefined ? grant.expected_award_count : 'Not specified'}</div>
+                </div>
+                 <div className="py-3 flex items-start">
+                  <div className="w-1/3 text-sm text-gray-600">Project Period Max Years</div>
+                  <div className="w-2/3">{grant.project_period_max_years !== undefined ? grant.project_period_max_years : 'Not specified'}</div>
                 </div>
                 
                 <div className="py-3 flex items-start">

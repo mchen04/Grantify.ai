@@ -64,6 +64,7 @@ interface GrantFilters {
   deadline_max?: string;
   deadline_null?: boolean;
   funding_null?: boolean;
+  exclude_id?: string; // Added to handle similar grants filtering
 }
 
 /**
@@ -408,6 +409,12 @@ class GrantsService {
 
       if (filters.eligible_applicant_types && Array.isArray(filters.eligible_applicant_types)) {
         query = query.contains('eligible_applicants', filters.eligible_applicant_types);
+      }
+
+      // Exclude a specific grant by ID for similar grants functionality
+      if (filters.exclude_id) {
+        console.log(`Excluding grant with ID: ${filters.exclude_id}`);
+        query = query.not('id', 'eq', filters.exclude_id);
       }
 
       // Apply deadline filters

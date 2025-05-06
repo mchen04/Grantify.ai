@@ -217,6 +217,58 @@ router.get('/recommended',
   }
 );
 
+// GET /api/grants/similar - Get similar grants
+router.get('/similar',
+  async (req: Request, res: Response) => {
+    try {
+      // Parse query parameters
+      const grantId = req.query.exclude_id as string;
+      const categories = req.query.categories ? (req.query.categories as string).split(',') : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 3;
+      const activeOnly = req.query.active_only === 'true';
+
+      logger.debug('Similar grants request', {
+        grantId,
+        categories,
+        limit,
+        activeOnly,
+        userId: req.user?.id || 'unauthenticated',
+        query: req.query
+      });
+
+      // Determine which service to use
+      const service = USE_MOCK_DATA ? mockGrantsService : grantsService;
+      logger.info(`Using ${USE_MOCK_DATA ? 'MOCK' : 'REAL'} grants service for similar grants`);
+
+      // Fetch similar grants using the getGrants function with appropriate filters
+      const similarGrants = await service.getGrants({
+        exclude_id: grantId,
+        activity_categories: categories, // Assuming categories map to activity_categories
+        limit: limit,
+        status: activeOnly ? 'active' : undefined // Assuming active_only maps to status 'active'
+      });
+
+      res.json({
+        message: 'Similar grants fetched successfully',
+        grants: similarGrants,
+        count: similarGrants.length
+      });
+    } catch (error) {
+      logger.error('Error fetching similar grants:', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: req.user?.id || 'unauthenticated',
+        query: req.query
+      });
+
+      res.status(500).json({
+        message: 'Failed to fetch similar grants',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+);
+
 // GET /api/grants/:id - Get a specific grant by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {

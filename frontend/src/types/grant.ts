@@ -37,6 +37,7 @@ export interface Grant {
   clinical_trial_allowed?: boolean;
   additional_notes?: string;
   keywords?: string[];
+  category?: string;
   interactions?: Array<{
     action: 'saved' | 'applied' | 'ignored';
     timestamp: string;
