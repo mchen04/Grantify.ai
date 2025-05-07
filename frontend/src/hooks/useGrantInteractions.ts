@@ -70,6 +70,12 @@ export function useGrantInteractions({
       setInteractionLoading(true);
 
       try {
+        console.log('User object before interaction:', user);
+        console.log('Session object before interaction:', session);
+        console.log('Access token before interaction:', session?.access_token);
+        console.log('User object before interaction:', user);
+        console.log('Session object before interaction:', session);
+        console.log('Access token before interaction:', session?.access_token);
         // Record the interaction using apiClient
         const { error } = await apiClient.users.recordInteraction(
           user.id,

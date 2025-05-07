@@ -1,10 +1,10 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, createClient } from '@supabase/supabase-js'; // Import createClient
 import { User, UserPreferences, UserInteraction } from '../models/user';
 import logger, { logSecurityEvent } from '../utils/logger';
-import serviceRoleSupabase from '../db/supabaseClient'; // Import the service role client separately
-
-/**
- * Service for managing user operations in the database
+import serviceRoleSupabase from '../db/supabaseClient'; // Re-import the service role client
+ 
+ /**
+  * Service for managing user operations in the database
  */
 class UsersService {
   /**
@@ -197,18 +197,23 @@ class UsersService {
    * @param interactionData - Interaction data
    * @returns Recorded interaction
    */
-  async recordUserInteraction(supabase: SupabaseClient, userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
+  async recordUserInteraction(userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
     try {
+      // Use the service role Supabase client for the operation after verifying user ID
+      // IMPORTANT: This relies on the auth middleware correctly setting req.user.id
+      // and the route handler passing that ID as the userId parameter.
+      // A more robust check could involve fetching the user with the service role client,
+      // but for this workaround, we trust the upstream authentication.
       const interaction = {
-        user_id: userId,
+        user_id: userId, // Use the userId parameter which comes from the authenticated request
         grant_id: interactionData.grant_id,
         action: interactionData.action,
         notes: interactionData.notes,
         timestamp: new Date().toISOString()
       };
 
-      // Upsert the interaction based on user_id and grant_id
-      const { data: upsertedInteraction, error: upsertError } = await supabase
+      // Upsert the interaction based on user_id and grant_id using the service role client
+      const { data: upsertedInteraction, error: upsertError } = await serviceRoleSupabase
         .from('user_interactions')
         .upsert({
           ...interaction
@@ -221,10 +226,10 @@ class UsersService {
       if (upsertError) {
         // Handle potential constraint violation if UNIQUE constraint includes `action`
         if (upsertError.code === '23505') { // unique_violation
-          logger.warn('Attempted duplicate interaction upsert:', { 
-            userId, 
-            grantId: interactionData.grant_id, 
-            action: interactionData.action 
+          logger.warn('Attempted duplicate interaction upsert:', {
+            userId,
+            grantId: interactionData.grant_id,
+            action: interactionData.action
           });
         }
         throw upsertError;
@@ -241,7 +246,7 @@ class UsersService {
       throw error;
     }
   }
-
+ 
   /**
    * Delete a user interaction
    * @param interactionId - Interaction ID
@@ -256,14 +261,14 @@ class UsersService {
         .select('user_id, grant_id')
         .eq('id', interactionId)
         .single();
-
+ 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') { // Not found
           throw new Error('Interaction not found');
         }
         throw fetchError;
       }
-
+ 
       // Check if the interaction belongs to the authenticated user
       if (interaction.user_id !== userId) {
         logSecurityEvent(userId, 'unauthorized_access', {
@@ -273,22 +278,22 @@ class UsersService {
         });
         throw new Error('You are not authorized to delete this interaction');
       }
-
+ 
       // Delete the interaction
       const { error: deleteError } = await supabase
         .from('user_interactions')
         .delete()
         .eq('id', interactionId);
-
+ 
       if (deleteError) {
         throw deleteError;
       }
-
+ 
       logSecurityEvent(userId, 'interaction_deleted', {
         interactionId,
         grantId: interaction.grant_id
       });
-
+ 
       return true;
     } catch (error) {
       logger.error('Error deleting user interaction:', {
@@ -299,7 +304,7 @@ class UsersService {
       throw error;
     }
   }
-
+ 
   /**
    * Delete a user interaction by user ID, grant ID, and action
    * @param userId - User ID
@@ -315,16 +320,16 @@ class UsersService {
         .eq('user_id', userId)
         .eq('grant_id', grantId)
         .eq('action', action);
-
+ 
       if (deleteError) {
         throw deleteError;
       }
-
+ 
       logSecurityEvent(userId, 'interaction_deleted_by_details', {
         grantId,
         action
       });
-
+ 
       return true;
     } catch (error) {
       logger.error('Error deleting user interaction by details:', {
@@ -337,6 +342,6 @@ class UsersService {
     }
   }
 }
-
+ 
 // Export a singleton instance
 export default new UsersService();

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react
 import dynamic from 'next/dynamic';
 import Layout from '@/components/Layout/Layout';
 import apiClient from '@/lib/apiClient';
+import supabase from '@/lib/supabaseClient'; // Import the supabase client
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -218,11 +219,31 @@ export default function Search() {
   }, [MAX_FUNDING, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS]);
 
   const handleInteraction = useCallback(async (grantId: string, action: 'applied' | 'saved' | 'ignored', removeFromUI: boolean = true): Promise<void> => {
-    if (!user) return;
-
+    // Ensure user is logged in
+    if (!user) {
+      console.error('User not logged in for interaction.');
+      setError('You must be logged in to perform this action.');
+      return;
+    }
+ 
     try {
-      // Insert the new interaction using apiClient
-      const response = await apiClient.users.recordInteraction(user.id, grantId, action, user.session?.access_token);
+      // Explicitly get the latest session before making the API call
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+ 
+      if (sessionError || !session) {
+        console.error('Failed to get session in handleInteraction:', sessionError?.message);
+        setError('Authentication session expired or invalid. Please log in again.');
+        // Optionally redirect to login page
+        // router.push('/login');
+        return;
+      }
+ 
+      console.log('User object in handleInteraction:', user);
+      console.log('Session object in handleInteraction (fetched):', session);
+      console.log('Access token in handleInteraction (fetched):', session.access_token);
+ 
+      // Insert the new interaction using apiClient, passing the fetched access token
+      const response = await apiClient.users.recordInteraction(user.id, grantId, action, session.access_token);
       
       if (response.error) throw response.error;
 

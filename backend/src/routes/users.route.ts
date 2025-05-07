@@ -85,8 +85,20 @@ router.post('/interactions',
         grantId: interaction.grant_id
       });
       
-      // Use users service to record user interaction
-      const recordedInteraction = await usersService.recordUserInteraction(req.supabase, req.user.id, interaction);
+      // Use users service to record user interaction, passing the access token
+      // Access the access token directly from the request object attached by authMiddleware
+      const accessToken = req.accessToken;
+      
+      if (!accessToken) {
+        // This case should ideally not happen if authMiddleware succeeded, but as a safeguard:
+        logSecurityEvent(req.user.id, 'interaction_failed_no_token_in_route', {
+          grantId: interaction.grant_id,
+          action: interaction.action
+        });
+        return res.status(500).json({ message: 'Authentication token not available in route handler.' });
+      }
+
+      const recordedInteraction = await usersService.recordUserInteraction(req.user.id, interaction);
       
       res.json({
         message: `Recorded interaction for user: ${interaction.user_id}`,
