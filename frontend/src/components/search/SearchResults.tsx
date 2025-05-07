@@ -208,9 +208,14 @@ const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
       );
     }
     
+    // Filter out grants with duplicate IDs before mapping
+    const uniqueGrants = grants.filter((grant, index, self) =>
+      index === self.findIndex((g) => g.id === grant.id)
+    );
+
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 auto-rows-fr">
-        {grants.map((grant) => (
+        {uniqueGrants.map((grant) => (
           <div
             key={grant.id}
             className={`transition-opacity duration-300 h-full ${
