@@ -100,6 +100,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   const [fromSource, setFromSource] = useState<string | null>(null);
   const [tabSource, setTabSource] = useState<string | null>(null);
   const [interactionLoading, setInteractionLoading] = useState(false);
+  const [showFullDescription, setShowFullDescription] = useState(false); // State to manage description visibility
   
   // Fetch the grant data
   useEffect(() => {
@@ -482,10 +483,25 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                 Description
               </h2>
               <div className="prose max-w-none text-gray-700">
-                {(grant.description_full ?? '').split('\n\n').map((paragraph, index) => (
-                  <p key={index} className="mb-4">{paragraph}</p>
-                ))}
+                {showFullDescription ? (
+                  // Show full description when expanded
+                  (grant.description_full ?? '').split('\n\n').map((paragraph, index) => (
+                    <p key={index} className="mb-4">{paragraph}</p>
+                  ))
+                ) : (
+                  // Show short description by default
+                  <p className="mb-4">{grant.description_short}</p>
+                )}
               </div>
+              {/* Toggle button */}
+              {(grant.description_full && grant.description_full !== grant.description_short) && (
+                <button
+                  onClick={() => setShowFullDescription(!showFullDescription)}
+                  className="text-primary-600 hover:text-primary-800 font-medium mt-2 inline-block"
+                >
+                  {showFullDescription ? 'Read Less' : 'Read More'}
+                </button>
+              )}
             </div>
             
             <div className="card p-6 transition-all duration-300 hover:shadow-lg">
