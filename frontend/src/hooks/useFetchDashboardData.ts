@@ -46,8 +46,20 @@ export function useFetchDashboardData({
       setLoading(true);
       setError(null);
 
+      // **Fetch the latest session and token before making API calls**
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        console.error('Error fetching latest session:', sessionError);
+        setError('Authentication failed. Please log in again.');
+        setLoading(false);
+        return; // Stop if session cannot be retrieved
+      }
+
+      const accessToken = session.access_token;
+
       // Fetch user preferences for scoring
-      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id, user.access_token);
+      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id, accessToken); // Use accessToken
 
       if (preferencesError) {
         console.error('Error fetching user preferences:', preferencesError);
@@ -69,7 +81,7 @@ export function useFetchDashboardData({
       const today = new Date().toISOString();
 
       // Fetch all user interactions
-      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, undefined, undefined, user.access_token);
+      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, undefined, undefined, accessToken); // Use accessToken
 
       if (interactionsError) {
         console.error('Error fetching user interactions:', interactionsError);
@@ -125,7 +137,7 @@ export function useFetchDashboardData({
           exclude: interactedGrantIds,
           limit: targetRecommendedCount
         },
-        user.access_token
+        accessToken // Use accessToken
       );
 
       if (recommendedError) {
@@ -155,7 +167,7 @@ export function useFetchDashboardData({
     } finally {
       setLoading(false);
     }
-  }, [user?.id, targetRecommendedCount, enabled]);
+  }, [user?.id, targetRecommendedCount, enabled]); // Keep user?.id in dependencies
 
   // Fetch replacement recommended grants when needed
   const fetchReplacementRecommendations = useCallback(async () => {
@@ -171,6 +183,18 @@ export function useFetchDashboardData({
     setIsFetchingReplacements(true);
 
     try {
+      // **Fetch the latest session and token before making API calls**
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        console.error('Error fetching latest session for replacement:', sessionError);
+        // Don't set a global error, just log and stop this fetch
+        setIsFetchingReplacements(false);
+        return;
+      }
+
+      const accessToken = session.access_token;
+
       // Get IDs of ALL grants currently displayed in any list
       const allCurrentGrantIds = [
         ...recommendedGrants.map(g => g.id),
@@ -186,7 +210,7 @@ export function useFetchDashboardData({
           exclude: allCurrentGrantIds,
           limit: neededCount
         },
-        user.access_token
+        accessToken // Use accessToken
       );
 
       if (newGrantsError) {
@@ -194,7 +218,7 @@ export function useFetchDashboardData({
       }
 
       const newGrants = newGrantsData?.grants || [];
-      
+
       if (newGrants.length > 0 && userPreferences) {
         // Add match scores to new grants
         const scoredNewGrants = newGrants.map(grant => ({
@@ -209,7 +233,7 @@ export function useFetchDashboardData({
       setIsFetchingReplacements(false);
     }
   }, [
-    user, // Add user to dependency array
+    user?.id, // Keep user?.id in dependency array
     isFetchingReplacements,
     recommendedGrants,
     savedGrants,

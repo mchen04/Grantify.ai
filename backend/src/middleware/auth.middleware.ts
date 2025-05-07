@@ -30,20 +30,29 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     }
     
     const token = authHeader.split(' ')[1];
-    
+
+    console.log('Received token:', token); // Log the received token
+
     // Create a temporary client with the service key to verify the token
     const tempSupabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data, error } = await tempSupabase.auth.getUser(token);
-    
+
+    console.log('Supabase auth.getUser result:', { data, error }); // Log the result
+
     if (error || !data.user) {
+      console.error('Token validation failed:', error); // Log the specific error
       return res.status(401).json({ message: 'Unauthorized: Invalid token' });
     }
-    
+
     // Add user to request object
     req.user = data.user;
-    
+
     // Create a new Supabase client instance with the user's access token
-    req.supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    // IMPORTANT: Do NOT use the service key here. The client should operate with the user's privileges.
+    req.supabase = createClient(supabaseUrl, token, { // Use token directly as the key for user-authenticated client
+      auth: {
+        persistSession: false, // Prevent the client from trying to save the session
+      },
       global: {
         headers: {
           Authorization: `Bearer ${token}`,
