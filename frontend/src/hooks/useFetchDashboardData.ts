@@ -3,9 +3,9 @@ import apiClient from '@/lib/apiClient';
 import { Grant, ScoredGrant } from '@/types/grant';
 import { UserInteraction, UserPreferences } from '@/types/user';
 import { calculateMatchScore } from '@/lib/grantRecommendations';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseFetchDashboardDataProps {
-  userId: string | undefined;
   targetRecommendedCount?: number;
   enabled?: boolean;
 }
@@ -26,10 +26,10 @@ interface UseFetchDashboardDataReturn {
  * Custom hook for fetching all dashboard data including recommended, saved, applied, and ignored grants
  */
 export function useFetchDashboardData({
-  userId,
   targetRecommendedCount = 10,
   enabled = true
 }: UseFetchDashboardDataProps): UseFetchDashboardDataReturn {
+  const { user } = useAuth();
   const [recommendedGrants, setRecommendedGrants] = useState<ScoredGrant[]>([]);
   const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
   const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
@@ -40,15 +40,15 @@ export function useFetchDashboardData({
   const [isFetchingReplacements, setIsFetchingReplacements] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
-    if (!userId || !enabled) return;
+    if (!user?.id || !enabled) return;
 
     try {
       setLoading(true);
       setError(null);
 
       // Fetch user preferences for scoring
-      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(userId);
-      
+      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id, user.access_token);
+
       if (preferencesError) {
         console.error('Error fetching user preferences:', preferencesError);
         // Use default preferences
@@ -69,8 +69,8 @@ export function useFetchDashboardData({
       const today = new Date().toISOString();
 
       // Fetch all user interactions
-      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(userId);
-      
+      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, undefined, undefined, user.access_token);
+
       if (interactionsError) {
         console.error('Error fetching user interactions:', interactionsError);
         // Don't throw, try to continue
@@ -120,11 +120,12 @@ export function useFetchDashboardData({
 
       // Fetch recommended grants based on user preferences
       const { data: recommendedData, error: recommendedError } = await apiClient.grants.getRecommendedGrants(
-        userId,
+        user.id,
         {
           exclude: interactedGrantIds,
           limit: targetRecommendedCount
-        }
+        },
+        user.access_token
       );
 
       if (recommendedError) {
@@ -154,11 +155,11 @@ export function useFetchDashboardData({
     } finally {
       setLoading(false);
     }
-  }, [userId, targetRecommendedCount, enabled]);
+  }, [user?.id, targetRecommendedCount, enabled]);
 
   // Fetch replacement recommended grants when needed
   const fetchReplacementRecommendations = useCallback(async () => {
-    if (!userId || isFetchingReplacements) return;
+    if (!user?.id || isFetchingReplacements) return;
 
     const currentRecommendedCount = recommendedGrants.length;
     const neededCount = targetRecommendedCount - currentRecommendedCount;
@@ -180,11 +181,12 @@ export function useFetchDashboardData({
 
       // Fetch more recommended grants with preferences
       const { data: newGrantsData, error: newGrantsError } = await apiClient.grants.getRecommendedGrants(
-        userId,
+        user.id,
         {
           exclude: allCurrentGrantIds,
           limit: neededCount
-        }
+        },
+        user.access_token
       );
 
       if (newGrantsError) {

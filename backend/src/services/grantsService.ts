@@ -2,6 +2,7 @@ import supabase from '../db/supabaseClient';
 import { format } from 'date-fns';
 import * as readline from 'readline';
 import { Grant } from '../models/grant';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Define TransformedGrant as an alias for Grant to maintain compatibility
 type TransformedGrant = Grant;
@@ -513,7 +514,7 @@ class GrantsService {
    * @param options - Options for filtering recommendations
    * @returns Array of recommended grants
    */
-  async getRecommendedGrants(userId: string, options: { exclude?: string[], limit?: number } = {}): Promise<TransformedGrant[]> {
+  async getRecommendedGrants(supabase: SupabaseClient, userId: string, options: { exclude?: string[], limit?: number } = {}): Promise<TransformedGrant[]> {
     try {
       console.log(`Fetching recommended grants for user ${userId} with options:`, JSON.stringify(options, null, 2));
       

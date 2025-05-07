@@ -19,7 +19,7 @@ router.get('/preferences',
       logSecurityEvent(userId, 'preferences_access', { method: 'GET' });
       
       // Use users service to fetch user preferences
-      const preferences = await usersService.getUserPreferences(userId);
+      const preferences = await usersService.getUserPreferences(req.supabase, userId);
       
       res.json({
         message: `Preferences for user: ${userId}`,
@@ -52,7 +52,7 @@ router.post('/preferences',
       });
       
       // Use users service to update user preferences
-      const updatedPreferences = await usersService.updateUserPreferences(userId, preferences);
+      const updatedPreferences = await usersService.updateUserPreferences(req.supabase, userId, preferences);
       
       res.json({
         message: `Updated preferences for user: ${userId}`,
@@ -86,7 +86,7 @@ router.post('/interactions',
       });
       
       // Use users service to record user interaction
-      const recordedInteraction = await usersService.recordUserInteraction(req.user.id, interaction);
+      const recordedInteraction = await usersService.recordUserInteraction(req.supabase, req.user.id, interaction);
       
       res.json({
         message: `Recorded interaction for user: ${interaction.user_id}`,
@@ -114,7 +114,7 @@ router.get('/interactions',
       const action = req.query.action as string | undefined;
       
       // Use users service to fetch interactions
-      const result = await usersService.getUserInteractions(userId, action);
+      const result = await usersService.getUserInteractions(req.supabase, userId, action);
       
       res.json({
         message: `User interactions for user: ${userId}`,
@@ -124,6 +124,40 @@ router.get('/interactions',
       logger.error('Error fetching user interactions:', {
         error: error instanceof Error ? error.message : error,
         userId: req.user?.id
+      });
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// DELETE /api/users/interactions/delete - Delete user interaction
+router.delete('/interactions/delete',
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const { grant_id, action } = req.body;
+
+      if (!grant_id || !action) {
+        return res.status(400).json({ message: 'Missing grant_id or action in request body' });
+      }
+
+      logSecurityEvent(userId, 'grant_interaction_delete', {
+        action,
+        grantId: grant_id
+      });
+
+      await usersService.deleteUserInteractionByDetails(req.supabase, userId, grant_id, action);
+
+      res.json({
+        message: `Deleted interaction for user: ${userId}, grant: ${grant_id}, action: ${action}`
+      });
+    } catch (error) {
+      logger.error('Error deleting user interaction:', {
+        error: error instanceof Error ? error.message : error,
+        userId: req.user?.id,
+        grantId: req.body.grant_id,
+        action: req.body.action
       });
       res.status(500).json({ message: 'Internal server error' });
     }

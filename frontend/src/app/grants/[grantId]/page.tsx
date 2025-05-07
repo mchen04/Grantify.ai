@@ -188,7 +188,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         const { error: deleteError } = await apiClient.users.deleteInteraction(
           user.id,
           grantId,
-          action
+          action,
+          session?.access_token
         );
         
         if (deleteError) throw new Error(deleteError);
@@ -198,7 +199,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         const { error } = await apiClient.users.recordInteraction(
           user.id,
           grantId,
-          action
+          action,
+          session?.access_token
         );
         
         if (error) throw new Error(error);

@@ -2,9 +2,9 @@ import { useState, useCallback } from 'react';
 import apiClient from '@/lib/apiClient';
 import { Grant } from '@/types/grant';
 import { UserInteraction } from '@/types/user';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseGrantInteractionsProps {
-  userId: string | undefined;
   onError?: (message: string) => void;
 }
 
@@ -23,10 +23,10 @@ interface UseGrantInteractionsReturn {
  * Custom hook for managing grant interactions (save, apply, ignore, share)
  */
 export function useGrantInteractions({
-  userId,
   onError = () => {}
 }: UseGrantInteractionsProps): UseGrantInteractionsReturn {
   const [interactionLoading, setInteractionLoading] = useState(false);
+  const { user, session } = useAuth();
 
   /**
    * Check if the specified action is the current interaction for the grant
@@ -62,7 +62,7 @@ export function useGrantInteractions({
    */
   const handleInteraction = useCallback(
     async (grantId: string, action: 'saved' | 'applied' | 'ignored', removeFromUI: boolean = false): Promise<void> => {
-      if (!userId) {
+      if (!user || !session) {
         onError('You must be logged in to perform this action');
         return;
       }
@@ -72,9 +72,10 @@ export function useGrantInteractions({
       try {
         // Record the interaction using apiClient
         const { error } = await apiClient.users.recordInteraction(
-          userId,
+          user.id,
           grantId,
-          action
+          action,
+          session.access_token
         );
 
         if (error) throw new Error(error);
@@ -86,7 +87,7 @@ export function useGrantInteractions({
         setInteractionLoading(false);
       }
     },
-    [userId, onError]
+    [user, session, onError]
   );
 
   /**
@@ -94,7 +95,7 @@ export function useGrantInteractions({
    */
   const handleUndoInteraction = useCallback(
     async (grantId: string, action: 'saved' | 'applied' | 'ignored'): Promise<void> => {
-      if (!userId) {
+      if (!user || !session) {
         onError('You must be logged in to perform this action');
         return;
       }
@@ -104,9 +105,10 @@ export function useGrantInteractions({
       try {
         // Delete the interaction using apiClient
         const { error } = await apiClient.users.deleteInteraction(
-          userId,
+          user.id,
           grantId,
-          action
+          action,
+          session.access_token
         );
 
         if (error) throw new Error(error);
@@ -117,7 +119,7 @@ export function useGrantInteractions({
         setInteractionLoading(false);
       }
     },
-    [user, onError] // Keep user in dependency array
+    [user, session, onError] // Keep user in dependency array
   );
 
   /**

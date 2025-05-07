@@ -1,6 +1,7 @@
-import supabase from '../db/supabaseClient';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { User, UserPreferences, UserInteraction } from '../models/user';
 import logger, { logSecurityEvent } from '../utils/logger';
+import serviceRoleSupabase from '../db/supabaseClient'; // Import the service role client separately
 
 /**
  * Service for managing user operations in the database
@@ -11,7 +12,7 @@ class UsersService {
    * @param userId - User ID
    * @returns User profile or null if not found
    */
-  async getUserProfile(userId: string): Promise<User | null> {
+  async getUserProfile(supabase: SupabaseClient, userId: string): Promise<User | null> {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
@@ -40,7 +41,7 @@ class UsersService {
    * @param profileData - Profile data to update
    * @returns Updated profile
    */
-  async updateUserProfile(userId: string, profileData: Partial<User>): Promise<User> {
+  async updateUserProfile(supabase: SupabaseClient, userId: string, profileData: Partial<User>): Promise<User> {
     try {
       // Use upsert to insert or update the profile
       const { data: updatedProfile, error } = await supabase
@@ -72,7 +73,7 @@ class UsersService {
    * @param userId - User ID
    * @returns User preferences or default preferences if not found
    */
-  async getUserPreferences(userId: string): Promise<UserPreferences> {
+  async getUserPreferences(supabase: SupabaseClient, userId: string): Promise<UserPreferences> {
     try {
       const { data, error } = await supabase
         .from('user_preferences')
@@ -104,7 +105,7 @@ class UsersService {
    * @param preferencesUpdate - Preferences data to update
    * @returns Updated preferences
    */
-  async updateUserPreferences(userId: string, preferencesUpdate: Partial<UserPreferences>): Promise<UserPreferences> {
+  async updateUserPreferences(supabase: SupabaseClient, userId: string, preferencesUpdate: Partial<UserPreferences>): Promise<UserPreferences> {
     try {
       // Upsert the preferences
       const { data: updatedPrefs, error } = await supabase
@@ -144,7 +145,7 @@ class UsersService {
    * @param action - Optional action filter
    * @returns User interactions and associated grants
    */
-  async getUserInteractions(userId: string, action?: string): Promise<{ interactions: UserInteraction[], grants: any[] }> {
+  async getUserInteractions(supabase: SupabaseClient, userId: string, action?: string): Promise<{ interactions: UserInteraction[], grants: any[] }> {
     try {
       let query = supabase
         .from('user_interactions')
@@ -196,7 +197,7 @@ class UsersService {
    * @param interactionData - Interaction data
    * @returns Recorded interaction
    */
-  async recordUserInteraction(userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
+  async recordUserInteraction(supabase: SupabaseClient, userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
     try {
       const interaction = {
         user_id: userId,
@@ -247,7 +248,7 @@ class UsersService {
    * @param userId - User ID (for authorization)
    * @returns True if deleted successfully
    */
-  async deleteUserInteraction(interactionId: string, userId: string): Promise<boolean> {
+  async deleteUserInteraction(supabase: SupabaseClient, interactionId: string, userId: string): Promise<boolean> {
     try {
       // Fetch the interaction to verify ownership before deleting
       const { data: interaction, error: fetchError } = await supabase
@@ -294,6 +295,43 @@ class UsersService {
         error: error instanceof Error ? error.message : error,
         userId,
         interactionId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a user interaction by user ID, grant ID, and action
+   * @param userId - User ID
+   * @param grantId - Grant ID
+   * @param action - Interaction action (e.g., 'saved', 'applied', 'ignored')
+   * @returns True if deleted successfully
+   */
+  async deleteUserInteractionByDetails(supabase: SupabaseClient, userId: string, grantId: string, action: string): Promise<boolean> {
+    try {
+      const { error: deleteError } = await supabase
+        .from('user_interactions')
+        .delete()
+        .eq('user_id', userId)
+        .eq('grant_id', grantId)
+        .eq('action', action);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      logSecurityEvent(userId, 'interaction_deleted_by_details', {
+        grantId,
+        action
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Error deleting user interaction by details:', {
+        error: error instanceof Error ? error.message : error,
+        userId,
+        grantId,
+        action
       });
       throw error;
     }

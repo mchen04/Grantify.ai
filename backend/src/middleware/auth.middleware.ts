@@ -6,16 +6,19 @@ declare global {
   namespace Express {
     interface Request {
       user?: any;
+      supabase?: any; // Add user-authenticated supabase client to request
     }
   }
 }
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// We no longer need the service_role client initialized here
+// const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
- * Middleware to verify Supabase JWT tokens and extract user information
+ * Middleware to verify Supabase JWT tokens, extract user information,
+ * and create a user-authenticated Supabase client instance
  * This ensures that all protected routes have access to the authenticated user
  */
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
@@ -27,7 +30,10 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     }
     
     const token = authHeader.split(' ')[1];
-    const { data, error } = await supabase.auth.getUser(token);
+    
+    // Create a temporary client with the service key to verify the token
+    const tempSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    const { data, error } = await tempSupabase.auth.getUser(token);
     
     if (error || !data.user) {
       return res.status(401).json({ message: 'Unauthorized: Invalid token' });
@@ -35,6 +41,16 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
     
     // Add user to request object
     req.user = data.user;
+    
+    // Create a new Supabase client instance with the user's access token
+    req.supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
     next();
   } catch (error) {
     console.error('Auth middleware error:', error instanceof Error ? error.message : error);

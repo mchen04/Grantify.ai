@@ -222,7 +222,7 @@ export default function Search() {
 
     try {
       // Insert the new interaction using apiClient
-      const response = await apiClient.users.recordInteraction(user.id, grantId, action);
+      const response = await apiClient.users.recordInteraction(user.id, grantId, action, user.session?.access_token);
       
       if (response.error) throw response.error;
 
