@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import SettingsLayout from '@/components/settings/SettingsLayout';
 import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { validatePassword } from '@/utils/passwordValidator';
+import PreferencesSettings from '@/components/settings/PreferencesSettings'; // Import the new component
 
 export default function Settings() {
   const { user, isLoading, updatePassword } = useAuth();
@@ -211,6 +212,9 @@ export default function Settings() {
             </form>
           </div>
         </div>
+
+        {/* Preferences Settings */}
+        <PreferencesSettings />
         
         {/* Account Danger Zone */}
         <div className="bg-red-50 rounded-lg border border-red-200 overflow-hidden">

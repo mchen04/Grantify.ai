@@ -35,8 +35,8 @@ router.get('/preferences',
   }
 );
 
-// POST /api/users/preferences - Update user preferences
-router.post('/preferences',
+// PUT /api/users/preferences - Update user preferences
+router.put('/preferences',
   authMiddleware,
   userPreferencesLimiter,
   userPreferencesValidation,
@@ -47,7 +47,7 @@ router.post('/preferences',
       const preferences = req.body.preferences as UserPreferences;
       
       logSecurityEvent(userId, 'preferences_update', {
-        method: 'POST',
+        method: 'PUT',
         preferencesUpdated: Object.keys(preferences)
       });
       
@@ -60,6 +60,28 @@ router.post('/preferences',
       });
     } catch (error) {
       logger.error('Error updating user preferences:', {
+        error: error instanceof Error ? error.message : error,
+        userId: req.user?.id
+      });
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// DELETE /api/users/preferences - Delete user preferences
+router.delete('/preferences',
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      
+      logSecurityEvent(userId, 'preferences_delete', { method: 'DELETE' });
+      
+      await usersService.deleteUserPreferences(req.supabase, userId);
+      
+      res.status(204).send(); // No content response for successful deletion
+    } catch (error) {
+      logger.error('Error deleting user preferences:', {
         error: error instanceof Error ? error.message : error,
         userId: req.user?.id
       });

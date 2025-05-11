@@ -310,4 +310,22 @@ DROP POLICY IF EXISTS grants_service_role_access ON grants;
 CREATE POLICY grants_service_role_access ON grants
   FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
+-- ========= Table Privileges (Grants) =========
+
+-- Grant necessary privileges to the 'authenticated' role for the user_preferences table.
+-- This works in conjunction with RLS policies. RLS policies restrict *which rows*
+-- can be accessed/modified by a user, while these GRANT statements provide the fundamental
+-- permission for the 'authenticated' role to perform SELECT, INSERT, UPDATE, or DELETE
+-- operations on the table itself. Both are often required for the 'authenticated' role.
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_preferences TO authenticated;
+
+-- Note: Similar grants might be needed for other tables like 'user_interactions' if they
+-- are accessed by authenticated users and face similar permission issues.
+-- For 'users' table, RLS policies allow self-select and self-update, and inserts are
+-- handled by a trigger. Explicit grants to 'authenticated' might be redundant but
+-- could be added if issues arise.
+-- The 'grants' table is publicly readable via its RLS policy.
+
+
 -- ========= End of Script =========

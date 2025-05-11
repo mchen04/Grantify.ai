@@ -99,14 +99,25 @@ export const grantsApi = {
 export const usersApi = {
   // Get user preferences
   getUserPreferences: async (userId: string, accessToken?: string | null) => {
+    // Ensure userId is passed as a query parameter as per backend expectation
     return fetchApi<any>(`/users/preferences?userId=${userId}`, {}, accessToken);
   },
-  
+
   // Update user preferences
   updateUserPreferences: async (userId: string, preferences: any, accessToken?: string | null) => {
-    return fetchApi<any>('/users/preferences', {
-      method: 'POST',
-      body: JSON.stringify({ userId, preferences }),
+    return fetchApi<any>(`/users/preferences`, { // Removed userId from path, will be in body or query
+      method: 'PUT', // Changed from POST to PUT
+      body: JSON.stringify({ userId, preferences }), // Assuming userId might still be needed in body by backend
+    }, accessToken);
+  },
+
+  // Delete user preferences
+  deleteUserPreferences: async (userId: string, preferenceIds: string[], accessToken?: string | null) => {
+    // Assuming backend expects preferenceIds in the body for deletion
+    // And userId might be in query or body depending on backend implementation
+    return fetchApi<any>(`/users/preferences`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId, preferenceIds }),
     }, accessToken);
   },
   

@@ -140,6 +140,38 @@ class UsersService {
   }
 
   /**
+   * Delete a user's preferences
+   * @param supabase - Supabase client
+   * @param userId - User ID
+   * @returns Promise<void>
+   */
+  async deleteUserPreferences(supabase: SupabaseClient, userId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .delete()
+        .eq('user_id', userId);
+
+      if (error) {
+        // PGRST116 means no rows were found, which is acceptable for a delete.
+        // If preferences didn't exist, deleting them is still a "successful" outcome.
+        if (error.code === 'PGRST116') {
+          logger.info(`No preferences found for user ${userId} to delete.`);
+          return;
+        }
+        throw error;
+      }
+      logger.info(`Successfully deleted preferences for user ${userId}`);
+    } catch (error) {
+      logger.error('Error deleting user preferences:', {
+        error: error instanceof Error ? error.message : error,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get user interactions
    * @param userId - User ID
    * @param action - Optional action filter

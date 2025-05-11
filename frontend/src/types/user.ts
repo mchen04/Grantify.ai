@@ -20,12 +20,15 @@ export interface UserInteraction {
   grants?: any; // Reference to the related grant
 }
 
-export interface UserPreferences {
-  topics: string[];
-  funding_min: number;
-  funding_max: number;
-  agencies: string[];
-  deadline_range: string;
-  show_no_deadline: boolean;
-  show_no_funding: boolean;
+// Represents an individual, manageable preference item
+export interface PreferenceItem {
+  id: string; // Unique identifier for the preference (e.g., "topic_ai", "funding_range_1")
+  userId: string; // Belongs to this user
+  type: string; // Category of preference (e.g., "topic", "agency", "funding_min", "funding_max")
+  value: any; // The actual value (e.g., "Artificial Intelligence", "NSF", 50000)
+  label?: string; // Optional display label
+  // Add other relevant fields as per the new schema, e.g., is_active, created_at
 }
+
+// UserPreferences will now be a collection of these items
+export type UserPreferences = PreferenceItem[];

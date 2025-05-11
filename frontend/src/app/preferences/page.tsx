@@ -12,7 +12,7 @@ export default function Preferences() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Preferences state
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
@@ -20,7 +20,7 @@ export default function Preferences() {
   const [fundingMax, setFundingMax] = useState<number>(1000000);
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [deadlineRange, setDeadlineRange] = useState<string>('0');
-  const [showNoDeadline, setShowNoDeadline] = useState<boolean>(true);
+  // const [showNoDeadline, setShowNoDeadline] = useState<boolean>(true); // Removed
   const [showNoFunding, setShowNoFunding] = useState<boolean>(true);
 
   // Redirect to login if not authenticated
@@ -37,6 +37,7 @@ export default function Preferences() {
 
       try {
         setLoading(true);
+        setMessage(null); // Clear previous messages
 
         // Fetch user preferences from Supabase
         const { data, error } = await supabase
@@ -46,31 +47,33 @@ export default function Preferences() {
           .single();
 
         if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+          // Actual error during fetch
           throw error;
         }
 
         if (data) {
-          // Set state from preferences
+          // Preferences found
           setSelectedTopics(data.topics || []);
           setFundingMin(data.funding_min || 0);
           setFundingMax(data.funding_max || 1000000);
           setSelectedAgencies(data.agencies || []);
           setDeadlineRange(data.deadline_range || '0');
-          setShowNoDeadline(data.show_no_deadline !== undefined ? data.show_no_deadline : true);
+          // setShowNoDeadline removed
           setShowNoFunding(data.show_no_funding !== undefined ? data.show_no_funding : true);
         } else {
-          // If no preferences exist yet, use defaults
+          // No preferences found (PGRST116 or data is null)
+          setMessage({ type: 'info', text: 'No preferences set yet. Using default values.' });
           setSelectedTopics(DEFAULT_USER_PREFERENCES.topics || []);
           setFundingMin(DEFAULT_USER_PREFERENCES.funding_min || 0);
           setFundingMax(DEFAULT_USER_PREFERENCES.funding_max || 1000000);
           setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
           setDeadlineRange(DEFAULT_USER_PREFERENCES.deadline_range || '0');
-          setShowNoDeadline(DEFAULT_USER_PREFERENCES.show_no_deadline !== undefined ? DEFAULT_USER_PREFERENCES.show_no_deadline : true);
+          // setShowNoDeadline removed
           setShowNoFunding(DEFAULT_USER_PREFERENCES.show_no_funding !== undefined ? DEFAULT_USER_PREFERENCES.show_no_funding : true);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error loading preferences:', error);
-        setMessage({ type: 'error', text: 'Failed to load preferences' });
+        setMessage({ type: 'error', text: `Failed to load preferences: ${error.message || 'An unknown error occurred'}` });
       } finally {
         setLoading(false);
       }
@@ -97,7 +100,7 @@ export default function Preferences() {
         funding_max: fundingMax,
         agencies: selectedAgencies,
         deadline_range: deadlineRange,
-        show_no_deadline: showNoDeadline,
+        // show_no_deadline: showNoDeadline, // Removed
         show_no_funding: showNoFunding,
         updated_at: new Date().toISOString(),
       };
@@ -167,7 +170,11 @@ export default function Preferences() {
       description="Customize your grant recommendations and search experience"
     >
       {message && (
-        <div className={`p-4 mb-6 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+        <div className={`p-4 mb-6 rounded-lg ${
+            message.type === 'success' ? 'bg-green-50 text-green-700' :
+            message.type === 'error' ? 'bg-red-50 text-red-700' :
+            'bg-blue-50 text-blue-700' // For 'info'
+          }`}>
           {message.text}
         </div>
       )}
@@ -274,18 +281,7 @@ export default function Preferences() {
               ))}
             </select>
             
-            <div className="mt-4 flex items-center">
-              <input
-                type="checkbox"
-                id="showNoDeadline"
-                checked={showNoDeadline}
-                onChange={(e) => setShowNoDeadline(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="showNoDeadline" className="ml-2 text-sm text-gray-700">
-                Show grants with no deadline or open-ended deadlines
-              </label>
-            </div>
+            {/* Removed showNoDeadline checkbox */}
           </div>
         </div>
 
