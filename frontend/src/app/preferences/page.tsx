@@ -21,7 +21,6 @@ export default function Preferences() {
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [deadlineRange, setDeadlineRange] = useState<string>('0');
   // const [showNoDeadline, setShowNoDeadline] = useState<boolean>(true); // Removed
-  const [showNoFunding, setShowNoFunding] = useState<boolean>(true);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -59,7 +58,6 @@ export default function Preferences() {
           setSelectedAgencies(data.agencies || []);
           setDeadlineRange(data.deadline_range || '0');
           // setShowNoDeadline removed
-          setShowNoFunding(data.show_no_funding !== undefined ? data.show_no_funding : true);
         } else {
           // No preferences found (PGRST116 or data is null)
           setMessage({ type: 'info', text: 'No preferences set yet. Using default values.' });
@@ -69,7 +67,6 @@ export default function Preferences() {
           setSelectedAgencies(DEFAULT_USER_PREFERENCES.agencies || []);
           setDeadlineRange(DEFAULT_USER_PREFERENCES.deadline_range || '0');
           // setShowNoDeadline removed
-          setShowNoFunding(DEFAULT_USER_PREFERENCES.show_no_funding !== undefined ? DEFAULT_USER_PREFERENCES.show_no_funding : true);
         }
       } catch (error: any) {
         console.error('Error loading preferences:', error);
@@ -101,7 +98,6 @@ export default function Preferences() {
         agencies: selectedAgencies,
         deadline_range: deadlineRange,
         // show_no_deadline: showNoDeadline, // Removed
-        show_no_funding: showNoFunding,
         updated_at: new Date().toISOString(),
       };
 
@@ -245,18 +241,6 @@ export default function Preferences() {
             </div>
           </div>
           
-          <div className="mt-4 flex items-center">
-            <input
-              type="checkbox"
-              id="showNoFunding"
-              checked={showNoFunding}
-              onChange={(e) => setShowNoFunding(e.target.checked)}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="showNoFunding" className="ml-2 text-sm text-gray-700">
-              Show grants with no funding amount specified
-            </label>
-          </div>
         </div>
 
         {/* Deadline Range */}
