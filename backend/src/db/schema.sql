@@ -95,9 +95,6 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   deadline_range TEXT DEFAULT '0',                                        -- Consider changing type if '0' isn't descriptive
   eligible_applicant_types TEXT[],                                        -- Aligns with grants.eligible_applicants
   agencies TEXT[],                                                        -- Aligns with grants.agency_name
-  locations TEXT[],                                                       -- Note: No location field currently in grants
-  preference_vector VECTOR(768),                                          -- Matches grant embedding dimension
-  notification_settings JSONB DEFAULT '{"email_frequency": "weekly", "notify_new_matches": true, "notify_deadlines": true}'::JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

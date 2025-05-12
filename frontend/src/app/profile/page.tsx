@@ -15,11 +15,6 @@ export default function Profile() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [profile, setProfile] = useState<UserProfile>({
     user_id: '',
-    first_name: '',
-    last_name: '',
-    organization: '',
-    job_title: '',
-    phone: '',
   });
 
   useEffect(() => {
@@ -37,7 +32,7 @@ export default function Profile() {
         
         // Fetch user profile
         const { data, error } = await supabase
-          .from('user_profiles')
+          .from('user_preferences')
           .select('*')
           .eq('user_id', user.id)
           .single();
@@ -52,8 +47,8 @@ export default function Profile() {
           // Initialize with user_id if no profile exists
           setProfile({ user_id: user.id });
         }
-      } catch (error) {
-        console.error('Error loading profile:', error);
+      } catch (error: any) {
+        console.error('Error loading profile:', error.message, error);
       } finally {
         setLoading(false);
       }
@@ -79,7 +74,7 @@ export default function Profile() {
       setMessage(null);
       
       const { error } = await supabase
-        .from('user_profiles')
+        .from('user_preferences')
         .upsert({
           ...profile,
           updated_at: new Date().toISOString()
@@ -129,95 +124,48 @@ export default function Profile() {
       
       <form onSubmit={handleSubmit}>
         <div className="space-y-6">
-          <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
-            <h3 className="text-sm font-medium text-blue-800 mb-1">Personal Information</h3>
-            <p className="text-sm text-blue-700">
-              This information will be displayed on your profile and may be visible to other users.
-            </p>
+          {/* Account Information */}
+          <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-800">Account Information</h2>
+            </div>
+            <div className="p-4">
+              <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Email</dt>
+                  <dd className="mt-1 text-sm text-gray-900 font-medium">{user?.email}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">User ID</dt>
+                  <dd className="mt-1 text-sm text-gray-900 font-medium truncate max-w-xs">{user?.id}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Last Sign In</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {user?.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Account Created</dt>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {user?.created_at ? new Date(user.created_at).toLocaleString() : 'N/A'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
           </div>
-          
+
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name
-              </label>
-              <input
-                type="text"
-                name="first_name"
-                value={profile.first_name || ''}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter your first name"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name
-              </label>
-              <input
-                type="text"
-                name="last_name"
-                value={profile.last_name || ''}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter your last name"
-              />
-            </div>
+
           </div>
-          
-          <div className="pt-4 border-t border-gray-200">
-            <h3 className="text-sm font-medium text-gray-800 mb-4">Professional Information</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Organization
-                </label>
-                <input
-                  type="text"
-                  name="organization"
-                  value={profile.organization || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your organization"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Job Title
-                </label>
-                <input
-                  type="text"
-                  name="job_title"
-                  value={profile.job_title || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your job title"
-                />
-              </div>
-            </div>
-          </div>
-          
+
+
           <div className="pt-4 border-t border-gray-200">
             <h3 className="text-sm font-medium text-gray-800 mb-4">Contact Information</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone
-                </label>
-                <input
-                  type="text"
-                  name="phone"
-                  value={profile.phone || ''}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your phone number"
-                />
-              </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email
@@ -232,7 +180,7 @@ export default function Profile() {
               </div>
             </div>
           </div>
-          
+
           <div className="pt-6 border-t border-gray-200">
             <button
               type="submit"
