@@ -76,11 +76,23 @@ export default function Settings() {
       setCurrentPassword('');
       
     } catch (error: any) {
-      console.error('Error updating password:', error);
-      setMessage({
-        type: 'error',
-        text: error.message || 'Failed to update password. Please try again.'
-      });
+      // Check if the error indicates an incorrect current password
+      // Assuming errors related to incorrect current password contain "Invalid" and ("password" or "credentials")
+      const isIncorrectPasswordError = 
+        error?.message && 
+        /invalid/i.test(error.message) && 
+        (/password/i.test(error.message) || /credentials/i.test(error.message));
+
+      if (isIncorrectPasswordError) {
+        // Specific message for incorrect current password
+        setMessage({ type: 'error', text: 'The current password you entered is incorrect. Please try again.' });
+      } else {
+        // Generic error handling for other issues
+        setMessage({
+          type: 'error',
+          text: error.message || 'Failed to update password. Please try again.'
+        });
+      }
     } finally {
       setLoading(false);
     }
