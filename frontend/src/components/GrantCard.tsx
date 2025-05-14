@@ -6,6 +6,8 @@ import { formatCurrency, formatDate, truncateText } from '@/utils/formatters';
 import ActionButton from '@/components/grant/ActionButton';
 import GrantCardIcons from '@/components/grant/GrantCardIcons';
 import GrantCardFooter from '@/components/grant/GrantCardFooter';
+import { useInteractions } from '@/contexts/InteractionContext';
+import { InteractionStatus } from '@/types/interaction';
 
 interface GrantCardProps {
   id: string;
@@ -15,10 +17,10 @@ interface GrantCardProps {
   fundingAmount: number | null;
   description: string; // This will use description_short from the Grant interface
   categories: string[];
-  onSave?: () => void;
-  onApply?: () => void;
+  onSave?: (status: InteractionStatus | null) => void;
+  onApply?: (status: InteractionStatus | null) => void;
   onShare?: () => void;
-  onIgnore?: () => void;
+  onIgnore?: (status: InteractionStatus | null) => void;
   isApplied?: boolean;
   isIgnored?: boolean;
   isSaved?: boolean;
@@ -47,19 +49,44 @@ const GrantCard: React.FC<GrantCardProps> = ({
 }) => {
   const formattedAmount = formatCurrency(fundingAmount);
   const truncatedDescription = truncateText(description, 150);
+  const { getInteractionStatus, updateUserInteraction } = useInteractions();
+  
+  // Use the InteractionContext to get the current status
+  const interactionStatus = getInteractionStatus(id);
+  
+  // Use the context status if provided, otherwise fall back to props
+  const isAppliedCurrent = interactionStatus === 'applied' || isApplied;
+  const isIgnoredCurrent = interactionStatus === 'ignored' || isIgnored;
+  const isSavedCurrent = interactionStatus === 'saved' || isSaved;
 
   const handleApplyClick = () => {
-    // If already applied, just call the original handler
-    if (isApplied) {
-      onApply?.();
+    // If already applied, toggle the status
+    if (isAppliedCurrent) {
+      updateUserInteraction(id, null);
+      onApply?.(null);
       return;
     }
     
     // Open the application link in a new tab
     window.open(`https://www.grants.gov/view-grant.html?oppId=${id}`, '_blank');
     
-    // Call the onApply handler which will show the confirmation popup
-    onApply?.();
+    // Update the interaction status and call the onApply handler
+    updateUserInteraction(id, 'applied');
+    onApply?.('applied');
+  };
+
+  const handleSaveClick = () => {
+    // Toggle the saved status
+    const newStatus = isSavedCurrent ? null : 'saved';
+    updateUserInteraction(id, newStatus);
+    onSave?.(newStatus);
+  };
+
+  const handleIgnoreClick = () => {
+    // Toggle the ignored status
+    const newStatus = isIgnoredCurrent ? null : 'ignored';
+    updateUserInteraction(id, newStatus);
+    onIgnore?.(newStatus);
   };
 
   return (
@@ -86,35 +113,35 @@ const GrantCard: React.FC<GrantCardProps> = ({
           <div className="flex items-start gap-1 flex-shrink-0">
             {/* Save Grant */}
             <ActionButton
-              onClick={onSave}
-              isActive={isSaved}
+              onClick={handleSaveClick}
+              isActive={isSavedCurrent}
               activeColor="text-primary-600"
               inactiveColor="text-gray-400"
               hoverColor="text-primary-600"
-              title={isSaved ? "Unsave Grant" : "Save Grant"}
-              icon={<GrantCardIcons.Save fill={isSaved} />}
+              title={isSavedCurrent ? "Unsave Grant" : "Save Grant"}
+              icon={<GrantCardIcons.Save fill={isSavedCurrent} />}
             />
 
             {/* Ignore Grant */}
             <ActionButton
-              onClick={onIgnore}
-              isActive={isIgnored}
+              onClick={handleIgnoreClick}
+              isActive={isIgnoredCurrent}
               activeColor="text-red-600"
               inactiveColor="text-gray-400"
               hoverColor="text-red-600"
-              title={isIgnored ? "Unignore Grant" : "Ignore Grant"}
-              icon={<GrantCardIcons.Ignore fill={isIgnored} />}
+              title={isIgnoredCurrent ? "Unignore Grant" : "Ignore Grant"}
+              icon={<GrantCardIcons.Ignore fill={isIgnoredCurrent} />}
             />
 
             {/* Apply on Grants.gov */}
             <ActionButton
               onClick={handleApplyClick}
-              isActive={isApplied}
+              isActive={isAppliedCurrent}
               activeColor="text-green-600"
               inactiveColor="text-gray-400"
               hoverColor="text-green-600"
-              title={isApplied ? "Unapply Grant" : "Apply on Grants.gov"}
-              icon={<GrantCardIcons.Apply fill={isApplied} />}
+              title={isAppliedCurrent ? "Unapply Grant" : "Apply on Grants.gov"}
+              icon={<GrantCardIcons.Apply fill={isAppliedCurrent} />}
             />
 
             {/* Share Grant */}

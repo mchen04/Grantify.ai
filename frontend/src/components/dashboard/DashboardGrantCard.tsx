@@ -2,6 +2,7 @@
 
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import GrantCard from '@/components/GrantCard';
+import { useInteractions } from '@/contexts/InteractionContext';
 
 interface DashboardGrantCardProps {
   id: string;
@@ -33,6 +34,15 @@ export interface DashboardGrantCardRef {
  */
 const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardProps>((props, ref) => {
   const [fading, setFading] = useState(false);
+  const { getInteractionStatus } = useInteractions();
+  
+  // Get the current interaction status from context
+  const interactionStatus = getInteractionStatus(props.id);
+  
+  // Determine interaction states based on context
+  const isSaved = interactionStatus === 'saved' || props.isSaved;
+  const isApplied = interactionStatus === 'applied' || props.isApplied;
+  const isIgnored = interactionStatus === 'ignored' || props.isIgnored;
 
   // Function to fade out the card
   const fadeAndRemoveCard = async () => {
@@ -55,7 +65,13 @@ const DashboardGrantCard = forwardRef<DashboardGrantCardRef, DashboardGrantCardP
 
   return (
     <div className={`transition-opacity duration-300 h-full relative ${fading ? 'opacity-0' : 'opacity-100'}`}>
-      <GrantCard {...props} linkParams={props.linkParams} />
+      <GrantCard
+        {...props}
+        isSaved={isSaved}
+        isApplied={isApplied}
+        isIgnored={isIgnored}
+        linkParams={props.linkParams}
+      />
       {props.showMatchScore && typeof props.matchScore === 'number' && (
         <div className="absolute bottom-2 right-2 bg-primary-100 text-primary-800 text-xs font-medium px-2 py-1 rounded-full shadow-sm z-10">
           {Math.round(props.matchScore)}% match

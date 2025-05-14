@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Grant, GrantFilter } from '@/types/grant';
 import apiClient from '@/lib/apiClient';
+import { useAuth } from '@/contexts/AuthContext';
+import { useInteractions } from '@/contexts/InteractionContext';
 
 interface UseFetchGrantsProps {
   filter?: GrantFilter;
   grantsPerPage?: number;
   enabled?: boolean;
+  excludeInteractedGrants?: boolean;
 }
 
 interface UseFetchGrantsReturn {
@@ -23,12 +26,19 @@ interface UseFetchGrantsReturn {
 export function useFetchGrants({
   filter,
   grantsPerPage = 10,
-  enabled = true
+  enabled = true,
+  excludeInteractedGrants = false
 }: UseFetchGrantsProps): UseFetchGrantsReturn {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
+  
+  // Get the user from AuthContext
+  const { user } = useAuth();
+  
+  // Get the lastInteractionTimestamp from InteractionContext to trigger refetches
+  const { lastInteractionTimestamp } = useInteractions();
 
   const fetchGrants = useCallback(async () => {
     if (!enabled) return;
@@ -39,6 +49,15 @@ export function useFetchGrants({
       
       // Convert filter to API-compatible format
       const apiFilters: Record<string, any> = {};
+      
+      // Add user ID and exclude interacted grants flag if user is logged in
+      if (user) {
+        apiFilters.user_id = user.id;
+        
+        if (excludeInteractedGrants) {
+          apiFilters.exclude_interacted_grants = true;
+        }
+      }
       
       if (filter) {
         // Basic filters
@@ -103,12 +122,19 @@ export function useFetchGrants({
     } finally {
       setLoading(false);
     }
-  }, [filter, grantsPerPage, enabled]);
+  }, [filter, grantsPerPage, enabled, user, excludeInteractedGrants]);
 
   // Fetch grants when dependencies change
   useEffect(() => {
     fetchGrants();
   }, [fetchGrants]);
+  
+  // Refetch grants when interactions change and user is logged in
+  useEffect(() => {
+    if (user && lastInteractionTimestamp) {
+      fetchGrants();
+    }
+  }, [lastInteractionTimestamp, user, fetchGrants]);
 
   return {
     grants,

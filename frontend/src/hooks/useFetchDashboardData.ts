@@ -1,13 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '@/lib/apiClient';
 import { Grant, ScoredGrant } from '@/types/grant';
-import { UserInteraction, UserPreferences } from '@/types/user';
-import { calculateMatchScore } from '@/lib/grantRecommendations';
+import { UserInteraction } from '@/types/user';
+import { calculateMatchScore, UserPreferences } from '@/lib/grantRecommendations';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInteractions } from '@/contexts/InteractionContext';
+import { InteractionStatus } from '@/types/interaction';
+import supabase from '@/lib/supabaseClient';
 
 interface UseFetchDashboardDataProps {
   targetRecommendedCount?: number;
   enabled?: boolean;
+  userId?: string; // Add userId parameter
 }
 
 interface UseFetchDashboardDataReturn {
@@ -27,9 +31,17 @@ interface UseFetchDashboardDataReturn {
  */
 export function useFetchDashboardData({
   targetRecommendedCount = 10,
-  enabled = true
+  enabled = true,
+  userId
 }: UseFetchDashboardDataProps): UseFetchDashboardDataReturn {
   const { user } = useAuth();
+  const currentUserId = userId || user?.id;
+  const {
+    interactionsMap,
+    isLoading: interactionsLoading,
+    lastInteractionTimestamp
+  } = useInteractions();
+  
   const [recommendedGrants, setRecommendedGrants] = useState<ScoredGrant[]>([]);
   const [savedGrants, setSavedGrants] = useState<Grant[]>([]);
   const [appliedGrants, setAppliedGrants] = useState<Grant[]>([]);
@@ -38,37 +50,138 @@ export function useFetchDashboardData({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFetchingReplacements, setIsFetchingReplacements] = useState(false);
+  const [grantDetailsMap, setGrantDetailsMap] = useState<Record<string, Grant>>({});
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!user?.id || !enabled) return;
-
+  // Function to fetch grant details for a list of grant IDs
+  const fetchGrantDetails = useCallback(async (grantIds: string[]) => {
+    if (!currentUserId || grantIds.length === 0) return {};
+    
     try {
-      setLoading(true);
-      setError(null);
-
-      // **Fetch the latest session and token before making API calls**
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
+      // Get session for API calls
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const session = data?.session;
+      
       if (sessionError || !session) {
-        console.error('Error fetching latest session:', sessionError);
-        setError('Authentication failed. Please log in again.');
-        setLoading(false);
-        return; // Stop if session cannot be retrieved
+        console.error('Error fetching session for grant details:', sessionError);
+        return {};
       }
-
+      
       const accessToken = session.access_token;
+      
+      // Filter out grant IDs we already have details for
+      const missingGrantIds = grantIds.filter(id => !grantDetailsMap[id]);
+      
+      if (missingGrantIds.length === 0) {
+        return grantDetailsMap; // We already have all the grant details
+      }
+      
+      // Fetch details for grants we don't have yet
+      // Fetch each grant individually since there's no batch endpoint
+      const grantsPromises = missingGrantIds.map(id =>
+        apiClient.grants.getGrantById(id, accessToken)
+      );
+      
+      const grantsResults = await Promise.all(grantsPromises);
+      const grantsData = { grants: grantsResults.map(result => result.data?.grant).filter(Boolean) };
+      
+      // Create a new map with the fetched grants
+      const newGrantsMap = { ...grantDetailsMap };
+      (grantsData?.grants || []).forEach((grant: Grant) => {
+        newGrantsMap[grant.id] = grant;
+      });
+      
+      // Update the state with the new map
+      setGrantDetailsMap(newGrantsMap);
+      return newGrantsMap;
+    } catch (error) {
+      console.error('Error in fetchGrantDetails:', error);
+      return grantDetailsMap; // Return what we already have
+    }
+  }, [currentUserId, grantDetailsMap]);
 
+  // Function to update grant lists based on interactions
+  const updateGrantLists = useCallback(async () => {
+    if (!currentUserId || !enabled) return;
+    
+    // Get current date for filtering expired grants
+    const today = new Date();
+    
+    // Extract grant IDs for each interaction type
+    const savedGrantIds: string[] = [];
+    const appliedGrantIds: string[] = [];
+    const ignoredGrantIds: string[] = [];
+    
+    // Filter grants by interaction type
+    Object.entries(interactionsMap).forEach(([grantId, status]) => {
+      if (status === 'saved') savedGrantIds.push(grantId);
+      else if (status === 'applied') appliedGrantIds.push(grantId);
+      else if (status === 'ignored') ignoredGrantIds.push(grantId);
+    });
+    
+    // Fetch details for all interacted grants
+    const allInteractedIds = [...savedGrantIds, ...appliedGrantIds, ...ignoredGrantIds];
+    const grantsMap = await fetchGrantDetails(allInteractedIds);
+    
+    // Filter function for active grants (not expired)
+    const isActiveGrant = (grant: Grant | undefined) => {
+      if (!grant) return false;
+      if (!grant.close_date) return true; // Keep if no close date
+      return new Date(grant.close_date) >= today; // Keep if not expired
+    };
+    
+    // Update saved grants
+    const newSavedGrants = savedGrantIds
+      .map(id => grantsMap[id])
+      .filter(grant => grant && isActiveGrant(grant)) as Grant[];
+    setSavedGrants(newSavedGrants);
+    
+    // Update applied grants (keep all regardless of expiry)
+    const newAppliedGrants = appliedGrantIds
+      .map(id => grantsMap[id])
+      .filter(grant => grant) as Grant[];
+    setAppliedGrants(newAppliedGrants);
+    
+    // Update ignored grants
+    const newIgnoredGrants = ignoredGrantIds
+      .map(id => grantsMap[id])
+      .filter(grant => grant && isActiveGrant(grant)) as Grant[];
+    setIgnoredGrants(newIgnoredGrants);
+    
+  }, [currentUserId, enabled, interactionsMap, fetchGrantDetails]);
+
+  // Function to fetch recommended grants
+  const fetchRecommendedGrants = useCallback(async () => {
+    if (!currentUserId || !enabled) return;
+    
+    try {
+      // Get session for API calls
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const session = data?.session;
+      
+      if (sessionError || !session) {
+        console.error('Error fetching session for recommended grants:', sessionError);
+        return;
+      }
+      
+      const accessToken = session.access_token;
+      
+      // Get all interacted grant IDs to exclude from recommendations
+      const interactedGrantIds = Object.keys(interactionsMap);
+      
       // Fetch user preferences for scoring
-      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(user.id, accessToken); // Use accessToken
-
+      const { data: preferences, error: preferencesError } = await apiClient.users.getUserPreferences(
+        currentUserId,
+        accessToken
+      );
+      
       if (preferencesError) {
         console.error('Error fetching user preferences:', preferencesError);
         // Use default preferences
         setUserPreferences({
-          topics: [],
+          topics: [] as string[],
           funding_min: 0,
           funding_max: 1000000,
-          agencies: [],
+          agencies: [] as string[],
           deadline_range: '0',
           show_no_deadline: true,
           show_no_funding: true
@@ -76,85 +189,58 @@ export function useFetchDashboardData({
       } else {
         setUserPreferences(preferences || null);
       }
-
-      // Get current date for filtering expired grants
-      const today = new Date().toISOString();
-
-      // Fetch all user interactions
-      const { data: interactionsResponse, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, undefined, undefined, accessToken); // Use accessToken
-
-      if (interactionsError) {
-        console.error('Error fetching user interactions:', interactionsError);
-        // Don't throw, try to continue
-      }
-
-      const allInteractions = interactionsResponse?.interactions || [];
-
-      // Process interactions to find the latest action for each grant
-      const latestInteractionsMap = new Map<string, UserInteraction>();
-      allInteractions.forEach(interaction => {
-        const existing = latestInteractionsMap.get(interaction.grant_id);
-        if (!existing || new Date(interaction.timestamp) > new Date(existing.timestamp)) {
-          latestInteractionsMap.set(interaction.grant_id, interaction);
-        }
-      });
-
-      const latestInteractions = Array.from(latestInteractionsMap.values());
-      const interactedGrantIds = Array.from(latestInteractionsMap.keys());
-
-      // Separate grants into lists based on the latest action
-      const initialSaved: Grant[] = [];
-      const initialApplied: Grant[] = [];
-      const initialIgnored: Grant[] = [];
-
-      const filterActiveGrants = (interaction: UserInteraction) => {
-        const grant = interaction.grants;
-        if (!grant) return false; // Skip if grant data is missing
-        if (!grant.close_date) return true; // Keep if no close date
-        return new Date(grant.close_date) >= new Date(); // Keep if not expired
-      };
-
-      latestInteractions.forEach(interaction => {
-        if (!interaction.grants) return; // Skip if grant data is missing
-
-        if (interaction.action === 'saved' && filterActiveGrants(interaction)) {
-          initialSaved.push(interaction.grants);
-        } else if (interaction.action === 'applied') { // Keep applied regardless of expiry
-          initialApplied.push(interaction.grants);
-        } else if (interaction.action === 'ignored' && filterActiveGrants(interaction)) {
-          initialIgnored.push(interaction.grants);
-        }
-      });
-
-      setSavedGrants(initialSaved);
-      setAppliedGrants(initialApplied);
-      setIgnoredGrants(initialIgnored);
-
+      
       // Fetch recommended grants based on user preferences
       const { data: recommendedData, error: recommendedError } = await apiClient.grants.getRecommendedGrants(
-        user.id,
+        currentUserId,
         {
           exclude: interactedGrantIds,
           limit: targetRecommendedCount
         },
-        accessToken // Use accessToken
+        accessToken
       );
-
+      
       if (recommendedError) {
         console.error('Error fetching recommended grants:', recommendedError);
+        return;
       }
-
+      
       // Calculate match scores for recommended grants
       const initialRecommended = recommendedData?.grants || [];
-      const scoredRecommendations = initialRecommended.map(grant => {
+      const scoredRecommendations = initialRecommended.map((grant: Grant) => {
+        // Add description field if missing (required by calculateMatchScore)
+        const grantWithDescription = {
+          ...grant,
+          description: grant.description_short || ''
+        };
+        
         return {
           ...grant,
-          matchScore: preferences ? calculateMatchScore(grant, preferences) : undefined
+          matchScore: preferences ? calculateMatchScore(grantWithDescription as any, preferences) : undefined
         } as unknown as ScoredGrant;
       });
-
+      
       // Set recommended grants with scores
       setRecommendedGrants(scoredRecommendations || []);
+      
+    } catch (error: any) {
+      console.error('Error fetching recommended grants:', error);
+    }
+  }, [currentUserId, enabled, interactionsMap, targetRecommendedCount]);
+
+  // Main function to fetch all dashboard data
+  const fetchDashboardData = useCallback(async () => {
+    if (!currentUserId || !enabled) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch user preferences and update grant lists based on interactions
+      await Promise.all([
+        updateGrantLists(),
+        fetchRecommendedGrants()
+      ]);
 
     } catch (error: any) {
       if (error && Object.keys(error).length > 0 && error.code !== 'PGRST116' && error.message !== 'No grants found') {
@@ -167,11 +253,11 @@ export function useFetchDashboardData({
     } finally {
       setLoading(false);
     }
-  }, [user?.id, targetRecommendedCount, enabled]); // Keep user?.id in dependencies
+  }, [currentUserId, enabled, updateGrantLists, fetchRecommendedGrants]);
 
   // Fetch replacement recommended grants when needed
   const fetchReplacementRecommendations = useCallback(async () => {
-    if (!user?.id || isFetchingReplacements) return;
+    if (!currentUserId || isFetchingReplacements) return;
 
     const currentRecommendedCount = recommendedGrants.length;
     const neededCount = targetRecommendedCount - currentRecommendedCount;
@@ -184,7 +270,8 @@ export function useFetchDashboardData({
 
     try {
       // **Fetch the latest session and token before making API calls**
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const session = data?.session;
 
       if (sessionError || !session) {
         console.error('Error fetching latest session for replacement:', sessionError);
@@ -205,7 +292,7 @@ export function useFetchDashboardData({
 
       // Fetch more recommended grants with preferences
       const { data: newGrantsData, error: newGrantsError } = await apiClient.grants.getRecommendedGrants(
-        user.id,
+        currentUserId,
         {
           exclude: allCurrentGrantIds,
           limit: neededCount
@@ -221,10 +308,18 @@ export function useFetchDashboardData({
 
       if (newGrants.length > 0 && userPreferences) {
         // Add match scores to new grants
-        const scoredNewGrants = newGrants.map(grant => ({
-          ...grant,
-          matchScore: calculateMatchScore(grant, userPreferences)
-        } as unknown as ScoredGrant));
+        const scoredNewGrants = newGrants.map((grant: Grant) => {
+          // Add description field if missing (required by calculateMatchScore)
+          const grantWithDescription = {
+            ...grant,
+            description: grant.description_short || ''
+          };
+          
+          return {
+            ...grant,
+            matchScore: userPreferences ? calculateMatchScore(grantWithDescription as any, userPreferences as unknown as UserPreferences) : undefined
+          } as unknown as ScoredGrant;
+        });
         setRecommendedGrants(prev => [...prev, ...scoredNewGrants]);
       }
     } catch (e) {
@@ -233,7 +328,7 @@ export function useFetchDashboardData({
       setIsFetchingReplacements(false);
     }
   }, [
-    user?.id, // Keep user?.id in dependency array
+    currentUserId, // Keep currentUserId in dependency array
     isFetchingReplacements,
     recommendedGrants,
     savedGrants,
@@ -245,10 +340,20 @@ export function useFetchDashboardData({
 
   // Fetch dashboard data when user is available and dependencies change
   useEffect(() => {
-    if (user) { // Only fetch if user is logged in
+    if (currentUserId) { // Only fetch if user is logged in
       fetchDashboardData();
     }
-  }, [fetchDashboardData, user]); // Keep user in dependency array
+  }, [fetchDashboardData, currentUserId]); // Keep currentUserId in dependency array
+  
+  // React to interaction changes
+  useEffect(() => {
+    if (currentUserId && !interactionsLoading) {
+      // When interactions change, update our grant lists
+      updateGrantLists();
+      // Also refresh recommended grants to ensure they exclude newly interacted grants
+      fetchRecommendedGrants();
+    }
+  }, [currentUserId, interactionsLoading, lastInteractionTimestamp, updateGrantLists, fetchRecommendedGrants]);
  
   return {
     recommendedGrants,

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Layout from '../../components/Layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInteractions } from '@/contexts/InteractionContext';
 import GrantCard from '@/components/GrantCard';
 import DashboardGrantCard from '@/components/dashboard/DashboardGrantCard';
 import apiClient from '@/lib/apiClient';
@@ -38,6 +39,7 @@ const TARGET_RECOMMENDED_COUNT = 10; // Target number of recommended grants
 
 export default function Dashboard() {
   const { user, isLoading } = useAuth();
+  const { updateUserInteraction } = useInteractions();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
@@ -324,30 +326,25 @@ export default function Dashboard() {
     // The actual functionality is handled in handleApplyConfirmation
   };
 
-  // Use the handleGrantInteraction function from the hook
+  // Use the InteractionContext to handle grant interactions
   const handleGrantInteraction = async (grantId: string, action: 'saved' | 'applied' | 'ignored') => {
-    // Find the grant in any of the lists to get its data
-    const grant = recommendedGrants.find(g => g.id === grantId) ||
-        savedGrants.find(g => g.id === grantId) ||
-        appliedGrants.find(g => g.id === grantId) ||
-        ignoredGrants.find(g => g.id === grantId);
-    
-    if (!grant) {
-      console.warn(`Grant ${grantId} not found in local state for interaction.`);
-      return; // Grant not found locally
-    }
-
     try {
-      if (action === 'saved') {
-        await handleSaveGrant(grantId);
-      } else if (action === 'applied') {
-        await handleApplyGrant(grantId);
-      } else if (action === 'ignored') {
-        await handleIgnoreGrant(grantId);
-      }
+      // Find the grant in any of the lists to get its data
+      const grant = recommendedGrants.find(g => g.id === grantId) ||
+          savedGrants.find(g => g.id === grantId) ||
+          appliedGrants.find(g => g.id === grantId) ||
+          ignoredGrants.find(g => g.id === grantId);
       
-      // After successful interaction, refresh the dashboard data
-      await refetch();
+      if (!grant) {
+        console.warn(`Grant ${grantId} not found in local state for interaction.`);
+        return; // Grant not found locally
+      }
+
+      // Use the InteractionContext to update the interaction
+      // This will handle toggling (if the same action is clicked twice)
+      await updateUserInteraction(grantId, action);
+      
+      // No need to manually refresh as the InteractionContext will trigger updates
     } catch (error: any) {
       console.error(`Error handling ${action} interaction:`, error);
       setError(`Failed to ${action.replace('ed', '')} grant: ${error.message || 'Please try again.'}`);
@@ -547,7 +544,6 @@ export default function Dashboard() {
                         onApply={() => handleApplyClick(grant.id)}
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')}
                         onShare={() => handleShareGrant(grant.id)}
-                        isSaved={true}
                         linkParams={`?from=dashboard&tab=saved`}
                       />
                     ))}
@@ -614,7 +610,6 @@ export default function Dashboard() {
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows ignoring
                         onSave={() => handleGrantInteraction(grant.id, 'saved')} // Allows saving
                         onShare={() => handleShareGrant(grant.id)}
-                        isApplied={true}
                         linkParams={`?from=dashboard&tab=applied`}
                       />
                     ))}
@@ -682,7 +677,6 @@ export default function Dashboard() {
                         onApply={() => handleApplyClick(grant.id)}
                         onIgnore={() => handleGrantInteraction(grant.id, 'ignored')} // Allows un-ignoring
                         onShare={() => handleShareGrant(grant.id)}
-                        isIgnored={true}
                         linkParams={`?from=dashboard&tab=ignored`}
                       />
                     ))}

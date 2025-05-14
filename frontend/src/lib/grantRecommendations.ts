@@ -40,7 +40,7 @@ export function calculateMatchScore(grant: Grant, preferences: UserPreferences):
   let totalFactors = 0;
   
   // Topic matching (highest weight - 40%)
-  if (preferences.topics.length > 0 && grant.activity_category?.length > 0) {
+  if (preferences.topics?.length > 0 && grant.activity_category?.length > 0) {
     totalFactors += 40;
     
     // Calculate percentage of matching topics
@@ -84,7 +84,7 @@ export function calculateMatchScore(grant: Grant, preferences: UserPreferences):
   }
   
   // Agency matching (20%)
-  if (preferences.agencies.length > 0) {
+  if (preferences.agencies?.length > 0) {
     totalFactors += 20;
     if (preferences.agencies.includes(grant.agency_name)) {
       score += 20;
@@ -195,11 +195,11 @@ export async function fetchRecommendedGrants(
     }
     
     // Apply preference filters if they exist
-    if (preferences.topics.length > 0) {
+    if (preferences.topics?.length > 0) {
       queryParams.topics = preferences.topics.join(',');
     }
     
-    if (preferences.agencies.length > 0) {
+    if (preferences.agencies?.length > 0) {
       queryParams.agencies = preferences.agencies.join(',');
     }
     

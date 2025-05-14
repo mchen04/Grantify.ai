@@ -3,6 +3,7 @@
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import GrantCard from '@/components/GrantCard';
 import { Grant } from '@/types/grant';
+import { InteractionStatus } from '@/types/interaction';
 
 interface SearchResultsProps {
   grants: Grant[];
@@ -12,10 +13,10 @@ interface SearchResultsProps {
   totalPages: number;
   grantsPerPage: number;
   goToPage: (page: number) => void;
-  onApply: (grantId: string) => Promise<void>;
-  onSave: (grantId: string) => Promise<void>;
+  onApply: (grantId: string, status: InteractionStatus | null) => Promise<void>;
+  onSave: (grantId: string, status: InteractionStatus | null) => Promise<void>;
   onShare: (grantId: string) => Promise<void>;
-  onIgnore: (grantId: string) => Promise<void>;
+  onIgnore: (grantId: string, status: InteractionStatus | null) => Promise<void>;
   onConfirmApply?: (grantId: string) => Promise<void>;
 }
 
@@ -46,11 +47,11 @@ const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
   /**
    * Handle interactions that should immediately fade the card (save, ignore)
    */
-  const handleInteraction = async (grantId: string, action: () => Promise<void>) => {
+  const handleInteraction = async (grantId: string, action: (grantId: string, status: InteractionStatus | null) => Promise<void>, status: InteractionStatus | null) => {
     setFadingGrants(prev => new Set([...prev, grantId]));
     
     try {
-      await action();
+      await action(grantId, status);
       // Wait for fade animation to complete
       await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
@@ -66,9 +67,9 @@ const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
   /**
    * Special handler for apply button that doesn't fade the card immediately
    */
-  const handleApplyClick = (grantId: string) => {
+  const handleApplyClick = (grantId: string, status: InteractionStatus | null) => {
     // Just call the onApply callback without fading the card
-    onApply(grantId);
+    onApply(grantId, status);
   };
 
   /**
@@ -230,10 +231,10 @@ const SearchResults = forwardRef<SearchResultsRef, SearchResultsProps>(({
               fundingAmount={grant.award_ceiling}
               description={grant.description_short}
               categories={grant.activity_category || []}
-              onApply={() => handleApplyClick(grant.id)}
-              onSave={() => handleInteraction(grant.id, () => onSave(grant.id))}
+              onApply={(status) => handleApplyClick(grant.id, status)}
+              onSave={(status) => handleInteraction(grant.id, onSave, status)}
               onShare={() => onShare(grant.id)}
-              onIgnore={() => handleInteraction(grant.id, () => onIgnore(grant.id))}
+              onIgnore={(status) => handleInteraction(grant.id, onIgnore, status)}
               isApplied={grant.interactions?.[0]?.action === 'applied'}
               isIgnored={grant.interactions?.[0]?.action === 'ignored'}
               isSaved={grant.interactions?.[0]?.action === 'saved'}

@@ -7,6 +7,8 @@ import apiClient from '@/lib/apiClient';
 import supabase from '@/lib/supabaseClient'; // Import the supabase client
 import { Grant, GrantFilter, SelectOption } from '@/types/grant';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInteractions } from '@/contexts/InteractionContext';
+import { InteractionStatus } from '@/types/interaction';
 import {
   MAX_FUNDING,
   MIN_DEADLINE_DAYS,
@@ -156,34 +158,36 @@ export default function Search() {
     return apiClient.grants.getGrants(apiFilters, filter.sortBy);
   }, [filter, SEARCH_GRANTS_PER_PAGE, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS, MAX_FUNDING]);
 
-  useEffect(() => {
-    const fetchGrants = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await fetchGrantsData();
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        if (!response.data) {
-          throw new Error('No data returned from API');
-        }
-        
-        setGrants(response.data.grants || []);
-        setTotalPages(response.data.count ? Math.ceil(response.data.count / SEARCH_GRANTS_PER_PAGE) : 1);
-      } catch (error: any) {
-        console.error('Error fetching grants:', error);
-        setError(`Failed to load grants: ${error.message || 'Please try again later.'}`);
-      } finally {
-        setLoading(false);
+  // Extract fetchGrants function and memoize it with useCallback
+  const fetchGrants = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetchGrantsData();
+      
+      if (response.error) {
+        throw new Error(response.error);
       }
-    };
-    
+      
+      if (!response.data) {
+        throw new Error('No data returned from API');
+      }
+      
+      setGrants(response.data.grants || []);
+      setTotalPages(response.data.count ? Math.ceil(response.data.count / SEARCH_GRANTS_PER_PAGE) : 1);
+    } catch (error: any) {
+      console.error('Error fetching grants:', error);
+      setError(`Failed to load grants: ${error.message || 'Please try again later.'}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchGrantsData, SEARCH_GRANTS_PER_PAGE, setLoading, setError, setGrants, setTotalPages]);
+
+  // Initial data fetch
+  useEffect(() => {
     fetchGrants();
-  }, [fetchGrantsData, SEARCH_GRANTS_PER_PAGE]);
+  }, [fetchGrants]);
 
   // Memoize the search handler to avoid recreating on every render
   const handleSearch = useCallback((e: React.FormEvent) => {
@@ -218,7 +222,10 @@ export default function Search() {
     });
   }, [MAX_FUNDING, MIN_DEADLINE_DAYS, MAX_DEADLINE_DAYS]);
 
-  const handleInteraction = useCallback(async (grantId: string, action: 'applied' | 'saved' | 'ignored', removeFromUI: boolean = true): Promise<void> => {
+  // Get the interaction context
+  const { lastInteractionTimestamp } = useInteractions();
+
+  const handleInteraction = useCallback(async (grantId: string, status: InteractionStatus | null): Promise<void> => {
     // Ensure user is logged in
     if (!user) {
       console.error('User not logged in for interaction.');
@@ -227,27 +234,15 @@ export default function Search() {
     }
  
     try {
-      // Explicitly get the latest session before making the API call
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
- 
-      if (sessionError || !session) {
-        console.error('Failed to get session in handleInteraction:', sessionError?.message);
-        setError('Authentication session expired or invalid. Please log in again.');
-        // Optionally redirect to login page
-        // router.push('/login');
+      // If status is null, we're removing the interaction
+      if (status === null) {
+        // The interaction is already handled by InteractionContext
         return;
       }
- 
-      console.log('User object in handleInteraction:', user);
-      console.log('Session object in handleInteraction (fetched):', session);
-      console.log('Access token in handleInteraction (fetched):', session.access_token);
- 
-      // Insert the new interaction using apiClient, passing the fetched access token
-      const response = await apiClient.users.recordInteraction(user.id, grantId, action, session.access_token);
-      
-      if (response.error) throw response.error;
 
-      // Only remove the grant from the UI if specified (for "applied" action, this depends on user confirmation)
+      // Only remove the grant from the UI for certain actions
+      const removeFromUI = status === 'applied' || status === 'ignored' || status === 'saved';
+      
       if (removeFromUI) {
         // Remove the grant from the UI
         setGrants(prevGrants => prevGrants.filter(g => g.id !== grantId));
@@ -262,7 +257,7 @@ export default function Search() {
             after_id: lastGrant.id,
             exclude_interactions: true,
             user_id: user.id
-          }, user.session?.access_token);
+          });
           
           if (response.error) {
             console.error('Error fetching replacement grant:', response.error);
@@ -276,16 +271,14 @@ export default function Search() {
           }
         }
       }
-      
-      // Note: We no longer open grants.gov here as it's handled in the GrantCard component
     } catch (error: any) {
-      console.error(`Error ${action} grant:`, error.message || error);
-      setError(`Failed to ${action} grant: ${error.message || 'Please try again.'}`);
+      console.error(`Error handling interaction for grant:`, error.message || error);
+      setError(`Failed to update grant: ${error.message || 'Please try again.'}`);
     }
-  }, [user, setGrants, grants, setError]);
+  }, [user, grants, setGrants, setError]); // Add all dependencies
 
   // Memoize the apply click handler to avoid recreating on every render
-  const handleApplyClick = useCallback((grantId: string): Promise<void> => {
+  const handleApplyClick = useCallback((grantId: string, status: InteractionStatus | null): Promise<void> => {
     return new Promise<void>(resolve => {
       // Find the grant in the list
       const grant = grants.find(g => g.id === grantId);
@@ -322,8 +315,8 @@ export default function Search() {
         await searchResultsRef.current.fadeAndRemoveCard(pendingGrantId);
       }
       
-      // Then update the database
-      await handleInteraction(pendingGrantId, 'applied', true); // true = remove from UI
+      // Then update the database - the InteractionContext will handle the actual API call
+      await handleInteraction(pendingGrantId, 'applied');
     }
     // If "No", do nothing and the card remains visible
     
@@ -339,15 +332,15 @@ export default function Search() {
   }, []);
   
   // Memoize handlers for grant interactions
-  const handleApply = useCallback(async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'applied', true);
+  const handleApply = useCallback(async (grantId: string, status: InteractionStatus | null): Promise<void> => {
+    await handleInteraction(grantId, status);
   }, [handleInteraction]);
 
-  const handleSave = useCallback(async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'saved', true);
+  const handleSave = useCallback(async (grantId: string, status: InteractionStatus | null): Promise<void> => {
+    await handleInteraction(grantId, status);
   }, [handleInteraction]);
 
-  const handleShare = useCallback(async (grantId: string) => {
+  const handleShare = useCallback(async (grantId: string): Promise<void> => {
     const shareUrl = `${window.location.origin}/grants/${grantId}`;
     
     try {
@@ -369,9 +362,16 @@ export default function Search() {
     }
   }, []);
 
-  const handleIgnore = useCallback(async (grantId: string): Promise<void> => {
-    await handleInteraction(grantId, 'ignored', true);
+  const handleIgnore = useCallback(async (grantId: string, status: InteractionStatus | null): Promise<void> => {
+    await handleInteraction(grantId, status);
   }, [handleInteraction]);
+  
+  // Re-fetch grants when interactions change
+  useEffect(() => {
+    if (lastInteractionTimestamp && user) {
+      fetchGrants();
+    }
+  }, [lastInteractionTimestamp, user, fetchGrants]);
 
   return (
     <Layout>

@@ -7,9 +7,10 @@ import { useSearchParams } from 'next/navigation';
 import Layout from '@/components/Layout/Layout';
 import apiClient from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInteractions } from '@/contexts/InteractionContext';
 import { fetchSimilarGrants, formatSimilarGrant } from '@/lib/similarGrants';
 import { Grant } from '@/types/grant';
-import { UserInteraction as Interaction } from '@/types/interaction';
+import { UserInteraction as Interaction, InteractionStatus } from '@/types/interaction';
 
 // Similar grant type
 interface SimilarGrant {
@@ -42,11 +43,12 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   const unwrappedParams = use(params as Promise<PageParams>);
   const grantId = unwrappedParams.grantId;
   const { user, session } = useAuth();
+  const { getInteractionStatus, updateUserInteraction, lastInteractionTimestamp } = useInteractions();
   const searchParams = useSearchParams();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [interactionState, setInteractionState] = useState<'saved' | 'applied' | 'ignored' | null>(null);
+  const [interactionState, setInteractionState] = useState<InteractionStatus | null>(null);
   const [similarGrants, setSimilarGrants] = useState<SimilarGrant[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [showApplyConfirmation, setShowApplyConfirmation] = useState(false);
@@ -78,35 +80,11 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         
         setGrant(data.grant); // Correctly set the nested grant object
         
-        // If user is logged in, check if they've interacted with this grant
+        // If user is logged in, get the interaction status from the context
         if (user) {
-          try {
-            setInteractionLoading(true);
-            // Fetch user interactions for this grant using apiClient
-            const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(
-              user.id,
-              undefined,
-              grantId,
-              undefined,
-              session?.access_token
-            );
-            
-            if (interactionsError) {
-              console.warn('Error fetching interactions:', interactionsError);
-              // Don't throw - we can still show the grant without interaction data
-            } else if (interactionsData && Array.isArray(interactionsData) && interactionsData.length > 0) {
-              // Get the most recent interaction
-              const latestInteraction = interactionsData[0] as Interaction;
-              setInteractionState(latestInteraction.action);
-            } else {
-              setInteractionState(null);
-            }
-          } catch (interactionError) {
-            console.warn('Error processing interactions:', interactionError);
-            // Don't block the UI - we can still show the grant without interaction data
-          } finally {
-            setInteractionLoading(false);
-          }
+          const status = getInteractionStatus(grantId);
+          setInteractionState(status || null);
+          setInteractionLoading(false);
         }
         
         // Fetch similar grants
@@ -134,64 +112,35 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
     setTabSource(tab);
     
     fetchGrant();
-  }, [grantId, user, searchParams]);
+  }, [grantId, user, searchParams, getInteractionStatus]);
+  
+  // Update the interaction state when the context changes
+  useEffect(() => {
+    if (user && grantId) {
+      const status = getInteractionStatus(grantId);
+      setInteractionState(status || null);
+    }
+  }, [lastInteractionTimestamp, grantId, user, getInteractionStatus]);
   
   // Handle user interactions (save, apply, ignore)
-  const handleInteraction = async (action: 'saved' | 'applied' | 'ignored') => {
+  const handleInteraction = async (action: InteractionStatus) => {
     if (!user) {
       // Redirect to login or show login modal
       return;
     }
     
-    // Set loading state and update UI immediately
+    // Set loading state
     setInteractionLoading(true);
     
-    // Immediately update UI state for better responsiveness
-    // Store previous state in case we need to revert due to error
-    const previousState = interactionState;
+    // Determine if we're toggling the current status
     const isCurrentStatus = interactionState === action;
-    
-    // Update local state first (before DB operation completes)
-    if (isCurrentStatus) {
-      setInteractionState(null);
-    } else {
-      setInteractionState(action);
-    }
+    const newStatus = isCurrentStatus ? null : action;
     
     try {
-      if (isCurrentStatus) {
-        // --- Undoing an action ---
-        // Delete the interaction from the database using apiClient
-        const { error: deleteError } = await apiClient.users.deleteInteraction(
-          user.id,
-          grantId,
-          action,
-          session?.access_token
-        );
-        
-        if (deleteError) {
-          console.error(`Error undoing ${action} grant:`, deleteError);
-          throw new Error(`Unable to update: ${deleteError}`);
-        }
-      } else {
-        // --- Setting a new action or changing an action ---
-        // Use apiClient to record the interaction
-        const { error } = await apiClient.users.recordInteraction(
-          user.id,
-          grantId,
-          action,
-          session?.access_token
-        );
-        
-        if (error) {
-          console.error(`Error recording ${action} grant:`, error);
-          throw new Error(`Unable to update: ${error}`);
-        }
-      }
+      // Use the InteractionContext to update the interaction
+      await updateUserInteraction(grantId, newStatus);
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error);
-      // Revert UI state if database operation failed
-      setInteractionState(previousState);
       // Could add toast notification here for user feedback
     } finally {
       setInteractionLoading(false);
@@ -246,12 +195,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
     
     // If user confirmed, mark as applied
     if (didApply) {
-      // Update UI state immediately before database interaction
-      const previousState = interactionState;
-      setInteractionState('applied');
-      
-      // Then handle the database update
-      handleInteraction('applied');
+      // Use the InteractionContext to update the interaction
+      updateUserInteraction(grantId, 'applied');
     }
   };
   
