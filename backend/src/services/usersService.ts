@@ -177,7 +177,7 @@ class UsersService {
    * @param action - Optional action filter
    * @returns User interactions and associated grants
    */
-  async getUserInteractions(supabase: SupabaseClient, userId: string, action?: string): Promise<{ interactions: UserInteraction[], grants: any[] }> {
+  async getUserInteractions(supabase: SupabaseClient, userId: string, action?: string, grant_id?: string): Promise<{ interactions: UserInteraction[], grants: any[] }> {
     try {
       let query = supabase
         .from('user_interactions')
@@ -186,6 +186,10 @@ class UsersService {
 
       if (action && ['saved', 'applied', 'ignored'].includes(action)) {
         query = query.eq('action', action);
+      }
+      
+      if (grant_id) {
+        query = query.eq('grant_id', grant_id);
       }
 
       query = query.order('timestamp', { ascending: false });
@@ -208,7 +212,8 @@ class UsersService {
 
       const grantRecords = interactions?.map(i => i.grants).filter(g => g !== null) || [];
       // Deduplicate grants if necessary (though each interaction should have one grant)
-      const uniqueGrants = Array.from(new Map(grantRecords.map(item => [item.Grant_ID, item])).values());
+      // Use lowercase grant_id for consistent property naming
+      const uniqueGrants = Array.from(new Map(grantRecords.map(item => [item.grant_id || item.Grant_ID, item])).values());
 
       return {
         interactions: interactionRecords,

@@ -146,9 +146,10 @@ router.get('/interactions',
       // Use authenticated user ID from middleware
       const userId = req.user.id;
       const action = req.query.action as string | undefined;
+      const grant_id = req.query.grant_id as string | undefined;
       
       // Use users service to fetch interactions
-      const result = await usersService.getUserInteractions(req.supabase, userId, action);
+      const result = await usersService.getUserInteractions(req.supabase, userId, action, grant_id);
       
       res.json({
         message: `User interactions for user: ${userId}`,

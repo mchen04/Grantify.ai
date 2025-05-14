@@ -8,55 +8,8 @@ import Layout from '@/components/Layout/Layout';
 import apiClient from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchSimilarGrants, formatSimilarGrant } from '@/lib/similarGrants';
-
-// Grant type definition
-interface Grant {
-  id: string;
-  title: string;
-  agency_name: string;
-  agency_code: string;
-  agency_subdivision?: string;
-  opportunity_id: string;
-  opportunity_number: string;
-  close_date: string | null;
-  post_date: string | null;
-  loi_due_date?: string | null;
-  expiration_date?: string | null;
-  earliest_start_date?: string | null;
-  total_funding: number | null;
-  award_ceiling: number | null;
-  award_floor: number | null;
-  expected_award_count?: number | null;
-  project_period_max_years?: number | null;
-  cost_sharing: boolean;
-  description_short: string;
-  description_full: string;
-  eligible_applicants: string[] | null;
-  eligibility_pi?: string;
-  activity_category: string[] | null;
-  activity_code?: string;
-  source_url: string | null;
-  data_source?: string;
-  status?: string;
-  grantor_contact_name: string | null;
-  grantor_contact_role?: string;
-  grantor_contact_email: string | null;
-  grantor_contact_phone: string | null;
-  grantor_contact_affiliation?: string;
-  announcement_type?: string;
-  clinical_trial_allowed?: boolean;
-  additional_notes?: string;
-  keywords?: string[];
-  grant_type: string | null;
-}
-// Interaction type
-interface Interaction {
-  id: string;
-  user_id: string;
-  grant_id: string;
-  action: 'saved' | 'applied' | 'ignored';
-  timestamp: string;
-}
+import { Grant } from '@/types/grant';
+import { UserInteraction as Interaction } from '@/types/interaction';
 
 // Similar grant type
 interface SimilarGrant {
@@ -112,7 +65,11 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         // Fetch the grant by ID using apiClient
         const { data, error } = await apiClient.grants.getGrantById(grantId);
         
-        if (error) throw new Error(error);
+        if (error) {
+          console.error('Error fetching grant:', error);
+          setError(`Unable to load grant details: ${error}`);
+          return;
+        }
         
         if (!data) {
           setError('Grant not found');
@@ -120,29 +77,49 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
         }
         
         setGrant(data.grant); // Correctly set the nested grant object
-        console.log('Fetched grant data:', JSON.stringify(data, null, 2)); // Keep logging for verification
         
         // If user is logged in, check if they've interacted with this grant
         if (user) {
-          // Fetch user interactions for this grant using apiClient
-          const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(user.id, undefined, grantId, undefined, session?.access_token);
-          
-          if (interactionsError) throw new Error(interactionsError);
-          
-          if (interactionsData && interactionsData.length > 0) {
-            // Get the most recent interaction
-            const latestInteraction = interactionsData[0] as Interaction;
-            setInteractionState(latestInteraction.action);
-          } else {
-            setInteractionState(null);
+          try {
+            setInteractionLoading(true);
+            // Fetch user interactions for this grant using apiClient
+            const { data: interactionsData, error: interactionsError } = await apiClient.users.getUserInteractions(
+              user.id,
+              undefined,
+              grantId,
+              undefined,
+              session?.access_token
+            );
+            
+            if (interactionsError) {
+              console.warn('Error fetching interactions:', interactionsError);
+              // Don't throw - we can still show the grant without interaction data
+            } else if (interactionsData && Array.isArray(interactionsData) && interactionsData.length > 0) {
+              // Get the most recent interaction
+              const latestInteraction = interactionsData[0] as Interaction;
+              setInteractionState(latestInteraction.action);
+            } else {
+              setInteractionState(null);
+            }
+          } catch (interactionError) {
+            console.warn('Error processing interactions:', interactionError);
+            // Don't block the UI - we can still show the grant without interaction data
+          } finally {
+            setInteractionLoading(false);
           }
         }
         
         // Fetch similar grants
         setLoadingSimilar(true);
-        const similarGrantsData = await fetchSimilarGrants(grantId, data.activity_category, 3);
-        setSimilarGrants(similarGrantsData.map(formatSimilarGrant));
-        setLoadingSimilar(false);
+        try {
+          const similarGrantsData = await fetchSimilarGrants(grantId, data.activity_category, 3);
+          setSimilarGrants(similarGrantsData.map(formatSimilarGrant));
+        } catch (similarError) {
+          console.error('Error fetching similar grants:', similarError);
+          // Don't block the UI - we can show the grant without similar grants
+        } finally {
+          setLoadingSimilar(false);
+        }
       } catch (error: any) {
         console.error('Error fetching grant:', error);
         setError('Failed to load grant details. Please try again later.');
@@ -192,7 +169,10 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
           session?.access_token
         );
         
-        if (deleteError) throw new Error(deleteError);
+        if (deleteError) {
+          console.error(`Error undoing ${action} grant:`, deleteError);
+          throw new Error(`Unable to update: ${deleteError}`);
+        }
       } else {
         // --- Setting a new action or changing an action ---
         // Use apiClient to record the interaction
@@ -203,12 +183,16 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
           session?.access_token
         );
         
-        if (error) throw new Error(error);
+        if (error) {
+          console.error(`Error recording ${action} grant:`, error);
+          throw new Error(`Unable to update: ${error}`);
+        }
       }
     } catch (error: any) {
       console.error(`Error ${action} grant:`, error);
       // Revert UI state if database operation failed
       setInteractionState(previousState);
+      // Could add toast notification here for user feedback
     } finally {
       setInteractionLoading(false);
     }
@@ -272,7 +256,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   };
   
   // Format dates
-  const formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'No deadline specified';
     
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -283,7 +267,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   };
   
   // Calculate days remaining
-  const getDaysRemaining = (closeDate: string | null) => {
+  const getDaysRemaining = (closeDate: string | null | undefined) => {
     if (!closeDate) return null;
     
     const today = new Date();
@@ -294,8 +278,8 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   };
   
   // Format currency
-  const formatCurrency = (amount: number | null) => {
-    if (amount === null) return 'Not specified';
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount === null || amount === undefined) return 'Not specified';
     
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -308,8 +292,9 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+          <p className="text-gray-600">Loading grant details...</p>
         </div>
       </Layout>
     );
@@ -323,9 +308,20 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
           <div className="bg-red-50 text-red-600 p-6 rounded-lg">
             <h1 className="text-2xl font-bold mb-4">Error</h1>
             <p>{error || 'Grant not found'}</p>
-            <Link href="/search" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
-              Return to Search
-            </Link>
+            <div className="mt-6 space-y-2">
+              <p className="text-sm text-red-800">If this problem persists, please try again later or contact support.</p>
+              <div className="flex space-x-4 mt-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                >
+                  Try Again
+                </button>
+                <Link href="/search" className="px-4 py-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors">
+                  Return to Search
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </Layout>
@@ -755,10 +751,19 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                       : 'btn-primary'
                   } w-full flex justify-center items-center gap-2 ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                  </svg>
-                  {interactionState === 'applied' ? 'Applied' : 'Apply on Grants.gov'}
+                  {interactionLoading ? (
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin mr-2"></div>
+                      <span>Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                      </svg>
+                      {interactionState === 'applied' ? 'Applied' : 'Apply on Grants.gov'}
+                    </>
+                  )}
                 </button>
                 
                 {/* Save Button */}
@@ -771,10 +776,19 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                       : 'btn-secondary'
                   } ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
-                  </svg>
-                  {interactionState === 'saved' ? 'Saved' : 'Save Grant'}
+                  {interactionLoading ? (
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 border-2 border-t-transparent border-primary-600 rounded-full animate-spin mr-2"></div>
+                      <span>Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
+                      </svg>
+                      {interactionState === 'saved' ? 'Saved' : 'Save Grant'}
+                    </>
+                  )}
                 </button>
                 
                 {/* Share Button */}
@@ -799,10 +813,19 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
                       : 'px-4 py-2 rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors'
                   } ${interactionLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                  {interactionState === 'ignored' ? 'Ignored' : 'Ignore Grant'}
+                  {interactionLoading ? (
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 border-2 border-t-transparent border-gray-600 rounded-full animate-spin mr-2"></div>
+                      <span>Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      {interactionState === 'ignored' ? 'Ignored' : 'Ignore Grant'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
