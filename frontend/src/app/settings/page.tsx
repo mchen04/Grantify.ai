@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import SettingsLayout from '@/components/settings/SettingsLayout';
 import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { validatePassword } from '@/utils/passwordValidator';
+import supabase from '@/lib/supabaseClient'; // Import Supabase client
 
 export default function Settings() {
   const { user, isLoading, updatePassword } = useAuth();
@@ -93,6 +94,38 @@ export default function Settings() {
           text: error.message || 'Failed to update password. Please try again.'
         });
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (!user?.email) {
+      setMessage({ type: 'error', text: 'User email not found.' });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setMessage(null);
+
+      // Replace with your actual redirect URL
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/login?reset=true`, // Redirect to login page after reset request
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setMessage({ type: 'success', text: 'Password recovery email sent. Please check your inbox.' });
+
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error.message || 'Failed to send password recovery email. Please try again.'
+      });
     } finally {
       setLoading(false);
     }
@@ -194,9 +227,29 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Preferences Settings removed */}
-        
-        {/* Account Danger Zone */}
+       {/* Forgot Password Section */}
+       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+         <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+           <h2 className="text-lg font-semibold text-gray-800">Forgot Password</h2>
+         </div>
+         <div className="p-4">
+           <p className="text-sm text-gray-700 mb-4">
+             If you have forgotten your password, you can request a password reset link to be sent to your email address.
+           </p>
+           <button
+             type="button"
+             onClick={handleForgotPassword}
+             disabled={loading}
+             className={`px-4 py-2 bg-blue-600 text-white rounded-lg font-medium transition-colors ${
+               loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
+             }`}
+           >
+             {loading ? 'Sending...' : 'Forgot Password? Retrieve via Email'}
+           </button>
+         </div>
+       </div>
+
+       {/* Account Danger Zone */}
         <div className="bg-red-50 rounded-lg border border-red-200 overflow-hidden">
           <div className="px-4 py-3 bg-red-100 border-b border-red-200">
             <h2 className="text-lg font-semibold text-red-800">Danger Zone</h2>

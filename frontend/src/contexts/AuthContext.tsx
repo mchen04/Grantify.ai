@@ -99,11 +99,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Reset password function
   const resetPassword = async (email: string) => {
     try {
+      // Supabase may use hash fragments (#) instead of query parameters (?) for client-side auth flows
+      // This is to prevent tokens from being sent to the server
+      // The reset-password page is set up to handle both formats
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
+        // Don't specify any additional options that might override Supabase's default behavior
       });
+      
+      console.log(`Password reset email sent to ${email}`);
       return { error };
     } catch (error) {
+      console.error('Error sending password reset email:', error);
       return { error };
     }
   };
