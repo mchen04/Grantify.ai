@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { debounce } from '../utils/debounce';
 import apiClient from '@/lib/apiClient';
 import { Grant, ScoredGrant } from '@/types/grant';
 import { UserInteraction } from '@/types/user';
@@ -51,6 +52,12 @@ export function useFetchDashboardData({
   const [error, setError] = useState<string | null>(null);
   const [isFetchingReplacements, setIsFetchingReplacements] = useState(false);
   const [grantDetailsMap, setGrantDetailsMap] = useState<Record<string, Grant>>({});
+  const grantDetailsMapRef = useRef<Record<string, Grant>>({});
+
+  // Keep the ref in sync with the state
+  useEffect(() => {
+    grantDetailsMapRef.current = grantDetailsMap;
+  }, [grantDetailsMap]);
 
   // Function to fetch grant details for a list of grant IDs
   const fetchGrantDetails = useCallback(async (grantIds: string[]) => {
@@ -68,11 +75,14 @@ export function useFetchDashboardData({
       
       const accessToken = session.access_token;
       
+      // Use the ref to access the current grantDetailsMap
+      const currentGrantDetailsMap = grantDetailsMapRef.current;
+
       // Filter out grant IDs we already have details for
-      const missingGrantIds = grantIds.filter(id => !grantDetailsMap[id]);
+      const missingGrantIds = grantIds.filter(id => !currentGrantDetailsMap[id]);
       
       if (missingGrantIds.length === 0) {
-        return grantDetailsMap; // We already have all the grant details
+        return currentGrantDetailsMap; // We already have all the grant details
       }
       
       // Fetch details for grants we don't have yet
@@ -85,19 +95,19 @@ export function useFetchDashboardData({
       const grantsData = { grants: grantsResults.map(result => result.data?.grant).filter(Boolean) };
       
       // Create a new map with the fetched grants
-      const newGrantsMap = { ...grantDetailsMap };
+      const newGrantsMap = { ...currentGrantDetailsMap };
       (grantsData?.grants || []).forEach((grant: Grant) => {
         newGrantsMap[grant.id] = grant;
       });
       
-      // Update the state with the new map
-      setGrantDetailsMap(newGrantsMap);
+      // Update the state with the new map using functional update
+      setGrantDetailsMap(prevMap => ({ ...prevMap, ...newGrantsMap }));
       return newGrantsMap;
     } catch (error) {
       console.error('Error in fetchGrantDetails:', error);
-      return grantDetailsMap; // Return what we already have
+      return grantDetailsMapRef.current; // Return what we already have
     }
-  }, [currentUserId, grantDetailsMap]);
+  }, [currentUserId]); // Removed grantDetailsMap from dependencies
 
   // Function to update grant lists based on interactions
   const updateGrantLists = useCallback(async () => {
@@ -112,16 +122,26 @@ export function useFetchDashboardData({
     const ignoredGrantIds: string[] = [];
     
     // Filter grants by interaction type
+    const allInteractedIds: string[] = [];
     Object.entries(interactionsMap).forEach(([grantId, status]) => {
+      allInteractedIds.push(grantId);
       if (status === 'saved') savedGrantIds.push(grantId);
       else if (status === 'applied') appliedGrantIds.push(grantId);
       else if (status === 'ignored') ignoredGrantIds.push(grantId);
     });
     
-    // Fetch details for all interacted grants
-    const allInteractedIds = [...savedGrantIds, ...appliedGrantIds, ...ignoredGrantIds];
-    const grantsMap = await fetchGrantDetails(allInteractedIds);
+    // Identify which interacted grant IDs are missing from the cache
+    const cachedGrantIds = Object.keys(grantDetailsMapRef.current);
+    const missingGrantIds = allInteractedIds.filter(id => !cachedGrantIds.includes(id));
+
+    // Fetch details only for missing grants
+    if (missingGrantIds.length > 0) {
+      await fetchGrantDetails(missingGrantIds);
+    }
     
+    // Use the updated cache (via ref) to build the grant lists
+    const currentGrantsMap = grantDetailsMapRef.current;
+
     // Filter function for active grants (not expired)
     const isActiveGrant = (grant: Grant | undefined) => {
       if (!grant) return false;
@@ -131,23 +151,23 @@ export function useFetchDashboardData({
     
     // Update saved grants
     const newSavedGrants = savedGrantIds
-      .map(id => grantsMap[id])
+      .map(id => currentGrantsMap[id])
       .filter(grant => grant && isActiveGrant(grant)) as Grant[];
     setSavedGrants(newSavedGrants);
     
     // Update applied grants (keep all regardless of expiry)
     const newAppliedGrants = appliedGrantIds
-      .map(id => grantsMap[id])
+      .map(id => currentGrantsMap[id])
       .filter(grant => grant) as Grant[];
     setAppliedGrants(newAppliedGrants);
     
     // Update ignored grants
     const newIgnoredGrants = ignoredGrantIds
-      .map(id => grantsMap[id])
+      .map(id => currentGrantsMap[id])
       .filter(grant => grant && isActiveGrant(grant)) as Grant[];
     setIgnoredGrants(newIgnoredGrants);
     
-  }, [currentUserId, enabled, interactionsMap, fetchGrantDetails]);
+  }, [currentUserId, enabled, interactionsMap, fetchGrantDetails]); // fetchGrantDetails is a stable ref now
 
   // Function to fetch recommended grants
   const fetchRecommendedGrants = useCallback(async () => {
@@ -346,14 +366,27 @@ export function useFetchDashboardData({
   }, [fetchDashboardData, currentUserId]); // Keep currentUserId in dependency array
   
   // React to interaction changes
+  // React to interaction changes with debounce
   useEffect(() => {
     if (currentUserId && !interactionsLoading) {
-      // When interactions change, update our grant lists
-      updateGrantLists();
-      // Also refresh recommended grants to ensure they exclude newly interacted grants
-      fetchRecommendedGrants();
+      const debouncedUpdate = debounce(() => {
+        // When interactions change, update our grant lists
+        updateGrantLists();
+        // Also refresh recommended grants to ensure they exclude newly interacted grants
+        fetchRecommendedGrants();
+      }, 300); // Debounce with a 300ms delay
+
+      debouncedUpdate();
+
+      // Cleanup function to cancel the debounce on effect cleanup
+      return () => {
+        // Check if cancel method exists before calling it
+        if (debouncedUpdate.cancel && typeof debouncedUpdate.cancel === 'function') {
+          debouncedUpdate.cancel();
+        }
+      };
     }
-  }, [currentUserId, interactionsLoading, lastInteractionTimestamp, updateGrantLists, fetchRecommendedGrants]);
+  }, [currentUserId, interactionsLoading, lastInteractionTimestamp, updateGrantLists, fetchRecommendedGrants]); // Dependencies remain the same for effect trigger
  
   return {
     recommendedGrants,

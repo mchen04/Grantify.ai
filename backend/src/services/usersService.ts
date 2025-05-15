@@ -179,9 +179,10 @@ class UsersService {
    */
   async getUserInteractions(supabase: SupabaseClient, userId: string, action?: string, grant_id?: string): Promise<{ interactions: UserInteraction[], grants: any[] }> {
     try {
+      // First, get the user interactions without joining with grants
       let query = supabase
         .from('user_interactions')
-        .select('*, grants(*)')
+        .select('*')
         .eq('user_id', userId);
 
       if (action && ['saved', 'applied', 'ignored'].includes(action)) {
@@ -200,7 +201,7 @@ class UsersService {
         throw error;
       }
 
-      // Separate interactions and grants for the response structure frontend expects
+      // Extract the interactions
       const interactionRecords = interactions?.map(i => ({
         id: i.id,
         user_id: i.user_id,
@@ -209,15 +210,25 @@ class UsersService {
         notes: i.notes,
         timestamp: i.timestamp,
       })) || [];
-
-      const grantRecords = interactions?.map(i => i.grants).filter(g => g !== null) || [];
-      // Deduplicate grants if necessary (though each interaction should have one grant)
-      // Use lowercase grant_id for consistent property naming
-      const uniqueGrants = Array.from(new Map(grantRecords.map(item => [item.grant_id || item.Grant_ID, item])).values());
+      
+      // Get the unique grant IDs from the interactions
+      const grantIds = [...new Set(interactionRecords.map(i => i.grant_id))];
+      
+      // If there are grant IDs, fetch the grants separately
+      let grantRecords: any[] = [];
+      if (grantIds.length > 0) {
+        // Use the service role client to fetch grants (bypassing RLS)
+        const { data: grants } = await supabase
+          .from('grants')
+          .select('*')
+          .in('id', grantIds);
+          
+        grantRecords = grants || [];
+      }
 
       return {
         interactions: interactionRecords,
-        grants: uniqueGrants
+        grants: grantRecords
       };
     } catch (error) {
       logger.error('Error fetching user interactions:', {
@@ -234,13 +245,9 @@ class UsersService {
    * @param interactionData - Interaction data
    * @returns Recorded interaction
    */
-  async recordUserInteraction(userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
+  async recordUserInteraction(supabase: SupabaseClient, userId: string, interactionData: Partial<UserInteraction>): Promise<UserInteraction> {
     try {
-      // Use the service role Supabase client for the operation after verifying user ID
-      // IMPORTANT: This relies on the auth middleware correctly setting req.user.id
-      // and the route handler passing that ID as the userId parameter.
-      // A more robust check could involve fetching the user with the service role client,
-      // but for this workaround, we trust the upstream authentication.
+      // Create the interaction object with the authenticated user ID
       const interaction = {
         user_id: userId, // Use the userId parameter which comes from the authenticated request
         grant_id: interactionData.grant_id,
@@ -249,8 +256,9 @@ class UsersService {
         timestamp: new Date().toISOString()
       };
 
-      // Upsert the interaction based on user_id and grant_id using the service role client
-      const { data: upsertedInteraction, error: upsertError } = await serviceRoleSupabase
+      // Upsert the interaction based on user_id and grant_id using the provided client
+      // This will respect RLS policies since we're using the user's authenticated client
+      const { data: upsertedInteraction, error: upsertError } = await supabase
         .from('user_interactions')
         .upsert({
           ...interaction

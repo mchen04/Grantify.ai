@@ -120,7 +120,7 @@ router.post('/interactions',
         return res.status(500).json({ message: 'Authentication token not available in route handler.' });
       }
 
-      const recordedInteraction = await usersService.recordUserInteraction(req.user.id, interaction);
+      const recordedInteraction = await usersService.recordUserInteraction(req.supabase, req.user.id, interaction);
       
       res.json({
         message: `Recorded interaction for user: ${interaction.user_id}`,

@@ -112,7 +112,7 @@ export default function GrantDetail({ params }: { params: Promise<PageParams> | 
     setTabSource(tab);
     
     fetchGrant();
-  }, [grantId, user, searchParams, getInteractionStatus]);
+  }, [grantId, user?.id]); // Reduced dependencies
   
   // Update the interaction state when the context changes
   useEffect(() => {

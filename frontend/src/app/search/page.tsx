@@ -60,7 +60,7 @@ export default function Search() {
     page: 1
   });
 
-  const { user } = useAuth();
+  const { user, session } = useAuth();
 
 
   const sortOptions: SelectOption[] = [
@@ -256,7 +256,8 @@ export default function Search() {
             limit: 1,
             after_id: lastGrant.id,
             exclude_interactions: true,
-            user_id: user.id
+            user_id: user.id,
+            access_token: session?.access_token
           });
           
           if (response.error) {

@@ -38,7 +38,7 @@ import { UserInteraction } from '@/types/user';
 const TARGET_RECOMMENDED_COUNT = 10; // Target number of recommended grants
 
 export default function Dashboard() {
-  const { user, isLoading } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const { updateUserInteraction } = useInteractions();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,6 +85,7 @@ export default function Dashboard() {
     handleUndoInteraction
   } = useGrantInteractions({
     userId: user?.id,
+    accessToken: session?.access_token,
     onError: (message) => setError(message)
   });
   

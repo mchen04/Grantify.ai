@@ -33,7 +33,7 @@ export const supabaseHelpers = {
   
   // User interactions
   getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
-    let query = supabase.from('user_interactions').select('*, grants(*)').eq('user_id', userId);
+    let query = supabase.from('user_interactions').select('*').eq('user_id', userId);
     
     if (action) {
       query = query.eq('action', action);
@@ -190,7 +190,7 @@ export const db = {
     
     // Get user interactions
     getUserInteractions: async (userId: string, action?: 'saved' | 'applied' | 'ignored') => {
-      let query = supabase.from('user_interactions').select('*, grants(*)').eq('user_id', userId);
+      let query = supabase.from('user_interactions').select('*').eq('user_id', userId);
       
       if (action) {
         query = query.eq('action', action);
