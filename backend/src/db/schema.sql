@@ -1,190 +1,53 @@
--- Grants.ai Database Schema SQL Script
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
 
--- ========= Extensions =========
--- Enable necessary extensions if they are not already enabled.
-CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgsodium";
+CREATE EXTENSION IF NOT EXISTS "pg_graphql" WITH SCHEMA "graphql";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "pgjwt" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "supabase_vault" WITH SCHEMA "vault";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA "extensions";
+CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA "public";
 
--- ========= Tables =========
+ALTER SCHEMA "public" OWNER TO "postgres";
 
--- Grants Table (Core grant information)
-CREATE TABLE IF NOT EXISTS grants (
-  -- Identifiers
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),                          -- Grant_ID (Internal Primary Key)
-  opportunity_id TEXT UNIQUE NOT NULL,                                    -- Funding_Opportunity_Number (Official Unique ID)
-  opportunity_number TEXT,                                                -- Often synonymous with opportunity_id, but sometimes different (e.g., CFDA)
+COMMENT ON SCHEMA "public" IS 'standard public schema';
 
-  -- Core Details
-  title TEXT NOT NULL,                                                    -- Grant_Title
-  description_short TEXT,                                                 -- Grant_Description_Short (Brief Summary - for list view)
-  description_full TEXT,                                                  -- Grant_Description_Full (Full Description - for detail view)
-  keywords TEXT[],                                                        -- Focus_Area / Keywords (Using array for multiple)
-  category TEXT,                                                          -- Broad category (Retained from original, might overlap keywords)
-
-  -- Agency Information
-  agency_name TEXT,                                                       -- Funding_Agency
-  agency_subdivision TEXT,                                                -- Agency_Subdivision
-  agency_code TEXT,                                                       -- Agency Code (Retained from original)
-
-  -- Source & Status
-  source_url TEXT,                                                        -- Source_URL (Link to official announcement) - Renamed from additional_info_url
-  data_source TEXT,                                                       -- Data_Source (Where the data originated, e.g., 'Grants.gov XML Feed', 'Manual Entry')
-  status TEXT,                                                            -- Status (e.g., 'Forecasted', 'Posted', 'Closed', 'Archived') - Consider CHECK constraint or ENUM
-
-  -- Dates
-  post_date TIMESTAMP WITH TIME ZONE,                                     -- Open_Date (When the grant was posted/announced)
-  close_date TIMESTAMP WITH TIME ZONE,                                    -- Application_Due_Date
-  loi_due_date TIMESTAMP WITH TIME ZONE,                                  -- Letter_of_Intent_Due_Date (Nullable)
-  expiration_date TIMESTAMP WITH TIME ZONE,                               -- Expiration_Date (When the announcement itself expires, might differ from close_date) (Nullable)
-  earliest_start_date TIMESTAMP WITH TIME ZONE,                           -- Earliest_Start_Date (Nullable)
-
-  -- Funding Details
-  total_funding BIGINT,                                                   -- Estimated_Total_Program_Funding
-  award_ceiling BIGINT,                                                   -- Funding_Amount_Ceiling
-  award_floor BIGINT,                                                     -- Funding_Amount_Floor
-  expected_award_count INTEGER,                                           -- Expected_Number_of_Awards (Nullable)
-
-  -- Project & Cost Details
-  project_period_max_years INTEGER,                                       -- Project_Period_Max_Years (Nullable)
-  cost_sharing BOOLEAN DEFAULT FALSE,                                     -- Cost_Sharing_Required
-
-  -- Eligibility
-  eligible_applicants TEXT[],                                             -- Eligibility_Organizations (Retained from original)
-  eligibility_pi TEXT,                                                    -- Eligibility_PI (Descriptive text, Nullable)
-
-  -- Grant Type & Activity Details
-  grant_type TEXT,                                                        -- Activity_Code / Grant_Type (Primary Type) - Renamed from funding_type
-  activity_code TEXT,                                                     -- Activity_Code (Specific code if available, Nullable)
-  activity_category TEXT[],                                               -- Activity Category (Retained from original, broader activities)
-  announcement_type TEXT,                                                 -- Announcement_Type (e.g., 'New', 'Continuation', 'Revision') (Nullable)
-  clinical_trial_allowed BOOLEAN,                                         -- Clinical_Trial_Allowed (Null indicates unknown, True/False if specified)
-
-  -- Contact Information
-  grantor_contact_name TEXT,                                              -- Contact_Name
-  grantor_contact_role TEXT,                                              -- Contact_Role (Nullable)
-  grantor_contact_email TEXT,                                             -- Contact_Email
-  grantor_contact_phone TEXT,                                             -- Contact_Phone
-  grantor_contact_affiliation TEXT,                                       -- Contact_Affiliation (Nullable)
-
-  -- Additional Information & AI Features
-  additional_notes TEXT,                                                  -- Additional_Notes / Key_Info_Highlight (Concise flags/notes) (Nullable)
-  embeddings VECTOR(768),                                                 -- Embeddings for semantic search (Dimension matches Gemini)
-
-  -- Timestamps
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Users Table (extends Supabase Auth users)
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY REFERENCES auth.users(id),                          -- Links to Supabase auth user ID
-  email TEXT NOT NULL UNIQUE,                                             -- Ensure email is unique here too for easier reference
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Add unique constraint explicitly if not handled by CREATE TABLE UNIQUE ( belt-and-suspenders )
-ALTER TABLE users ADD CONSTRAINT users_email_unique_constraint UNIQUE (email);
-
--- User Preferences Table
-CREATE TABLE IF NOT EXISTS user_preferences (
-  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,        -- References users table, cascade delete
-  topics TEXT[],                                                          -- Might align with grants.keywords or grants.category
-  funding_min INTEGER,
-  funding_max INTEGER,
-  deadline_range TEXT DEFAULT '0',                                        -- Consider changing type if '0' isn't descriptive
-  eligible_applicant_types TEXT[],                                        -- Aligns with grants.eligible_applicants
-  agencies TEXT[],                                                        -- Aligns with grants.agency_name
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- User Interactions Table
-CREATE TABLE IF NOT EXISTS user_interactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,           -- References users table, cascade delete
-  grant_id UUID NOT NULL REFERENCES grants(id) ON DELETE CASCADE,           -- References grants table, cascade delete
-  action TEXT NOT NULL CHECK (action IN ('saved', 'applied', 'ignored')), -- Ensure valid action types
-  notes TEXT,                                                             -- User notes for this interaction
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, grant_id, action)                                       -- Prevents duplicate actions per user/grant
-);
-
--- Pipeline Runs Table (for monitoring data pipeline)
-CREATE TABLE IF NOT EXISTS pipeline_runs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  status TEXT NOT NULL CHECK (status IN ('started', 'completed', 'failed')), -- Ensure valid status types
-  details JSONB,                                                          -- Store run details (e.g., errors, counts)
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-
--- ========= Indexes =========
-
--- Indexes for Grants table
-CREATE INDEX IF NOT EXISTS grants_close_date_idx ON grants(close_date);
-CREATE INDEX IF NOT EXISTS grants_post_date_idx ON grants(post_date);
-CREATE INDEX IF NOT EXISTS grants_agency_name_idx ON grants(agency_name);
-CREATE INDEX IF NOT EXISTS grants_agency_subdivision_idx ON grants(agency_subdivision);
-CREATE INDEX IF NOT EXISTS grants_category_idx ON grants(category);
-CREATE INDEX IF NOT EXISTS grants_keywords_idx ON grants USING GIN(keywords);          -- GIN for text array
-CREATE INDEX IF NOT EXISTS grants_status_idx ON grants(status);
-CREATE INDEX IF NOT EXISTS grants_grant_type_idx ON grants(grant_type);
-CREATE INDEX IF NOT EXISTS grants_activity_category_idx ON grants USING GIN(activity_category); -- GIN for text array
-CREATE INDEX IF NOT EXISTS grants_eligible_applicants_idx ON grants USING GIN(eligible_applicants); -- GIN for text array
-CREATE INDEX IF NOT EXISTS grants_opportunity_id_idx ON grants(opportunity_id);      -- Keep index on unique ID
-
--- Index for vector similarity search on Grants embeddings
--- Using IVFFlat, consider HNSW for larger datasets.
--- Note: Recreate this index if embedding dimensions change.
--- DROP INDEX IF EXISTS grants_embeddings_idx; -- Uncomment to force recreation if needed
-CREATE INDEX IF NOT EXISTS grants_embeddings_idx ON grants USING ivfflat (embeddings vector_cosine_ops) WITH (lists = 100);
--- Alternative HNSW index:
--- CREATE INDEX IF NOT EXISTS grants_embeddings_hnsw_idx ON grants USING hnsw (embeddings vector_cosine_ops);
-
--- Indexes for User Interactions table
-CREATE INDEX IF NOT EXISTS user_interactions_user_id_idx ON user_interactions(user_id);
-CREATE INDEX IF NOT EXISTS user_interactions_grant_id_idx ON user_interactions(grant_id);
-CREATE INDEX IF NOT EXISTS user_interactions_action_idx ON user_interactions(action);
-
-
--- ========= Functions and Triggers =========
-
--- Function to update the updated_at timestamp automatically
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION "public"."check_rls_status"() RETURNS TABLE("table_name" "text", "rls_enabled" boolean)
+    LANGUAGE "plpgsql"
+    AS $$
 BEGIN
-  NEW.updated_at = NOW(); -- Set updated_at to the current time
-  RETURN NEW;             -- Return the modified row
+  RETURN QUERY
+  SELECT tablename::text, rowsecurity
+  FROM pg_tables
+  WHERE schemaname = 'public';
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- Trigger for grants table to update updated_at on modification
-DROP TRIGGER IF EXISTS update_grants_updated_at ON grants; -- Drop if exists to avoid errors on re-run
-CREATE TRIGGER update_grants_updated_at
-BEFORE UPDATE ON grants
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+ALTER FUNCTION "public"."check_rls_status"() OWNER TO "postgres";
 
--- Trigger for users table to update updated_at on modification
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-CREATE TRIGGER update_users_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+CREATE OR REPLACE FUNCTION "public"."get_auth_role"() RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN current_setting('request.jwt.claim.role', true);
+END;
+$$;
 
--- Trigger for user_preferences table to update updated_at on modification
-DROP TRIGGER IF EXISTS update_user_preferences_updated_at ON user_preferences;
-CREATE TRIGGER update_user_preferences_updated_at
-BEFORE UPDATE ON user_preferences
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+ALTER FUNCTION "public"."get_auth_role"() OWNER TO "postgres";
 
--- Function to create a public.users record when a new auth.users is created (Supabase specific)
--- SECURITY DEFINER is often needed for a trigger in the 'auth' schema to insert into the 'public' schema.
--- Review your security model to ensure this is appropriate.
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
 BEGIN
   -- Insert the new user's ID and email into the public users table
   -- Use ON CONFLICT DO NOTHING to safely handle potential duplicate calls or race conditions.
@@ -193,136 +56,258 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
--- Trigger on auth.users table to call handle_new_user after a new user signs up
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW
-EXECUTE FUNCTION public.handle_new_user();
+ALTER FUNCTION "public"."handle_new_user"() OWNER TO "postgres";
 
--- Optional: Grant execute permission on the function if needed.
--- The role executing the trigger (often 'postgres' or 'supabase_admin' due to SECURITY DEFINER) needs execute permission.
--- GRANT EXECUTE ON FUNCTION public.handle_new_user() TO postgres; -- Adjust role if different
+CREATE OR REPLACE FUNCTION "public"."is_service_role"() RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  RETURN current_setting('request.jwt.claim.role', true) = 'service_role';
+END;
+$$;
 
+ALTER FUNCTION "public"."is_service_role"() OWNER TO "postgres";
 
--- ========= Row Level Security (RLS) Policies =========
+CREATE OR REPLACE FUNCTION "public"."service_role_bypass_rls"() RETURNS boolean
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    AS $$
+BEGIN
+  -- If the role is service_role, bypass RLS
+  IF current_setting('request.jwt.claim.role', true) = 'service_role' THEN
+    RETURN true;
+  END IF;
 
--- Enable RLS on all relevant tables
-ALTER TABLE grants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_interactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pipeline_runs ENABLE ROW LEVEL SECURITY; -- Be cautious with access control here
+  -- Otherwise, return false (let other policies handle access)
+  RETURN false;
+END;
+$$;
 
--- Force RLS for tables containing user data (prevents access if no policies match)
-ALTER TABLE users FORCE ROW LEVEL SECURITY;
-ALTER TABLE user_preferences FORCE ROW LEVEL SECURITY;
-ALTER TABLE user_interactions FORCE ROW LEVEL SECURITY;
+ALTER FUNCTION "public"."service_role_bypass_rls"() OWNER TO "postgres";
 
--- --- Grants Policies ---
--- Policy: Anyone can read grants (public data)
-DROP POLICY IF EXISTS grants_select_policy ON grants;
-CREATE POLICY grants_select_policy ON grants
-  FOR SELECT USING (true); -- Allows SELECT for all roles/users
+CREATE OR REPLACE FUNCTION "public"."update_updated_at_column"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+BEGIN
+  NEW.updated_at = NOW(); -- Set updated_at to the current time
+  RETURN NEW;             -- Return the modified row
+END;
+$$;
 
--- --- Users Policies ---
--- Policy: Users can select their own user record
-DROP POLICY IF EXISTS users_select_self ON users;
-CREATE POLICY users_select_self ON users
-  FOR SELECT USING (auth.uid() = id); -- Only allow selecting the row where the user's UID matches the id
+ALTER FUNCTION "public"."update_updated_at_column"() OWNER TO "postgres";
 
--- Policy: Allow the handle_new_user trigger function (running as SECURITY DEFINER) to insert new rows
-DROP POLICY IF EXISTS users_allow_trigger_insert ON users;
-CREATE POLICY users_allow_trigger_insert ON users
-  FOR INSERT WITH CHECK (true); -- Very permissive for INSERT; relies on trigger security. Consider role-based check if needed.
+SET default_tablespace = '';
+SET default_table_access_method = "heap";
 
--- Policy: Users can update their own user record
-DROP POLICY IF EXISTS users_update_self ON users;
-CREATE POLICY users_update_self ON users
-  FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id); -- Allow user to update only their own row
+CREATE TABLE IF NOT EXISTS "public"."grants" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "opportunity_id" "text" NOT NULL,
+    "opportunity_number" "text",
+    "title" "text" NOT NULL,
+    "description_short" "text",
+    "description_full" "text",
+    "keywords" "text"[],
+    "category" "text",
+    "agency_name" "text",
+    "agency_subdivision" "text",
+    "agency_code" "text",
+    "source_url" "text",
+    "data_source" "text",
+    "status" "text",
+    "post_date" timestamp with time zone,
+    "close_date" timestamp with time zone,
+    "loi_due_date" timestamp with time zone,
+    "expiration_date" timestamp with time zone,
+    "earliest_start_date" timestamp with time zone,
+    "total_funding" bigint,
+    "award_ceiling" bigint,
+    "award_floor" bigint,
+    "expected_award_count" integer,
+    "project_period_max_years" integer,
+    "cost_sharing" boolean DEFAULT false,
+    "eligible_applicants" "text"[],
+    "eligibility_pi" "text",
+    "grant_type" "text",
+    "activity_code" "text",
+    "activity_category" "text"[],
+    "announcement_type" "text",
+    "clinical_trial_allowed" boolean,
+    "grantor_contact_name" "text",
+    "grantor_contact_role" "text",
+    "grantor_contact_email" "text",
+    "grantor_contact_phone" "text",
+    "grantor_contact_affiliation" "text",
+    "additional_notes" "text",
+    "embeddings" "public"."vector"(768),
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
 
--- --- User Preferences Policies ---
--- Policy: Users can select their own preferences
-DROP POLICY IF EXISTS user_preferences_select_self ON user_preferences;
-CREATE POLICY user_preferences_select_self ON user_preferences
-  FOR SELECT USING (auth.uid() = user_id);
+ALTER TABLE "public"."grants" OWNER TO "postgres";
 
--- Policy: Users can insert their own preferences
-DROP POLICY IF EXISTS user_preferences_insert_self ON user_preferences;
-CREATE POLICY user_preferences_insert_self ON user_preferences
-  FOR INSERT WITH CHECK (auth.uid() = user_id); -- Ensure user_id matches the authenticated user on insert
+CREATE TABLE IF NOT EXISTS "public"."pipeline_runs" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "status" "text" NOT NULL,
+    "details" "jsonb",
+    "timestamp" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "pipeline_runs_status_check" CHECK (("status" = ANY (ARRAY['started'::"text", 'completed'::"text", 'failed'::"text"])))
+);
 
--- Policy: Users can update their own preferences
-DROP POLICY IF EXISTS user_preferences_update_self ON user_preferences;
-CREATE POLICY user_preferences_update_self ON user_preferences
-  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+ALTER TABLE "public"."pipeline_runs" OWNER TO "postgres";
 
--- Policy: Users can delete their own preferences
-DROP POLICY IF EXISTS user_preferences_delete_self ON user_preferences;
-CREATE POLICY user_preferences_delete_self ON user_preferences
-  FOR DELETE USING (auth.uid() = user_id);
+CREATE TABLE IF NOT EXISTS "public"."user_interactions" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "grant_id" "uuid" NOT NULL,
+    "action" "text" NOT NULL,
+    "notes" "text",
+    "timestamp" timestamp with time zone DEFAULT "now"(),
+    CONSTRAINT "user_interactions_action_check" CHECK (("action" = ANY (ARRAY['saved'::"text", 'applied'::"text", 'ignored'::"text"])))
+);
 
--- --- User Interactions Policies ---
--- Policy: Users can select their own interactions
-DROP POLICY IF EXISTS user_interactions_select_self ON user_interactions;
-CREATE POLICY user_interactions_select_self ON user_interactions
-  FOR SELECT USING (auth.uid() = user_id);
+ALTER TABLE ONLY "public"."user_interactions" FORCE ROW LEVEL SECURITY;
 
--- Policy: Users can insert their own interactions
-DROP POLICY IF EXISTS user_interactions_insert_self ON user_interactions;
-CREATE POLICY user_interactions_insert_self ON user_interactions
-  FOR INSERT WITH CHECK (auth.uid() = user_id); -- Ensure user_id matches the authenticated user
+ALTER TABLE "public"."user_interactions" OWNER TO "postgres";
 
--- Policy: Users can update their own interactions (e.g., changing notes)
-DROP POLICY IF EXISTS user_interactions_update_self ON user_interactions;
-CREATE POLICY user_interactions_update_self ON user_interactions
-  FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE TABLE IF NOT EXISTS "public"."user_preferences" (
+    "user_id" "uuid" NOT NULL,
+    "topics" "text"[],
+    "funding_min" integer,
+    "funding_max" integer,
+    "deadline_range" "text" DEFAULT '0'::"text",
+    "eligible_applicant_types" "text"[],
+    "agencies" "text"[],
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
 
--- Policy: Users can delete their own interactions
-DROP POLICY IF EXISTS user_interactions_delete_self ON user_interactions;
-CREATE POLICY user_interactions_delete_self ON user_interactions
-  FOR DELETE USING (auth.uid() = user_id);
+ALTER TABLE ONLY "public"."user_preferences" FORCE ROW LEVEL SECURITY;
 
--- --- Pipeline Runs Policies ---
--- Policy: Restrict access to pipeline runs (e.g., service role or specific admin UIDs)
--- WARNING: Hardcoding emails/UIDs is generally discouraged. Use roles or claims if possible.
-DROP POLICY IF EXISTS pipeline_runs_admin_only ON pipeline_runs;
-CREATE POLICY pipeline_runs_admin_only ON pipeline_runs
-  FOR ALL -- Apply to SELECT, INSERT, UPDATE, DELETE
-  USING (
-    auth.role() = 'service_role'
-    -- OR auth.uid() IN (SELECT id FROM users WHERE email = 'admin@grantify.ai') -- Example: Allow specific admin UID(s)
-    -- OR (auth.jwt() ->> 'app_metadata')::jsonb ->> 'is_admin' = 'true' -- Preferred: Check custom claim
-  )
-  WITH CHECK (
-    auth.role() = 'service_role'
-    -- OR auth.uid() IN (SELECT id FROM users WHERE email = 'admin@grantify.ai') -- Example: Allow specific admin UID(s)
-    -- OR (auth.jwt() ->> 'app_metadata')::jsonb ->> 'is_admin' = 'true' -- Preferred: Check custom claim
-  );
+ALTER TABLE "public"."user_preferences" OWNER TO "postgres";
 
--- Grant service_role full access to grants table for backend processes
-DROP POLICY IF EXISTS grants_service_role_access ON grants;
-CREATE POLICY grants_service_role_access ON grants
-  FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE TABLE IF NOT EXISTS "public"."users" (
+    "id" "uuid" NOT NULL,
+    "email" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "updated_at" timestamp with time zone DEFAULT "now"()
+);
 
--- ========= Table Privileges (Grants) =========
+ALTER TABLE ONLY "public"."users" FORCE ROW LEVEL SECURITY;
 
--- Grant necessary privileges to the 'authenticated' role for the user_preferences table.
--- This works in conjunction with RLS policies. RLS policies restrict *which rows*
--- can be accessed/modified by a user, while these GRANT statements provide the fundamental
--- permission for the 'authenticated' role to perform SELECT, INSERT, UPDATE, or DELETE
--- operations on the table itself. Both are often required for the 'authenticated' role.
+ALTER TABLE "public"."users" OWNER TO "postgres";
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_preferences TO authenticated;
+ALTER TABLE ONLY "public"."grants"
+    ADD CONSTRAINT "grants_opportunity_id_key" UNIQUE ("opportunity_id");
 
--- Note: Similar grants might be needed for other tables like 'user_interactions' if they
--- are accessed by authenticated users and face similar permission issues.
--- For 'users' table, RLS policies allow self-select and self-update, and inserts are
--- handled by a trigger. Explicit grants to 'authenticated' might be redundant but
--- could be added if issues arise.
--- The 'grants' table is publicly readable via its RLS policy.
+ALTER TABLE ONLY "public"."grants"
+    ADD CONSTRAINT "grants_pkey" PRIMARY KEY ("id");
 
+ALTER TABLE ONLY "public"."pipeline_runs"
+    ADD CONSTRAINT "pipeline_runs_pkey" PRIMARY KEY ("id");
 
--- ========= End of Script =========
+ALTER TABLE ONLY "public"."user_interactions"
+    ADD CONSTRAINT "user_interactions_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "public"."user_interactions"
+    ADD CONSTRAINT "user_interactions_user_id_grant_id_key" UNIQUE ("user_id", "grant_id");
+
+ALTER TABLE ONLY "public"."user_preferences"
+    ADD CONSTRAINT "user_preferences_pkey" PRIMARY KEY ("user_id");
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_email_key" UNIQUE ("email");
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_email_unique_constraint" UNIQUE ("email");
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
+
+CREATE INDEX "grants_activity_category_idx" ON "public"."grants" USING "gin" ("activity_category");
+CREATE INDEX "grants_agency_name_idx" ON "public"."grants" USING "btree" ("agency_name");
+CREATE INDEX "grants_agency_subdivision_idx" ON "public"."grants" USING "btree" ("agency_subdivision");
+CREATE INDEX "grants_category_idx" ON "public"."grants" USING "btree" ("category");
+CREATE INDEX "grants_close_date_idx" ON "public"."grants" USING "btree" ("close_date");
+CREATE INDEX "grants_eligible_applicants_idx" ON "public"."grants" USING "gin" ("eligible_applicants");
+CREATE INDEX "grants_embeddings_idx" ON "public"."grants" USING "ivfflat" ("embeddings" "public"."vector_cosine_ops") WITH ("lists"='100');
+CREATE INDEX "grants_grant_type_idx" ON "public"."grants" USING "btree" ("grant_type");
+CREATE INDEX "grants_keywords_idx" ON "public"."grants" USING "gin" ("keywords");
+CREATE INDEX "grants_opportunity_id_idx" ON "public"."grants" USING "btree" ("opportunity_id");
+CREATE INDEX "grants_post_date_idx" ON "public"."grants" USING "btree" ("post_date");
+CREATE INDEX "grants_status_idx" ON "public"."grants" USING "btree" ("status");
+CREATE INDEX "user_interactions_action_idx" ON "public"."user_interactions" USING "btree" ("action");
+CREATE INDEX "user_interactions_grant_id_idx" ON "public"."user_interactions" USING "btree" ("grant_id");
+CREATE INDEX "user_interactions_user_id_idx" ON "public"."user_interactions" USING "btree" ("user_id");
+
+CREATE OR REPLACE TRIGGER "update_grants_updated_at" BEFORE UPDATE ON "public"."grants" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE OR REPLACE TRIGGER "update_user_preferences_updated_at" BEFORE UPDATE ON "public"."user_preferences" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+CREATE OR REPLACE TRIGGER "update_users_updated_at" BEFORE UPDATE ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "public"."update_updated_at_column"();
+
+ALTER TABLE ONLY "public"."user_interactions"
+    ADD CONSTRAINT "user_interactions_grant_id_fkey" FOREIGN KEY ("grant_id") REFERENCES "public"."grants"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."user_interactions"
+    ADD CONSTRAINT "user_interactions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."user_preferences"
+    ADD CONSTRAINT "user_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."users"
+    ADD CONSTRAINT "users_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id");
+
+CREATE POLICY "Allow public users to create their own interactions" ON "public"."user_interactions" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+CREATE POLICY "Allow public users to delete their own interactions" ON "public"."user_interactions" FOR DELETE USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "Allow public users to read their own interactions" ON "public"."user_interactions" FOR SELECT USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "Allow public users to update their own interactions" ON "public"."user_interactions" FOR UPDATE USING (("auth"."uid"() = "user_id"));
+
+ALTER TABLE "public"."grants" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "grants_select_policy" ON "public"."grants" FOR SELECT USING (true);
+CREATE POLICY "grants_service_role_bypass" ON "public"."grants" TO "service_role" USING ("public"."service_role_bypass_rls"()) WITH CHECK ("public"."service_role_bypass_rls"());
+
+ALTER TABLE "public"."pipeline_runs" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "pipeline_runs_admin_only" ON "public"."pipeline_runs" USING (("auth"."role"() = 'service_role'::"text")) WITH CHECK (("auth"."role"() = 'service_role'::"text"));
+CREATE POLICY "pipeline_runs_service_role_bypass" ON "public"."pipeline_runs" USING ("public"."service_role_bypass_rls"()) WITH CHECK ("public"."service_role_bypass_rls"());
+
+ALTER TABLE "public"."user_interactions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."user_preferences" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "user_preferences_delete_self" ON "public"."user_preferences" FOR DELETE USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "user_preferences_insert_self" ON "public"."user_preferences" FOR INSERT WITH CHECK (("auth"."uid"() = "user_id"));
+CREATE POLICY "user_preferences_select_self" ON "public"."user_preferences" FOR SELECT USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "user_preferences_service_role_bypass" ON "public"."user_preferences" USING ("public"."service_role_bypass_rls"()) WITH CHECK ("public"."service_role_bypass_rls"());
+CREATE POLICY "user_preferences_update_self" ON "public"."user_preferences" FOR UPDATE USING (("auth"."uid"() = "id")) WITH CHECK (("auth"."uid"() = "id"));
+
+ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_allow_trigger_insert" ON "public"."users" FOR INSERT WITH CHECK (true);
+CREATE POLICY "users_select_self" ON "public"."users" FOR SELECT USING (("auth"."uid"() = "id"));
+CREATE POLICY "users_service_role_bypass" ON "public"."users" USING ("public"."service_role_bypass_rls"()) WITH CHECK ("public"."service_role_bypass_rls"());
+CREATE POLICY "users_update_self" ON "public"."users" FOR UPDATE USING (("auth"."uid"() = "id")) WITH CHECK (("auth"."uid"() = "id"));
+
+ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
+
+REVOKE USAGE ON SCHEMA "public" FROM PUBLIC;
+GRANT ALL ON SCHEMA "public" TO PUBLIC;
+GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+GRANT ALL ON FUNCTION "public"."check_rls_status"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."get_auth_role"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_auth_role"() TO "anon";
+GRANT ALL ON FUNCTION "public"."get_auth_role"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."handle_new_user"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."is_service_role"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_service_role"() TO "anon";
+GRANT ALL ON FUNCTION "public"."is_service_role"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."service_role_bypass_rls"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."service_role_bypass_rls"() TO "anon";
+GRANT ALL ON FUNCTION "public"."service_role_bypass_rls"() TO "service_role";
+GRANT ALL ON FUNCTION "public"."update_updated_at_column"() TO "service_role";
+
+GRANT ALL ON TABLE "public"."grants" TO "service_role";
+GRANT ALL ON TABLE "public"."pipeline_runs" TO "service_role";
+GRANT ALL ON TABLE "public"."user_interactions" TO "service_role";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."user_interactions" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_preferences" TO "service_role";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."user_preferences" TO "authenticated";
+GRANT ALL ON TABLE "public"."users" TO "service_role";
+
+RESET ALL;
